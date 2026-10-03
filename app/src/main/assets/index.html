@@ -30,6 +30,12 @@
   }
   .wrap{max-width:520px;margin:0 auto;padding:28px 18px;}
 
+  .greeting{
+    font-family:var(--serif);
+    font-size:17px;
+    color:var(--ink);
+    margin:0 0 2px 0;
+  }
   .today{
     font-family:var(--serif);
     font-size:15px;
@@ -348,9 +354,16 @@
 
 <script>
 const STORAGE_KEY = 'ledger-data';
-let data = { debts: [], expenses: [], incomes: [], hormiga: [], settings: { hormigaLimit: 50, currentBalance: 0 } };
-let sectionsOpen = { income:true, debts:false, expenses:false, hormiga:false };
+let data = { debts: [], expenses: [], incomes: [], hormiga: [], settings: { hormigaLimit: 50, currentBalance: 0 }, history: { paidDebts: [] } };
+let sectionsOpen = { income:true, debts:false, expenses:false, hormiga:false, history:false };
 let loaded = false;
+
+function getGreeting(){
+  const h = new Date().getHours();
+  if(h < 12) return 'Buenos días';
+  if(h < 19) return 'Buenas tardes';
+  return 'Buenas noches';
+}
 
 const fmtMoney = n => {
   const sign = n < 0 ? '-' : '';
@@ -409,7 +422,8 @@ function loadData(){
         expenses: parsed.expenses||[],
         incomes: parsed.incomes||[],
         hormiga: parsed.hormiga||[],
-        settings: { hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50, currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0 }
+        settings: { hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50, currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0 },
+        history: { paidDebts: (parsed.history && parsed.history.paidDebts) || [] }
       };
     }
     loadState = 'ok';
@@ -511,7 +525,8 @@ function confirmRestore(){
     expenses: parsed.expenses||[],
     incomes: parsed.incomes||[],
     hormiga: parsed.hormiga||[],
-    settings: { hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50, currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0 }
+    settings: { hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50, currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0 },
+    history: { paidDebts: (parsed.history && parsed.history.paidDebts) || [] }
   };
   pendingRestoreData = null;
   saveBlocked = false;
@@ -571,12 +586,33 @@ function confirmDelete(kind, id){
 }
 function deleteControl(kind, id){
   if(confirmingDeleteId === id){
+    if(kind === 'debts'){
+      return `<span class="del-confirm">
+        <button class="item-del-yes" onclick="confirmPaidDebt('${id}')">Saldada ✓</button>
+        <button class="item-del-yes" style="border-color:var(--ink-faint);color:var(--ink-faint);" onclick="confirmDelete('${kind}','${id}')">Borrar sin más</button>
+        <button class="item-del-no" onclick="cancelDelete()">Cancelar</button>
+      </span>`;
+    }
     return `<span class="del-confirm">
       <button class="item-del-yes" onclick="confirmDelete('${kind}','${id}')">Sí, borrar</button>
       <button class="item-del-no" onclick="cancelDelete()">Cancelar</button>
     </span>`;
   }
   return `<button class="item-del" onclick="requestDelete('${id}')">×</button>`;
+}
+function confirmPaidDebt(id){
+  const debt = data.debts.find(d => d.id === id);
+  if(debt){
+    data.history.paidDebts.push({
+      id:'p'+Date.now(),
+      name: debt.name,
+      balance: debt.balance,
+      monthlyPayment: debt.monthlyPayment,
+      date: new Date().toISOString().slice(0,10)
+    });
+  }
+  confirmingDeleteId = null;
+  removeItem('debts', id);
 }
 function addHormiga(amount, date, desc){
   data.hormiga.push({id:'h'+Date.now(), amount:Number(amount), date, desc:desc||''});
@@ -678,6 +714,25 @@ function computeAll(){
   return {weeklyTarget, dueThisWeek, incomeThisWeek, hormigaThisWeek, hormigaLimit, hormigaOver, availableThisWeek, shortfall, totalDebt, monthlyTotal, upcoming, weeklyEquivDebt, weeklyEquivExp, need, weeksAhead, currentBalance, totalWithBalance, realGap};
 }
 
+function pastWeeksHistory(limit){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const curWeekStart = startOfWeek(today);
+  const weeks = [];
+  for(let w=1; w<=limit; w++){
+    const ws = new Date(curWeekStart); ws.setDate(ws.getDate() - w*7);
+    const we = new Date(ws); we.setDate(we.getDate()+6); we.setHours(23,59,59,999);
+    const income = data.incomes
+      .filter(i=>{ const dd=new Date(i.date+'T00:00:00'); return dd>=ws && dd<=we; })
+      .reduce((s,i)=>s+(i.amount||0),0);
+    const hormiga = data.hormiga
+      .filter(h=>{ const dd=new Date(h.date+'T00:00:00'); return dd>=ws && dd<=we; })
+      .reduce((s,h)=>s+(h.amount||0),0);
+    if(income === 0 && hormiga === 0) continue;
+    weeks.push({ weekStart: ws, weekEnd: we, income, hormiga, net: income - hormiga });
+  }
+  return weeks;
+}
+
 function toggleSection(key){
   sectionsOpen[key] = !sectionsOpen[key];
   render();
@@ -748,6 +803,7 @@ function render(){
   const todayStr = today.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
 
   let html = '';
+  html += `<p class="greeting">${getGreeting()}, Bran</p>`;
   html += `<p class="today">${todayStr}</p>`;
   html += `<h1>Control semanal</h1>`;
   html += `<p class="save-status" id="save-status"></p>`;
@@ -917,6 +973,30 @@ function render(){
       </div>
       <button class="btn btn-primary" onclick="submitExpense()">Añadir gasto</button>
     </div>
+  `);
+
+  // HISTORIAL
+  const pastWeeks = pastWeeksHistory(12);
+  const paidDebts = (data.history && data.history.paidDebts) || [];
+  html += renderSection('history', 'Historial', pastWeeks.length + paidDebts.length, `
+    <p class="item-meta" style="font-size:12.5px;margin:4px 0 6px 0;">Semanas anteriores</p>
+    ${pastWeeks.length ? pastWeeks.map(w=>`
+      <div class="item-row">
+        <div class="item-main">
+          <div class="item-name">${fmtRange(w.weekStart, w.weekEnd)}</div>
+          <div class="item-meta">Ingresó ${fmtMoney(w.income)} · hormiga ${fmtMoney(w.hormiga)}</div>
+        </div>
+        <div class="item-amounts"><span class="item-amount" style="${w.net<0?'color:var(--warn);':'color:var(--good);'}">${fmtMoney(w.net)}</span></div>
+      </div>`).join('') : '<div class="empty-note">Sin semanas anteriores registradas todavía.</div>'}
+    <p class="item-meta" style="font-size:12.5px;margin:16px 0 6px 0;">Deudas saldadas</p>
+    ${paidDebts.length ? paidDebts.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`
+      <div class="item-row">
+        <div class="item-main">
+          <div class="item-name">${p.name} ✓</div>
+          <div class="item-meta">Saldada el ${new Date(p.date+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'})}</div>
+        </div>
+        <div class="item-amounts"><span class="item-amount" style="color:var(--good);">${fmtMoney(p.balance)}</span></div>
+      </div>`).join('') : '<div class="empty-note">Ninguna deuda saldada todavía.</div>'}
   `);
 
   // PRÓXIMOS VENCIMIENTOS
