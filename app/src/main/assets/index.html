@@ -173,6 +173,7 @@
   .month-header{
     display:flex;
     justify-content:space-between;
+    align-items:center;
     padding:10px 0 4px 0;
     margin-top:4px;
     border-top:1px solid var(--line);
@@ -180,11 +181,29 @@
     font-size:13.5px;
     color:var(--ink-dim);
     text-transform:capitalize;
+    cursor:pointer;
+    user-select:none;
   }
   .month-header .amt{
     font-family:var(--mono);
     font-size:12.5px;
     color:var(--ink-faint);
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+  }
+  .month-header .chevron{font-size:11px;}
+
+  .add-toggle-btn{
+    width:100%;
+    text-align:center;
+    border-top:1px solid var(--line);
+    border-left:none;border-right:none;border-bottom:none;
+    border-radius:0;
+    padding:14px 0 4px 0;
+    background:none;
+    color:var(--good);
+    font-size:14px;
   }
 
   .tab-row{display:flex;gap:8px;margin-bottom:16px;}
@@ -434,6 +453,29 @@ let sectionsOpen = { income:true, debts:false, expenses:false, hormiga:false, lo
 let savingsTab = 'emergency';
 let editingItem = null; // {kind, id}
 let loaded = false;
+let monthsOpen = {}; // { sectionKey: { monthKey: bool } }
+let formOpen = {}; // { kind: bool } — formularios de "añadir" colapsados detrás de un botón +
+
+function isMonthOpen(section, key, defaultOpen){
+  if(!monthsOpen[section]) monthsOpen[section] = {};
+  if(!(key in monthsOpen[section])) monthsOpen[section][key] = defaultOpen;
+  return monthsOpen[section][key];
+}
+function toggleMonth(section, key){
+  if(!monthsOpen[section]) monthsOpen[section] = {};
+  monthsOpen[section][key] = !monthsOpen[section][key];
+  render();
+}
+function toggleFormOpen(kind){
+  formOpen[kind] = !formOpen[kind];
+  render();
+  if(formOpen[kind]){
+    setTimeout(()=>{
+      const el = document.getElementById('edit-anchor-'+kind);
+      if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+    }, 50);
+  }
+}
 
 function getGreeting(){
   const h = new Date().getHours();
@@ -657,6 +699,7 @@ function startEdit(kind, id){
   }, 50);
 }
 function cancelEdit(){
+  if(editingItem) formOpen[editingItem.kind] = false;
   editingItem = null;
   render();
 }
@@ -702,18 +745,52 @@ function updateHormiga(id, amount, date, desc){
   saveData(); render();
 }
 // ---- Préstamos ----
+// Un préstamo "activo" (no devuelto) descuenta su monto del capital disponible;
+// al marcarlo devuelto, borrarlo, o editar su monto, se ajusta el capital para que
+// siempre refleje lo que de verdad tienes en la mano.
+function applyLoanBalanceEffect(amount, wasActive, isActive){
+  const oldContribution = wasActive ? -amount : 0;
+  const newContribution = isActive ? -amount : 0;
+  data.settings.currentBalance = (data.settings.currentBalance || 0) + (newContribution - oldContribution);
+}
 function addLoan(person, amount, date, note){
-  data.loans.push({id:'l'+Date.now(), person, amount:Number(amount)||0, date, note:note||'', returned:false});
+  const amt = Number(amount)||0;
+  data.loans.push({id:'l'+Date.now(), person, amount:amt, date, note:note||'', returned:false});
+  applyLoanBalanceEffect(amt, false, true);
   saveData(); render();
 }
 function updateLoan(id, person, amount, date, note, returned){
   const idx = data.loans.findIndex(l=>l.id===id);
-  if(idx>-1) data.loans[idx] = {...data.loans[idx], person, amount:Number(amount)||0, date, note:note||'', returned: !!returned};
+  if(idx>-1){
+    const existing = data.loans[idx];
+    const wasActive = !existing.returned;
+    const newAmount = Number(amount)||0;
+    const isActive = !returned;
+    // Revierte el efecto del monto viejo y aplica el del monto nuevo
+    if(wasActive) applyLoanBalanceEffect(existing.amount, true, false);
+    if(isActive) applyLoanBalanceEffect(newAmount, false, true);
+    data.loans[idx] = {...existing, person, amount:newAmount, date, note:note||'', returned: !!returned};
+  }
   saveData(); render();
 }
 function toggleLoanReturned(id){
   const l = data.loans.find(x=>x.id===id);
-  if(l){ l.returned = !l.returned; saveData(); render(); }
+  if(l){
+    const wasActive = !l.returned;
+    l.returned = !l.returned;
+    const isActive = !l.returned;
+    applyLoanBalanceEffect(l.amount, wasActive, isActive);
+    saveData(); render();
+  }
+}
+function removeLoan(id){
+  const l = data.loans.find(x=>x.id===id);
+  if(l){
+    const wasActive = !l.returned;
+    applyLoanBalanceEffect(l.amount, wasActive, false);
+  }
+  data.loans = data.loans.filter(x => x.id !== id);
+  saveData(); render();
 }
 
 function removeItem(kind, id){
@@ -733,6 +810,7 @@ function cancelDelete(){
 function confirmDelete(kind, id){
   confirmingDeleteId = null;
   if(editingItem && editingItem.kind===kind && editingItem.id===id) editingItem = null;
+  if(kind === 'loans'){ removeLoan(id); return; }
   removeItem(kind, id);
 }
 function deleteControl(kind, id){
@@ -833,6 +911,7 @@ function submitSavingsMovement(which){
   } else {
     addSavingsMovement(which, amount, date, note, type);
   }
+  formOpen[kind] = false;
 }
 
 // ---- Resumen por rango de fechas ----
@@ -1134,10 +1213,13 @@ function render(){
   // INGRESOS (agrupados por mes)
   const incomeGroups = groupByMonth(data.incomes.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)));
   const editingIncome = editingItem && editingItem.kind==='incomes' ? data.incomes.find(i=>i.id===editingItem.id) : null;
+  const showIncomeForm = formOpen['incomes'] || !!editingIncome;
   html += renderSection('income', 'Ingresos', data.incomes.length, `
-    ${incomeGroups.length ? incomeGroups.map(g=>`
-      <div class="month-header"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)}</span></div>
-      ${g.items.map(i=>`
+    ${incomeGroups.length ? incomeGroups.map((g,gi)=>{
+      const open = isMonthOpen('incomes', g.key, gi===0);
+      return `
+      <div class="month-header" onclick="toggleMonth('incomes','${g.key}')"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)} <span class="chevron ${open?'open':''}">›</span></span></div>
+      ${open ? g.items.map(i=>`
       <div class="item-row">
         <div class="item-main clickable" onclick="startEdit('incomes','${i.id}')">
           <div class="item-name">${i.source ? i.source : 'Ingreso'}</div>
@@ -1145,8 +1227,9 @@ function render(){
         </div>
         <div class="item-amounts"><span class="item-amount">${fmtMoney(i.amount)}</span></div>
         ${deleteControl('incomes', i.id)}
-      </div>`).join('')}
-    `).join('') : '<div class="empty-note">Sin ingresos registrados.</div>'}
+      </div>`).join('') : ''}
+    `;}).join('') : '<div class="empty-note">Sin ingresos registrados.</div>'}
+    ${showIncomeForm ? `
     <div class="add-form" id="edit-anchor-incomes">
       <div class="field-row">
         <div class="field"><label>Monto</label><input type="number" id="inc-amount" placeholder="0.00" value="${editingIncome?editingIncome.amount:''}"></div>
@@ -1155,9 +1238,10 @@ function render(){
       <div class="field"><label>Fuente (opcional)</label><input type="text" id="inc-source" placeholder="Trading, tatuajes, mantenimiento…" value="${editingIncome?escapeAttr(editingIncome.source):''}"></div>
       <div class="field-row" style="gap:8px;">
         <button class="btn btn-primary" onclick="submitIncome()">${editingIncome?'Guardar cambios':'Añadir ingreso'}</button>
-        ${editingIncome?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+        <button class="btn" onclick="${editingIncome?'cancelEdit()':"toggleFormOpen('incomes')"}">Cancelar</button>
       </div>
     </div>
+    ` : `<button class="add-toggle-btn" id="edit-anchor-incomes" onclick="toggleFormOpen('incomes')">+ Añadir ingreso</button>`}
   `);
 
   // GASTOS HORMIGA (agrupados por mes)
@@ -1178,9 +1262,11 @@ function render(){
       <div class="item-amounts"><span class="item-amount" style="${hormigaWarn?'color:var(--warn);':''}">${fmtMoney(c.hormigaThisWeek)}</span></div>
     </div>
     ${hormigaWarn ? `<div class="empty-note" style="color:var(--warn);border-top:none;">Te pasaste del límite por ${fmtMoney(c.hormigaOver)} esta semana.</div>` : ''}
-    ${hormigaGroups.length ? hormigaGroups.map(g=>`
-      <div class="month-header"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)}</span></div>
-      ${g.items.map(h=>`
+    ${hormigaGroups.length ? hormigaGroups.map((g,gi)=>{
+      const open = isMonthOpen('hormiga', g.key, gi===0);
+      return `
+      <div class="month-header" onclick="toggleMonth('hormiga','${g.key}')"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)} <span class="chevron ${open?'open':''}">›</span></span></div>
+      ${open ? g.items.map(h=>`
       <div class="item-row">
         <div class="item-main clickable" onclick="startEdit('hormiga','${h.id}')">
           <div class="item-name">${h.desc ? h.desc : 'Gasto hormiga'}</div>
@@ -1188,8 +1274,9 @@ function render(){
         </div>
         <div class="item-amounts"><span class="item-amount">${fmtMoney(h.amount)}</span></div>
         ${deleteControl('hormiga', h.id)}
-      </div>`).join('')}
-    `).join('') : '<div class="empty-note">Sin gastos hormiga registrados.</div>'}
+      </div>`).join('') : ''}
+    `;}).join('') : '<div class="empty-note">Sin gastos hormiga registrados.</div>'}
+    ${(formOpen['hormiga'] || !!editingHormiga) ? `
     <div class="add-form" id="edit-anchor-hormiga">
       <div class="field-row">
         <div class="field"><label>Monto</label><input type="number" id="hor-amount" placeholder="0.00" value="${editingHormiga?editingHormiga.amount:''}"></div>
@@ -1198,18 +1285,21 @@ function render(){
       <div class="field"><label>Descripción (opcional)</label><input type="text" id="hor-desc" placeholder="Café, uber, antojo…" value="${editingHormiga?escapeAttr(editingHormiga.desc):''}"></div>
       <div class="field-row" style="gap:8px;">
         <button class="btn btn-primary" onclick="submitHormiga()">${editingHormiga?'Guardar cambios':'Añadir gasto hormiga'}</button>
-        ${editingHormiga?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+        <button class="btn" onclick="${editingHormiga?'cancelEdit()':"toggleFormOpen('hormiga')"}">Cancelar</button>
       </div>
     </div>
+    ` : `<button class="add-toggle-btn" id="edit-anchor-hormiga" onclick="toggleFormOpen('hormiga')">+ Añadir gasto hormiga</button>`}
   `);
 
   // PRÉSTAMOS
   const loanGroups = groupByMonth(data.loans.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)));
   const editingLoan = editingItem && editingItem.kind==='loans' ? data.loans.find(l=>l.id===editingItem.id) : null;
   html += renderSection('loans', 'Préstamos', data.loans.length, `
-    ${loanGroups.length ? loanGroups.map(g=>`
-      <div class="month-header"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)}</span></div>
-      ${g.items.map(l=>`
+    ${loanGroups.length ? loanGroups.map((g,gi)=>{
+      const open = isMonthOpen('loans', g.key, gi===0);
+      return `
+      <div class="month-header" onclick="toggleMonth('loans','${g.key}')"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)} <span class="chevron ${open?'open':''}">›</span></span></div>
+      ${open ? g.items.map(l=>`
       <div class="item-row">
         <div class="item-main clickable" onclick="startEdit('loans','${l.id}')">
           <div class="item-name">${l.person}${l.note?' · '+l.note:''}</div>
@@ -1219,8 +1309,9 @@ function render(){
         </div>
         <div class="item-amounts"><span class="item-amount">${fmtMoney(l.amount)}</span></div>
         ${deleteControl('loans', l.id)}
-      </div>`).join('')}
-    `).join('') : '<div class="empty-note">Sin préstamos registrados.</div>'}
+      </div>`).join('') : ''}
+    `;}).join('') : '<div class="empty-note">Sin préstamos registrados.</div>'}
+    ${(formOpen['loans'] || !!editingLoan) ? `
     <div class="add-form" id="edit-anchor-loans">
       <div class="field"><label>¿A quién le prestaste?</label><input type="text" id="loan-person" placeholder="Nombre" value="${editingLoan?escapeAttr(editingLoan.person):''}"></div>
       <div class="field-row">
@@ -1228,11 +1319,13 @@ function render(){
         <div class="field"><label>Fecha</label><input type="date" id="loan-date" value="${editingLoan?editingLoan.date:new Date().toISOString().slice(0,10)}"></div>
       </div>
       <div class="field"><label>Nota (opcional)</label><input type="text" id="loan-note" placeholder="Opcional" value="${editingLoan?escapeAttr(editingLoan.note):''}"></div>
+      <p class="item-meta">El monto se descuenta de tu capital disponible y se devuelve cuando lo marcas como "Devuelto".</p>
       <div class="field-row" style="gap:8px;">
         <button class="btn btn-primary" onclick="submitLoan()">${editingLoan?'Guardar cambios':'Añadir préstamo'}</button>
-        ${editingLoan?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+        <button class="btn" onclick="${editingLoan?'cancelEdit()':"toggleFormOpen('loans')"}">Cancelar</button>
       </div>
     </div>
+    ` : `<button class="add-toggle-btn" id="edit-anchor-loans" onclick="toggleFormOpen('loans')">+ Añadir préstamo</button>`}
   `);
 
   // DEUDAS
@@ -1250,6 +1343,7 @@ function render(){
         </div>
         ${deleteControl('debts', d.id)}
       </div>`).join('') : '<div class="empty-note">Sin deudas registradas.</div>'}
+    ${(formOpen['debts'] || !!editingDebt) ? `
     <div class="add-form" id="edit-anchor-debts">
       <div class="field"><label>Nombre</label><input type="text" id="debt-name" placeholder="Ej: Amigo $12,500" value="${editingDebt?escapeAttr(editingDebt.name):''}"></div>
       <div class="field-row">
@@ -1262,9 +1356,10 @@ function render(){
       </div>
       <div class="field-row" style="gap:8px;">
         <button class="btn btn-primary" onclick="submitDebt()">${editingDebt?'Guardar cambios':'Añadir deuda'}</button>
-        ${editingDebt?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+        <button class="btn" onclick="${editingDebt?'cancelEdit()':"toggleFormOpen('debts')"}">Cancelar</button>
       </div>
     </div>
+    ` : `<button class="add-toggle-btn" id="edit-anchor-debts" onclick="toggleFormOpen('debts')">+ Añadir deuda</button>`}
   `);
 
   // GASTOS FIJOS
@@ -1282,6 +1377,7 @@ function render(){
         </div>
         ${deleteControl('expenses', e.id)}
       </div>`).join('') : '<div class="empty-note">Sin gastos fijos registrados.</div>'}
+    ${(formOpen['expenses'] || !!editingExpense) ? `
     <div class="add-form" id="edit-anchor-expenses">
       <div class="field"><label>Nombre</label><input type="text" id="exp-name" placeholder="Ej: Carro, seguro, T-Mobile" value="${editingExpense?escapeAttr(editingExpense.name):''}"></div>
       <div class="field-row">
@@ -1290,9 +1386,10 @@ function render(){
       </div>
       <div class="field-row" style="gap:8px;">
         <button class="btn btn-primary" onclick="submitExpense()">${editingExpense?'Guardar cambios':'Añadir gasto'}</button>
-        ${editingExpense?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+        <button class="btn" onclick="${editingExpense?'cancelEdit()':"toggleFormOpen('expenses')"}">Cancelar</button>
       </div>
     </div>
+    ` : `<button class="add-toggle-btn" id="edit-anchor-expenses" onclick="toggleFormOpen('expenses')">+ Añadir gasto fijo</button>`}
   `);
 
   // AHORRO (fondo de emergencia / inversiones)
@@ -1409,9 +1506,11 @@ function renderSavingsTab(which){
     </div>`;
   }
 
-  html += groups.length ? groups.map(g=>`
-    <div class="month-header"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)}</span></div>
-    ${g.items.map(m=>`
+  html += groups.length ? groups.map((g,gi)=>{
+    const open = isMonthOpen(kind, g.key, gi===0);
+    return `
+    <div class="month-header" onclick="toggleMonth('${kind}','${g.key}')"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)} <span class="chevron ${open?'open':''}">›</span></span></div>
+    ${open ? g.items.map(m=>`
       <div class="item-row">
         <div class="item-main clickable" onclick="startEdit('${kind}','${m.id}')">
           <div class="item-name">${m.type==='withdraw'?'Retiro':'Depósito'}${m.note?' · '+m.note:''}</div>
@@ -1419,28 +1518,32 @@ function renderSavingsTab(which){
         </div>
         <div class="item-amounts"><span class="item-amount" style="${m.type==='withdraw'?'color:var(--warn);':'color:var(--good);'}">${m.type==='withdraw'?'-':'+'}${fmtMoney(m.amount)}</span></div>
         ${deleteControlSavings(which, m.id)}
-      </div>`).join('')}
-  `).join('') : '<div class="empty-note">Sin movimientos registrados.</div>';
+      </div>`).join('') : ''}
+  `;}).join('') : '<div class="empty-note">Sin movimientos registrados.</div>';
 
-  html += `<div class="add-form" id="edit-anchor-${kind}">
-    <div class="field-row">
-      <div class="field"><label>Tipo</label>
-        <select id="sav-${which}-type">
-          <option value="deposit" ${editing&&editing.type==='deposit'?'selected':''}>Depósito</option>
-          <option value="withdraw" ${editing&&editing.type==='withdraw'?'selected':''}>Retiro</option>
-        </select>
+  if(formOpen[kind] || !!editing){
+    html += `<div class="add-form" id="edit-anchor-${kind}">
+      <div class="field-row">
+        <div class="field"><label>Tipo</label>
+          <select id="sav-${which}-type">
+            <option value="deposit" ${editing&&editing.type==='deposit'?'selected':''}>Depósito</option>
+            <option value="withdraw" ${editing&&editing.type==='withdraw'?'selected':''}>Retiro</option>
+          </select>
+        </div>
+        <div class="field"><label>Monto</label><input type="number" id="sav-${which}-amount" placeholder="0.00" value="${editing?editing.amount:''}"></div>
       </div>
-      <div class="field"><label>Monto</label><input type="number" id="sav-${which}-amount" placeholder="0.00" value="${editing?editing.amount:''}"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Fecha</label><input type="date" id="sav-${which}-date" value="${editing?editing.date:new Date().toISOString().slice(0,10)}"></div>
-      <div class="field"><label>Nota (opcional)</label><input type="text" id="sav-${which}-note" placeholder="Opcional" value="${editing?escapeAttr(editing.note):''}"></div>
-    </div>
-    <div class="field-row" style="gap:8px;">
-      <button class="btn btn-primary" onclick="submitSavingsMovement('${which}')">${editing?'Guardar cambios':'Añadir movimiento'}</button>
-      ${editing?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
-    </div>
-  </div>`;
+      <div class="field-row">
+        <div class="field"><label>Fecha</label><input type="date" id="sav-${which}-date" value="${editing?editing.date:new Date().toISOString().slice(0,10)}"></div>
+        <div class="field"><label>Nota (opcional)</label><input type="text" id="sav-${which}-note" placeholder="Opcional" value="${editing?escapeAttr(editing.note):''}"></div>
+      </div>
+      <div class="field-row" style="gap:8px;">
+        <button class="btn btn-primary" onclick="submitSavingsMovement('${which}')">${editing?'Guardar cambios':'Añadir movimiento'}</button>
+        <button class="btn" onclick="${editing?'cancelEdit()':`toggleFormOpen('${kind}')`}">Cancelar</button>
+      </div>
+    </div>`;
+  } else {
+    html += `<button class="add-toggle-btn" id="edit-anchor-${kind}" onclick="toggleFormOpen('${kind}')">+ Añadir movimiento</button>`;
+  }
 
   return html;
 }
@@ -1468,6 +1571,7 @@ function submitIncome(){
   } else {
     addIncome(amount, date, source);
   }
+  formOpen['incomes'] = false;
 }
 function submitHormiga(){
   const amount = document.getElementById('hor-amount').value;
@@ -1480,6 +1584,7 @@ function submitHormiga(){
   } else {
     addHormiga(amount, date, desc);
   }
+  formOpen['hormiga'] = false;
 }
 function submitDebt(){
   const name = document.getElementById('debt-name').value;
@@ -1494,6 +1599,7 @@ function submitDebt(){
   } else {
     addDebt(name, balance||0, rate||0, due, payment);
   }
+  formOpen['debts'] = false;
 }
 function submitExpense(){
   const name = document.getElementById('exp-name').value;
@@ -1506,6 +1612,7 @@ function submitExpense(){
   } else {
     addExpense(name, amount, day);
   }
+  formOpen['expenses'] = false;
 }
 function submitLoan(){
   const person = document.getElementById('loan-person').value;
@@ -1520,6 +1627,7 @@ function submitLoan(){
   } else {
     addLoan(person, amount, date, note);
   }
+  formOpen['loans'] = false;
 }
 
 loadData();
