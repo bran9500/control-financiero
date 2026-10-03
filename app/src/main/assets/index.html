@@ -137,6 +137,7 @@
     gap:10px;
   }
   .item-main{flex:1;min-width:0;}
+  .item-main.clickable{cursor:pointer;}
   .item-name{font-size:14.5px;color:var(--ink);}
   .item-meta{font-size:12px;color:var(--ink-faint);margin-top:2px;}
   .item-amounts{text-align:right;flex-shrink:0;}
@@ -157,7 +158,50 @@
   }
   .item-del:hover{color:var(--warn);}
 
-  .del-confirm{display:flex;gap:6px;flex-shrink:0;}
+  .badge{
+    display:inline-block;
+    font-size:11px;
+    padding:2px 7px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    color:var(--ink-faint);
+    margin-top:3px;
+    cursor:pointer;
+  }
+  .badge.returned{border-color:var(--good);color:var(--good);}
+
+  .month-header{
+    display:flex;
+    justify-content:space-between;
+    padding:10px 0 4px 0;
+    margin-top:4px;
+    border-top:1px solid var(--line);
+    font-family:var(--serif);
+    font-size:13.5px;
+    color:var(--ink-dim);
+    text-transform:capitalize;
+  }
+  .month-header .amt{
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--ink-faint);
+  }
+
+  .tab-row{display:flex;gap:8px;margin-bottom:16px;}
+  .tab-btn{
+    flex:1;
+    text-align:center;
+    padding:9px 8px;
+    border-radius:4px;
+    border:1px solid var(--line);
+    background:var(--surface-raised);
+    color:var(--ink-dim);
+    font-size:13px;
+    cursor:pointer;
+  }
+  .tab-btn.active{border-color:var(--good);color:var(--good);}
+
+  .del-confirm{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;}
   .item-del-yes, .item-del-no{
     font-size:12px;
     padding:6px 9px;
@@ -354,8 +398,41 @@
 
 <script>
 const STORAGE_KEY = 'ledger-data';
-let data = { debts: [], expenses: [], incomes: [], hormiga: [], settings: { hormigaLimit: 50, currentBalance: 0 }, history: { paidDebts: [] } };
-let sectionsOpen = { income:true, debts:false, expenses:false, hormiga:false, history:false };
+function emptyData(){
+  return {
+    debts: [], expenses: [], incomes: [], hormiga: [], loans: [],
+    settings: { hormigaLimit: 50, currentBalance: 0 },
+    savings: { emergency: { movements: [] }, investments: { movements: [], rate: 0 } },
+    history: { paidDebts: [] }
+  };
+}
+function normalizeData(parsed){
+  parsed = parsed || {};
+  return {
+    debts: parsed.debts || [],
+    expenses: parsed.expenses || [],
+    incomes: parsed.incomes || [],
+    hormiga: parsed.hormiga || [],
+    loans: parsed.loans || [],
+    settings: {
+      hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50,
+      currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0
+    },
+    savings: {
+      emergency: { movements: (parsed.savings && parsed.savings.emergency && parsed.savings.emergency.movements) || [] },
+      investments: {
+        movements: (parsed.savings && parsed.savings.investments && parsed.savings.investments.movements) || [],
+        rate: (parsed.savings && parsed.savings.investments && parsed.savings.investments.rate) || 0
+      }
+    },
+    history: { paidDebts: (parsed.history && parsed.history.paidDebts) || [] }
+  };
+}
+
+let data = emptyData();
+let sectionsOpen = { income:true, debts:false, expenses:false, hormiga:false, loans:false, savings:false, stats:false, range:false, history:false };
+let savingsTab = 'emergency';
+let editingItem = null; // {kind, id}
 let loaded = false;
 
 function getGreeting(){
@@ -369,6 +446,11 @@ const fmtMoney = n => {
   const sign = n < 0 ? '-' : '';
   return sign + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
 };
+
+function escapeAttr(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 function startOfWeek(d){
   const date = new Date(d);
@@ -385,6 +467,26 @@ function nextExpenseDueDate(dueDay, from){
   let candidate = new Date(d.getFullYear(), d.getMonth(), dueDay);
   if(candidate < d) candidate = new Date(d.getFullYear(), d.getMonth()+1, dueDay);
   return candidate;
+}
+
+function monthKey(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function monthLabel(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  return d.toLocaleDateString('es-ES', {month:'long', year:'numeric'});
+}
+function groupByMonth(items, amountFn){
+  const map = {};
+  const order = [];
+  items.forEach(it=>{
+    const key = monthKey(it.date);
+    if(!map[key]){ map[key] = { key, label: monthLabel(it.date), items: [], total: 0 }; order.push(key); }
+    map[key].items.push(it);
+    map[key].total += amountFn ? amountFn(it) : (it.amount||0);
+  });
+  return order.sort((a,b)=>b.localeCompare(a)).map(k=>map[k]);
 }
 
 let saveStatus = null; // null | 'saving' | 'ok' | 'error'
@@ -416,15 +518,7 @@ function loadData(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
-      const parsed = JSON.parse(raw);
-      data = {
-        debts: parsed.debts||[],
-        expenses: parsed.expenses||[],
-        incomes: parsed.incomes||[],
-        hormiga: parsed.hormiga||[],
-        settings: { hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50, currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0 },
-        history: { paidDebts: (parsed.history && parsed.history.paidDebts) || [] }
-      };
+      data = normalizeData(JSON.parse(raw));
     }
     loadState = 'ok';
   }catch(e){
@@ -519,15 +613,7 @@ function restoreFromTextarea(){
 }
 
 function confirmRestore(){
-  const parsed = pendingRestoreData;
-  data = {
-    debts: parsed.debts||[],
-    expenses: parsed.expenses||[],
-    incomes: parsed.incomes||[],
-    hormiga: parsed.hormiga||[],
-    settings: { hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50, currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0 },
-    history: { paidDebts: (parsed.history && parsed.history.paidDebts) || [] }
-  };
+  data = normalizeData(pendingRestoreData);
   pendingRestoreData = null;
   saveBlocked = false;
   loadState = 'ok';
@@ -554,18 +640,82 @@ function saveData(){
   }
 }
 
+// ---- Edición en curso ----
+function startEdit(kind, id){
+  editingItem = { kind, id };
+  confirmingDeleteId = null;
+  if(kind === 'savings-emergency') savingsTab = 'emergency';
+  if(kind === 'savings-investments') savingsTab = 'investments';
+  const sectionKey = kind === 'incomes' ? 'income'
+    : (kind === 'savings-emergency' || kind === 'savings-investments') ? 'savings'
+    : kind;
+  if(sectionKey in sectionsOpen) sectionsOpen[sectionKey] = true;
+  render();
+  setTimeout(()=>{
+    const el = document.getElementById('edit-anchor-'+kind);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 50);
+}
+function cancelEdit(){
+  editingItem = null;
+  render();
+}
+
+// ---- Deudas ----
 function addDebt(name, balance, rate, dueDate, monthlyPayment){
   data.debts.push({id:'d'+Date.now(), name, balance:Number(balance), rate:Number(rate)||0, dueDate, monthlyPayment:Number(monthlyPayment)});
   saveData(); render();
 }
+function updateDebt(id, name, balance, rate, dueDate, monthlyPayment){
+  const idx = data.debts.findIndex(d=>d.id===id);
+  if(idx>-1) data.debts[idx] = {...data.debts[idx], name, balance:Number(balance), rate:Number(rate)||0, dueDate, monthlyPayment:Number(monthlyPayment)};
+  saveData(); render();
+}
+// ---- Gastos fijos ----
 function addExpense(name, amount, dueDay){
   data.expenses.push({id:'e'+Date.now(), name, amount:Number(amount), dueDay:Number(dueDay)});
   saveData(); render();
 }
+function updateExpense(id, name, amount, dueDay){
+  const idx = data.expenses.findIndex(e=>e.id===id);
+  if(idx>-1) data.expenses[idx] = {...data.expenses[idx], name, amount:Number(amount), dueDay:Number(dueDay)};
+  saveData(); render();
+}
+// ---- Ingresos ----
 function addIncome(amount, date, source){
   data.incomes.push({id:'i'+Date.now(), amount:Number(amount), date, source:source||''});
   saveData(); render();
 }
+function updateIncome(id, amount, date, source){
+  const idx = data.incomes.findIndex(i=>i.id===id);
+  if(idx>-1) data.incomes[idx] = {...data.incomes[idx], amount:Number(amount), date, source:source||''};
+  saveData(); render();
+}
+// ---- Gastos hormiga ----
+function addHormiga(amount, date, desc){
+  data.hormiga.push({id:'h'+Date.now(), amount:Number(amount), date, desc:desc||''});
+  saveData(); render();
+}
+function updateHormiga(id, amount, date, desc){
+  const idx = data.hormiga.findIndex(h=>h.id===id);
+  if(idx>-1) data.hormiga[idx] = {...data.hormiga[idx], amount:Number(amount), date, desc:desc||''};
+  saveData(); render();
+}
+// ---- Préstamos ----
+function addLoan(person, amount, date, note){
+  data.loans.push({id:'l'+Date.now(), person, amount:Number(amount)||0, date, note:note||'', returned:false});
+  saveData(); render();
+}
+function updateLoan(id, person, amount, date, note, returned){
+  const idx = data.loans.findIndex(l=>l.id===id);
+  if(idx>-1) data.loans[idx] = {...data.loans[idx], person, amount:Number(amount)||0, date, note:note||'', returned: !!returned};
+  saveData(); render();
+}
+function toggleLoanReturned(id){
+  const l = data.loans.find(x=>x.id===id);
+  if(l){ l.returned = !l.returned; saveData(); render(); }
+}
+
 function removeItem(kind, id){
   data[kind] = data[kind].filter(x => x.id !== id);
   saveData(); render();
@@ -582,6 +732,7 @@ function cancelDelete(){
 }
 function confirmDelete(kind, id){
   confirmingDeleteId = null;
+  if(editingItem && editingItem.kind===kind && editingItem.id===id) editingItem = null;
   removeItem(kind, id);
 }
 function deleteControl(kind, id){
@@ -598,7 +749,7 @@ function deleteControl(kind, id){
       <button class="item-del-no" onclick="cancelDelete()">Cancelar</button>
     </span>`;
   }
-  return `<button class="item-del" onclick="requestDelete('${id}')">×</button>`;
+  return `<button class="item-del" onclick="event.stopPropagation(); requestDelete('${id}')">×</button>`;
 }
 function confirmPaidDebt(id){
   const debt = data.debts.find(d => d.id === id);
@@ -612,12 +763,10 @@ function confirmPaidDebt(id){
     });
   }
   confirmingDeleteId = null;
+  if(editingItem && editingItem.kind==='debts' && editingItem.id===id) editingItem = null;
   removeItem('debts', id);
 }
-function addHormiga(amount, date, desc){
-  data.hormiga.push({id:'h'+Date.now(), amount:Number(amount), date, desc:desc||''});
-  saveData(); render();
-}
+
 function setHormigaLimit(val){
   const n = Number(val);
   data.settings.hormigaLimit = isNaN(n) ? 0 : n;
@@ -627,6 +776,121 @@ function setCurrentBalance(val){
   const n = Number(val);
   data.settings.currentBalance = isNaN(n) ? 0 : n;
   saveData(); render();
+}
+
+// ---- Ahorro (fondo de emergencia / inversiones) ----
+function savingsTotal(which){
+  return data.savings[which].movements.reduce((s,m)=> s + (m.type==='withdraw' ? -(m.amount||0) : (m.amount||0)), 0);
+}
+function addSavingsMovement(which, amount, date, note, type){
+  data.savings[which].movements.push({id:'s'+Date.now(), amount:Number(amount)||0, date, note:note||'', type});
+  saveData(); render();
+}
+function updateSavingsMovement(which, id, amount, date, note, type){
+  const list = data.savings[which].movements;
+  const idx = list.findIndex(m=>m.id===id);
+  if(idx>-1) list[idx] = {...list[idx], amount:Number(amount)||0, date, note:note||'', type};
+  saveData(); render();
+}
+function removeSavingsMovement(which, id){
+  data.savings[which].movements = data.savings[which].movements.filter(m=>m.id!==id);
+  saveData(); render();
+}
+function deleteControlSavings(which, id){
+  if(confirmingDeleteId === id){
+    return `<span class="del-confirm">
+      <button class="item-del-yes" onclick="confirmDeleteSavings('${which}','${id}')">Sí, borrar</button>
+      <button class="item-del-no" onclick="cancelDelete()">Cancelar</button>
+    </span>`;
+  }
+  return `<button class="item-del" onclick="event.stopPropagation(); requestDelete('${id}')">×</button>`;
+}
+function confirmDeleteSavings(which, id){
+  confirmingDeleteId = null;
+  const kind = 'savings-'+which;
+  if(editingItem && editingItem.kind===kind && editingItem.id===id) editingItem = null;
+  removeSavingsMovement(which, id);
+}
+function setInvestmentRate(val){
+  const n = Number(val);
+  data.savings.investments.rate = isNaN(n) ? 0 : n;
+  saveData(); render();
+}
+function setSavingsTab(tab){
+  savingsTab = tab;
+  render();
+}
+function submitSavingsMovement(which){
+  const amount = document.getElementById('sav-'+which+'-amount').value;
+  const date = document.getElementById('sav-'+which+'-date').value;
+  const note = document.getElementById('sav-'+which+'-note').value;
+  const type = document.getElementById('sav-'+which+'-type').value;
+  if(!amount || !date) return;
+  const kind = 'savings-'+which;
+  if(editingItem && editingItem.kind===kind){
+    updateSavingsMovement(which, editingItem.id, amount, date, note, type);
+    editingItem = null;
+  } else {
+    addSavingsMovement(which, amount, date, note, type);
+  }
+}
+
+// ---- Resumen por rango de fechas ----
+let rangeStart = null, rangeEnd = null;
+function setRangeStart(v){ rangeStart = v; render(); }
+function setRangeEnd(v){ rangeEnd = v; render(); }
+function computeRangeSummary(){
+  if(!rangeStart || !rangeEnd) return null;
+  const rs = new Date(rangeStart+'T00:00:00');
+  const re = new Date(rangeEnd+'T23:59:59');
+  if(re < rs) return null;
+  const incomes = data.incomes.filter(i=>{ const d=new Date(i.date+'T00:00:00'); return d>=rs && d<=re; });
+  const hormiga = data.hormiga.filter(h=>{ const d=new Date(h.date+'T00:00:00'); return d>=rs && d<=re; });
+  const loans = data.loans.filter(l=>{ const d=new Date(l.date+'T00:00:00'); return d>=rs && d<=re; });
+
+  const recurring = [];
+  data.debts.forEach(d=>{ if(d.dueDate) recurring.push({ name:d.name, amount:d.monthlyPayment||0, dayOfMonth:new Date(d.dueDate+'T00:00:00').getDate(), kind:'Deuda' }); });
+  data.expenses.forEach(e=>{ recurring.push({ name:e.name, amount:e.amount||0, dayOfMonth:e.dueDay, kind:'Gasto fijo' }); });
+
+  const dueItems = [];
+  const d = new Date(rs);
+  while(d <= re){
+    const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    recurring.forEach(it=>{
+      const effectiveDay = Math.min(it.dayOfMonth, lastDayOfMonth);
+      if(d.getDate() === effectiveDay) dueItems.push({ name: it.name, amount: it.amount, kind: it.kind, date: new Date(d).toISOString().slice(0,10) });
+    });
+    d.setDate(d.getDate()+1);
+  }
+
+  const totalIncome = incomes.reduce((s,i)=>s+(i.amount||0),0);
+  const totalHormiga = hormiga.reduce((s,h)=>s+(h.amount||0),0);
+  const totalDue = dueItems.reduce((s,x)=>s+(x.amount||0),0);
+  const totalLoaned = loans.reduce((s,l)=>s+(l.amount||0),0);
+  return { incomes, hormiga, loans, dueItems, totalIncome, totalHormiga, totalDue, totalLoaned };
+}
+function renderRangeSummary(r){
+  if(!r) return '<div class="empty-note" style="border-top:none;">Elige fecha de inicio y fin para ver el resumen.</div>';
+  const rows = [];
+  r.incomes.forEach(i=>rows.push({label:(i.source||'Ingreso'), kind:'Ingreso', amount:i.amount, date:i.date, positive:true}));
+  r.hormiga.forEach(h=>rows.push({label:(h.desc||'Gasto hormiga'), kind:'Hormiga', amount:h.amount, date:h.date, positive:false}));
+  r.loans.forEach(l=>rows.push({label:l.person, kind:'Préstamo', amount:l.amount, date:l.date, positive:false}));
+  r.dueItems.forEach(x=>rows.push({label:x.name, kind:x.kind, amount:x.amount, date:x.date, positive:false}));
+  rows.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const net = r.totalIncome - r.totalHormiga - r.totalDue - r.totalLoaned;
+  return `
+    <div class="item-row" style="border-top:none;"><div class="item-main"><div class="item-name">Ingresos</div></div><div class="item-amounts"><span class="item-amount" style="color:var(--good);">${fmtMoney(r.totalIncome)}</span></div></div>
+    <div class="item-row"><div class="item-main"><div class="item-name">Gastos hormiga</div></div><div class="item-amounts"><span class="item-amount" style="color:var(--warn);">${fmtMoney(r.totalHormiga)}</span></div></div>
+    <div class="item-row"><div class="item-main"><div class="item-name">Deudas y gastos fijos que vencen</div></div><div class="item-amounts"><span class="item-amount" style="color:var(--warn);">${fmtMoney(r.totalDue)}</span></div></div>
+    <div class="item-row"><div class="item-main"><div class="item-name">Prestado en el período</div></div><div class="item-amounts"><span class="item-amount" style="color:var(--warn);">${fmtMoney(r.totalLoaned)}</span></div></div>
+    <div class="item-row" style="border-top:2px solid var(--line);"><div class="item-main"><div class="item-name">Neto del período</div></div><div class="item-amounts"><span class="item-amount" style="${net<0?'color:var(--warn);':'color:var(--good);'}">${fmtMoney(net)}</span></div></div>
+    <p class="item-meta" style="margin:14px 0 6px 0;">Detalle</p>
+    ${rows.length ? rows.map(x=>`
+      <div class="item-row">
+        <div class="item-main"><div class="item-name">${x.label}</div><div class="item-meta">${x.kind} · ${new Date(x.date+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</div></div>
+        <div class="item-amounts"><span class="item-amount" style="${x.positive?'color:var(--good);':''}">${x.positive?'+':'-'}${fmtMoney(x.amount)}</span></div>
+      </div>`).join('') : '<div class="empty-note">Sin movimientos en este rango.</div>'}
+  `;
 }
 
 function computeAll(){
@@ -764,9 +1028,9 @@ function renderRestoreDialogs(){
     </div>`;
   }
   if(pendingRestoreData){
-    const counts = ['debts','expenses','incomes','hormiga'].map(k=>{
+    const counts = ['debts','expenses','incomes','hormiga','loans'].map(k=>{
       const n = (pendingRestoreData[k]||[]).length;
-      const labels = {debts:'deudas', expenses:'gastos fijos', incomes:'ingresos', hormiga:'gastos hormiga'};
+      const labels = {debts:'deudas', expenses:'gastos fijos', incomes:'ingresos', hormiga:'gastos hormiga', loans:'préstamos'};
       return `${n} ${labels[k]}`;
     }).join(', ');
     html += `<div class="load-fail" style="border-color:var(--good);">
@@ -867,29 +1131,39 @@ function render(){
     </div>
   </div>`;
 
-  // INGRESOS
-  html += renderSection('income', 'Ingresos de esta semana', data.incomes.length, `
-    ${data.incomes.length ? data.incomes.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).map(i=>`
+  // INGRESOS (agrupados por mes)
+  const incomeGroups = groupByMonth(data.incomes.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)));
+  const editingIncome = editingItem && editingItem.kind==='incomes' ? data.incomes.find(i=>i.id===editingItem.id) : null;
+  html += renderSection('income', 'Ingresos', data.incomes.length, `
+    ${incomeGroups.length ? incomeGroups.map(g=>`
+      <div class="month-header"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)}</span></div>
+      ${g.items.map(i=>`
       <div class="item-row">
-        <div class="item-main">
+        <div class="item-main clickable" onclick="startEdit('incomes','${i.id}')">
           <div class="item-name">${i.source ? i.source : 'Ingreso'}</div>
           <div class="item-meta">${new Date(i.date+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</div>
         </div>
         <div class="item-amounts"><span class="item-amount">${fmtMoney(i.amount)}</span></div>
         ${deleteControl('incomes', i.id)}
-      </div>`).join('') : '<div class="empty-note">Sin ingresos registrados esta semana.</div>'}
-    <div class="add-form">
+      </div>`).join('')}
+    `).join('') : '<div class="empty-note">Sin ingresos registrados.</div>'}
+    <div class="add-form" id="edit-anchor-incomes">
       <div class="field-row">
-        <div class="field"><label>Monto</label><input type="number" id="inc-amount" placeholder="0.00"></div>
-        <div class="field"><label>Fecha</label><input type="date" id="inc-date" value="${new Date().toISOString().slice(0,10)}"></div>
+        <div class="field"><label>Monto</label><input type="number" id="inc-amount" placeholder="0.00" value="${editingIncome?editingIncome.amount:''}"></div>
+        <div class="field"><label>Fecha</label><input type="date" id="inc-date" value="${editingIncome?editingIncome.date:new Date().toISOString().slice(0,10)}"></div>
       </div>
-      <div class="field"><label>Fuente (opcional)</label><input type="text" id="inc-source" placeholder="Trading, tatuajes, mantenimiento…"></div>
-      <button class="btn btn-primary" onclick="submitIncome()">Añadir ingreso</button>
+      <div class="field"><label>Fuente (opcional)</label><input type="text" id="inc-source" placeholder="Trading, tatuajes, mantenimiento…" value="${editingIncome?escapeAttr(editingIncome.source):''}"></div>
+      <div class="field-row" style="gap:8px;">
+        <button class="btn btn-primary" onclick="submitIncome()">${editingIncome?'Guardar cambios':'Añadir ingreso'}</button>
+        ${editingIncome?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+      </div>
     </div>
   `);
 
-  // GASTOS HORMIGA
+  // GASTOS HORMIGA (agrupados por mes)
   const hormigaWarn = c.hormigaOver > 0;
+  const hormigaGroups = groupByMonth(data.hormiga.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)));
+  const editingHormiga = editingItem && editingItem.kind==='hormiga' ? data.hormiga.find(h=>h.id===editingItem.id) : null;
   html += renderSection('hormiga', 'Gastos hormiga', data.hormiga.length, `
     <div class="item-row" style="border-top:none;padding-top:0;">
       <div class="item-main">
@@ -904,30 +1178,69 @@ function render(){
       <div class="item-amounts"><span class="item-amount" style="${hormigaWarn?'color:var(--warn);':''}">${fmtMoney(c.hormigaThisWeek)}</span></div>
     </div>
     ${hormigaWarn ? `<div class="empty-note" style="color:var(--warn);border-top:none;">Te pasaste del límite por ${fmtMoney(c.hormigaOver)} esta semana.</div>` : ''}
-    ${data.hormiga.length ? data.hormiga.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).map(h=>`
+    ${hormigaGroups.length ? hormigaGroups.map(g=>`
+      <div class="month-header"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)}</span></div>
+      ${g.items.map(h=>`
       <div class="item-row">
-        <div class="item-main">
+        <div class="item-main clickable" onclick="startEdit('hormiga','${h.id}')">
           <div class="item-name">${h.desc ? h.desc : 'Gasto hormiga'}</div>
           <div class="item-meta">${new Date(h.date+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</div>
         </div>
         <div class="item-amounts"><span class="item-amount">${fmtMoney(h.amount)}</span></div>
         ${deleteControl('hormiga', h.id)}
-      </div>`).join('') : '<div class="empty-note">Sin gastos hormiga registrados esta semana.</div>'}
-    <div class="add-form">
+      </div>`).join('')}
+    `).join('') : '<div class="empty-note">Sin gastos hormiga registrados.</div>'}
+    <div class="add-form" id="edit-anchor-hormiga">
       <div class="field-row">
-        <div class="field"><label>Monto</label><input type="number" id="hor-amount" placeholder="0.00"></div>
-        <div class="field"><label>Fecha</label><input type="date" id="hor-date" value="${new Date().toISOString().slice(0,10)}"></div>
+        <div class="field"><label>Monto</label><input type="number" id="hor-amount" placeholder="0.00" value="${editingHormiga?editingHormiga.amount:''}"></div>
+        <div class="field"><label>Fecha</label><input type="date" id="hor-date" value="${editingHormiga?editingHormiga.date:new Date().toISOString().slice(0,10)}"></div>
       </div>
-      <div class="field"><label>Descripción (opcional)</label><input type="text" id="hor-desc" placeholder="Café, uber, antojo…"></div>
-      <button class="btn btn-primary" onclick="submitHormiga()">Añadir gasto hormiga</button>
+      <div class="field"><label>Descripción (opcional)</label><input type="text" id="hor-desc" placeholder="Café, uber, antojo…" value="${editingHormiga?escapeAttr(editingHormiga.desc):''}"></div>
+      <div class="field-row" style="gap:8px;">
+        <button class="btn btn-primary" onclick="submitHormiga()">${editingHormiga?'Guardar cambios':'Añadir gasto hormiga'}</button>
+        ${editingHormiga?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+      </div>
+    </div>
+  `);
+
+  // PRÉSTAMOS
+  const loanGroups = groupByMonth(data.loans.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)));
+  const editingLoan = editingItem && editingItem.kind==='loans' ? data.loans.find(l=>l.id===editingItem.id) : null;
+  html += renderSection('loans', 'Préstamos', data.loans.length, `
+    ${loanGroups.length ? loanGroups.map(g=>`
+      <div class="month-header"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)}</span></div>
+      ${g.items.map(l=>`
+      <div class="item-row">
+        <div class="item-main clickable" onclick="startEdit('loans','${l.id}')">
+          <div class="item-name">${l.person}${l.note?' · '+l.note:''}</div>
+          <div class="item-meta">${new Date(l.date+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}
+            <span class="badge ${l.returned?'returned':''}" onclick="event.stopPropagation(); toggleLoanReturned('${l.id}')">${l.returned?'Devuelto ✓':'Pendiente'}</span>
+          </div>
+        </div>
+        <div class="item-amounts"><span class="item-amount">${fmtMoney(l.amount)}</span></div>
+        ${deleteControl('loans', l.id)}
+      </div>`).join('')}
+    `).join('') : '<div class="empty-note">Sin préstamos registrados.</div>'}
+    <div class="add-form" id="edit-anchor-loans">
+      <div class="field"><label>¿A quién le prestaste?</label><input type="text" id="loan-person" placeholder="Nombre" value="${editingLoan?escapeAttr(editingLoan.person):''}"></div>
+      <div class="field-row">
+        <div class="field"><label>Monto</label><input type="number" id="loan-amount" placeholder="0.00" value="${editingLoan?editingLoan.amount:''}"></div>
+        <div class="field"><label>Fecha</label><input type="date" id="loan-date" value="${editingLoan?editingLoan.date:new Date().toISOString().slice(0,10)}"></div>
+      </div>
+      <div class="field"><label>Nota (opcional)</label><input type="text" id="loan-note" placeholder="Opcional" value="${editingLoan?escapeAttr(editingLoan.note):''}"></div>
+      <div class="field-row" style="gap:8px;">
+        <button class="btn btn-primary" onclick="submitLoan()">${editingLoan?'Guardar cambios':'Añadir préstamo'}</button>
+        ${editingLoan?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+      </div>
     </div>
   `);
 
   // DEUDAS
+  const editingDebt = editingItem && editingItem.kind==='debts' ? data.debts.find(d=>d.id===editingItem.id) : null;
   html += renderSection('debts', 'Deudas', data.debts.length, `
     ${data.debts.length ? data.debts.map(d=>`
       <div class="item-row">
-        <div class="item-main">
+        <div class="item-main clickable" onclick="startEdit('debts','${d.id}')">
           <div class="item-name">${d.name}</div>
           <div class="item-meta">Saldo ${fmtMoney(d.balance)}${d.rate?` · ${d.rate}% interés`:''}${d.dueDate?` · vence ${new Date(d.dueDate+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}`:''}</div>
         </div>
@@ -937,25 +1250,29 @@ function render(){
         </div>
         ${deleteControl('debts', d.id)}
       </div>`).join('') : '<div class="empty-note">Sin deudas registradas.</div>'}
-    <div class="add-form">
-      <div class="field"><label>Nombre</label><input type="text" id="debt-name" placeholder="Ej: Amigo $12,500"></div>
+    <div class="add-form" id="edit-anchor-debts">
+      <div class="field"><label>Nombre</label><input type="text" id="debt-name" placeholder="Ej: Amigo $12,500" value="${editingDebt?escapeAttr(editingDebt.name):''}"></div>
       <div class="field-row">
-        <div class="field"><label>Saldo pendiente</label><input type="number" id="debt-balance" placeholder="0.00"></div>
-        <div class="field"><label>Interés % (opcional)</label><input type="number" id="debt-rate" placeholder="0"></div>
+        <div class="field"><label>Saldo pendiente</label><input type="number" id="debt-balance" placeholder="0.00" value="${editingDebt?editingDebt.balance:''}"></div>
+        <div class="field"><label>Interés % (opcional)</label><input type="number" id="debt-rate" placeholder="0" value="${editingDebt&&editingDebt.rate?editingDebt.rate:''}"></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>Pago mensual</label><input type="number" id="debt-payment" placeholder="0.00"></div>
-        <div class="field"><label>Próx. vencimiento</label><input type="date" id="debt-due"></div>
+        <div class="field"><label>Pago mensual</label><input type="number" id="debt-payment" placeholder="0.00" value="${editingDebt?editingDebt.monthlyPayment:''}"></div>
+        <div class="field"><label>Próx. vencimiento</label><input type="date" id="debt-due" value="${editingDebt&&editingDebt.dueDate?editingDebt.dueDate:''}"></div>
       </div>
-      <button class="btn btn-primary" onclick="submitDebt()">Añadir deuda</button>
+      <div class="field-row" style="gap:8px;">
+        <button class="btn btn-primary" onclick="submitDebt()">${editingDebt?'Guardar cambios':'Añadir deuda'}</button>
+        ${editingDebt?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+      </div>
     </div>
   `);
 
   // GASTOS FIJOS
+  const editingExpense = editingItem && editingItem.kind==='expenses' ? data.expenses.find(e=>e.id===editingItem.id) : null;
   html += renderSection('expenses', 'Gastos fijos mensuales', data.expenses.length, `
     ${data.expenses.length ? data.expenses.map(e=>`
       <div class="item-row">
-        <div class="item-main">
+        <div class="item-main clickable" onclick="startEdit('expenses','${e.id}')">
           <div class="item-name">${e.name}</div>
           <div class="item-meta">Día ${e.dueDay} de cada mes</div>
         </div>
@@ -965,14 +1282,72 @@ function render(){
         </div>
         ${deleteControl('expenses', e.id)}
       </div>`).join('') : '<div class="empty-note">Sin gastos fijos registrados.</div>'}
-    <div class="add-form">
-      <div class="field"><label>Nombre</label><input type="text" id="exp-name" placeholder="Ej: Carro, seguro, T-Mobile"></div>
+    <div class="add-form" id="edit-anchor-expenses">
+      <div class="field"><label>Nombre</label><input type="text" id="exp-name" placeholder="Ej: Carro, seguro, T-Mobile" value="${editingExpense?escapeAttr(editingExpense.name):''}"></div>
       <div class="field-row">
-        <div class="field"><label>Monto mensual</label><input type="number" id="exp-amount" placeholder="0.00"></div>
-        <div class="field"><label>Día del mes que vence</label><input type="number" id="exp-day" min="1" max="31" placeholder="1-31"></div>
+        <div class="field"><label>Monto mensual</label><input type="number" id="exp-amount" placeholder="0.00" value="${editingExpense?editingExpense.amount:''}"></div>
+        <div class="field"><label>Día del mes que vence</label><input type="number" id="exp-day" min="1" max="31" placeholder="1-31" value="${editingExpense?editingExpense.dueDay:''}"></div>
       </div>
-      <button class="btn btn-primary" onclick="submitExpense()">Añadir gasto</button>
+      <div class="field-row" style="gap:8px;">
+        <button class="btn btn-primary" onclick="submitExpense()">${editingExpense?'Guardar cambios':'Añadir gasto'}</button>
+        ${editingExpense?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+      </div>
     </div>
+  `);
+
+  // AHORRO (fondo de emergencia / inversiones)
+  html += renderSection('savings', 'Ahorro', '', `
+    <div class="tab-row">
+      <button class="tab-btn ${savingsTab==='emergency'?'active':''}" onclick="setSavingsTab('emergency')">Fondo de emergencia</button>
+      <button class="tab-btn ${savingsTab==='investments'?'active':''}" onclick="setSavingsTab('investments')">Inversiones</button>
+    </div>
+    ${renderSavingsTab(savingsTab)}
+  `);
+
+  // ESTADÍSTICAS
+  const pastWeeksForStats = pastWeeksHistory(12);
+  const allWeeksForAvg = [{income:c.incomeThisWeek, hormiga:c.hormigaThisWeek}, ...pastWeeksForStats.map(w=>({income:w.income, hormiga:w.hormiga}))];
+  const avgIncome = allWeeksForAvg.length ? allWeeksForAvg.reduce((s,w)=>s+w.income,0)/allWeeksForAvg.length : 0;
+  const avgHormiga = allWeeksForAvg.length ? allWeeksForAvg.reduce((s,w)=>s+w.hormiga,0)/allWeeksForAvg.length : 0;
+  const totalPaidDebts = (data.history.paidDebts||[]).reduce((s,p)=>s+(p.balance||0),0);
+  const totalLoansOut = data.loans.filter(l=>!l.returned).reduce((s,l)=>s+(l.amount||0),0);
+  const totalSavings = savingsTotal('emergency') + savingsTotal('investments');
+  html += renderSection('stats', 'Estadísticas', '', `
+    <div class="item-row" style="border-top:none;">
+      <div class="item-main"><div class="item-name">Ingreso semanal promedio</div><div class="item-meta">Últimas ${allWeeksForAvg.length} semanas con datos</div></div>
+      <div class="item-amounts"><span class="item-amount">${fmtMoney(avgIncome)}</span></div>
+    </div>
+    <div class="item-row">
+      <div class="item-main"><div class="item-name">Gasto hormiga semanal promedio</div></div>
+      <div class="item-amounts"><span class="item-amount">${fmtMoney(avgHormiga)}</span></div>
+    </div>
+    <div class="item-row">
+      <div class="item-main"><div class="item-name">Deuda saldada hasta ahora</div></div>
+      <div class="item-amounts"><span class="item-amount" style="color:var(--good);">${fmtMoney(totalPaidDebts)}</span></div>
+    </div>
+    <div class="item-row">
+      <div class="item-main"><div class="item-name">Deuda pendiente</div></div>
+      <div class="item-amounts"><span class="item-amount" style="color:var(--warn);">${fmtMoney(c.totalDebt)}</span></div>
+    </div>
+    <div class="item-row">
+      <div class="item-main"><div class="item-name">Prestado sin devolver</div></div>
+      <div class="item-amounts"><span class="item-amount">${fmtMoney(totalLoansOut)}</span></div>
+    </div>
+    <div class="item-row">
+      <div class="item-main"><div class="item-name">Ahorro total (fondo + inversiones)</div></div>
+      <div class="item-amounts"><span class="item-amount" style="color:var(--good);">${fmtMoney(totalSavings)}</span></div>
+    </div>
+  `);
+
+  // RESUMEN POR RANGO DE FECHAS
+  const rangeSummary = computeRangeSummary();
+  const rangeCount = rangeSummary ? (rangeSummary.incomes.length + rangeSummary.hormiga.length + rangeSummary.loans.length + rangeSummary.dueItems.length) : '';
+  html += renderSection('range', 'Resumen por rango de fechas', rangeCount, `
+    <div class="field-row" style="padding-top:4px;">
+      <div class="field"><label>Desde</label><input type="date" id="range-start-input" value="${rangeStart||''}" onchange="setRangeStart(this.value)"></div>
+      <div class="field"><label>Hasta</label><input type="date" id="range-end-input" value="${rangeEnd||''}" onchange="setRangeEnd(this.value)"></div>
+    </div>
+    ${renderRangeSummary(rangeSummary)}
   `);
 
   // HISTORIAL
@@ -1009,16 +1384,73 @@ function render(){
       </div>`).join('') : '<div class="empty-note">Nada programado en los próximos 30 días.</div>'}
   </div>`;
 
-  html += `<p class="footnote">Esta versión guarda tus datos en el almacenamiento de este navegador (no depende de Claude ni de internet para guardar). Ábrela siempre igual: con Chrome o Safari, desde el mismo archivo — no en modo incógnito. La meta semanal promedio reparte cada pago mensual entre 4.345 semanas. "Vence en 7 días" y el faltante usan el mayor de los dos, para que nunca te agarre corto justo antes de una fecha límite. Los gastos hormiga se restan de lo que entra antes de calcular el faltante, así el número refleja lo que de verdad te queda libre.</p>`;
+  html += `<p class="footnote">Esta versión guarda tus datos en el almacenamiento de este navegador (no depende de Claude ni de internet para guardar). Ábrela siempre igual: con Chrome o Safari, desde el mismo archivo — no en modo incógnito. La meta semanal promedio reparte cada pago mensual entre 4.345 semanas. "Vence en 7 días" y el faltante usan el mayor de los dos, para que nunca te agarre corto justo antes de una fecha límite. Los gastos hormiga se restan de lo que entra antes de calcular el faltante, así el número refleja lo que de verdad te queda libre. Toca cualquier movimiento para editarlo.</p>`;
 
   app.innerHTML = html;
 }
 
+function renderSavingsTab(which){
+  const label = which==='emergency' ? 'Fondo de emergencia' : 'Inversiones';
+  const movements = data.savings[which].movements;
+  const total = savingsTotal(which);
+  const kind = 'savings-'+which;
+  const editing = editingItem && editingItem.kind===kind ? movements.find(m=>m.id===editingItem.id) : null;
+  const groups = groupByMonth(movements.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)), m => m.type==='withdraw' ? -(m.amount||0) : (m.amount||0));
+
+  let html = `<div class="hero" style="padding:14px 0 18px 0;border-bottom:1px solid var(--line);margin-bottom:14px;">
+    <p class="hero-label">${label} — total actual</p>
+    <p class="hero-number good" style="font-size:30px;">${fmtMoney(total)}</p>
+  </div>`;
+
+  if(which === 'investments'){
+    html += `<div class="balance-row">
+      <label for="inv-rate">Interés / rendimiento (%)</label>
+      <input type="number" id="inv-rate" value="${data.savings.investments.rate||0}" style="width:90px;" onchange="setInvestmentRate(this.value)">
+    </div>`;
+  }
+
+  html += groups.length ? groups.map(g=>`
+    <div class="month-header"><span>${g.label}</span><span class="amt">${fmtMoney(g.total)}</span></div>
+    ${g.items.map(m=>`
+      <div class="item-row">
+        <div class="item-main clickable" onclick="startEdit('${kind}','${m.id}')">
+          <div class="item-name">${m.type==='withdraw'?'Retiro':'Depósito'}${m.note?' · '+m.note:''}</div>
+          <div class="item-meta">${new Date(m.date+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</div>
+        </div>
+        <div class="item-amounts"><span class="item-amount" style="${m.type==='withdraw'?'color:var(--warn);':'color:var(--good);'}">${m.type==='withdraw'?'-':'+'}${fmtMoney(m.amount)}</span></div>
+        ${deleteControlSavings(which, m.id)}
+      </div>`).join('')}
+  `).join('') : '<div class="empty-note">Sin movimientos registrados.</div>';
+
+  html += `<div class="add-form" id="edit-anchor-${kind}">
+    <div class="field-row">
+      <div class="field"><label>Tipo</label>
+        <select id="sav-${which}-type">
+          <option value="deposit" ${editing&&editing.type==='deposit'?'selected':''}>Depósito</option>
+          <option value="withdraw" ${editing&&editing.type==='withdraw'?'selected':''}>Retiro</option>
+        </select>
+      </div>
+      <div class="field"><label>Monto</label><input type="number" id="sav-${which}-amount" placeholder="0.00" value="${editing?editing.amount:''}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fecha</label><input type="date" id="sav-${which}-date" value="${editing?editing.date:new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Nota (opcional)</label><input type="text" id="sav-${which}-note" placeholder="Opcional" value="${editing?escapeAttr(editing.note):''}"></div>
+    </div>
+    <div class="field-row" style="gap:8px;">
+      <button class="btn btn-primary" onclick="submitSavingsMovement('${which}')">${editing?'Guardar cambios':'Añadir movimiento'}</button>
+      ${editing?'<button class="btn" onclick="cancelEdit()">Cancelar</button>':''}
+    </div>
+  </div>`;
+
+  return html;
+}
+
 function renderSection(key, title, count, bodyHtml){
   const open = sectionsOpen[key];
+  const countHtml = (count === '' ) ? '' : ` <span class="section-count">(${count})</span>`;
   return `<section>
     <div class="section-head" onclick="toggleSection('${key}')">
-      <p class="section-title">${title} <span class="section-count">(${count})</span></p>
+      <p class="section-title">${title}${countHtml}</p>
       <span class="chevron ${open?'open':''}">›</span>
     </div>
     <div class="section-body ${open?'open':''}">${bodyHtml}</div>
@@ -1030,14 +1462,24 @@ function submitIncome(){
   const date = document.getElementById('inc-date').value;
   const source = document.getElementById('inc-source').value;
   if(!amount || !date) return;
-  addIncome(amount, date, source);
+  if(editingItem && editingItem.kind==='incomes'){
+    updateIncome(editingItem.id, amount, date, source);
+    editingItem = null;
+  } else {
+    addIncome(amount, date, source);
+  }
 }
 function submitHormiga(){
   const amount = document.getElementById('hor-amount').value;
   const date = document.getElementById('hor-date').value;
   const desc = document.getElementById('hor-desc').value;
   if(!amount || !date) return;
-  addHormiga(amount, date, desc);
+  if(editingItem && editingItem.kind==='hormiga'){
+    updateHormiga(editingItem.id, amount, date, desc);
+    editingItem = null;
+  } else {
+    addHormiga(amount, date, desc);
+  }
 }
 function submitDebt(){
   const name = document.getElementById('debt-name').value;
@@ -1046,14 +1488,38 @@ function submitDebt(){
   const payment = document.getElementById('debt-payment').value;
   const due = document.getElementById('debt-due').value;
   if(!name || !payment) return;
-  addDebt(name, balance||0, rate||0, due, payment);
+  if(editingItem && editingItem.kind==='debts'){
+    updateDebt(editingItem.id, name, balance||0, rate||0, due, payment);
+    editingItem = null;
+  } else {
+    addDebt(name, balance||0, rate||0, due, payment);
+  }
 }
 function submitExpense(){
   const name = document.getElementById('exp-name').value;
   const amount = document.getElementById('exp-amount').value;
   const day = document.getElementById('exp-day').value;
   if(!name || !amount || !day) return;
-  addExpense(name, amount, day);
+  if(editingItem && editingItem.kind==='expenses'){
+    updateExpense(editingItem.id, name, amount, day);
+    editingItem = null;
+  } else {
+    addExpense(name, amount, day);
+  }
+}
+function submitLoan(){
+  const person = document.getElementById('loan-person').value;
+  const amount = document.getElementById('loan-amount').value;
+  const date = document.getElementById('loan-date').value;
+  const note = document.getElementById('loan-note').value;
+  if(!person || !amount || !date) return;
+  if(editingItem && editingItem.kind==='loans'){
+    const existing = data.loans.find(l=>l.id===editingItem.id);
+    updateLoan(editingItem.id, person, amount, date, note, existing ? existing.returned : false);
+    editingItem = null;
+  } else {
+    addLoan(person, amount, date, note);
+  }
 }
 
 loadData();
