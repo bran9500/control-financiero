@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control semanal</title>
+<style>
+  :root{
+    --bg:#12161C;
+    --surface:#1B2129;
+    --surface-raised:#212832;
+    --line:#2A313B;
+    --ink:#E8E6E0;
+    --ink-dim:#8B93A0;
+    --ink-faint:#5B6472;
+    --good:#6FA98A;
+    --warn:#C4693B;
+    --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+    --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    padding:0 0 60px 0;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:28px 18px;}
+
+  .today{
+    font-family:var(--serif);
+    font-size:15px;
+    color:var(--ink-dim);
+    margin:0 0 4px 0;
+    text-transform:capitalize;
+  }
+  h1{
+    font-family:var(--serif);
+    font-size:26px;
+    font-weight:normal;
+    margin:0 0 22px 0;
+    color:var(--ink);
+    border-bottom:1px solid var(--line);
+    padding-bottom:18px;
+  }
+
+  .hero{
+    padding:22px 0 26px 0;
+    border-bottom:1px solid var(--line);
+    margin-bottom:22px;
+  }
+  .hero-label{
+    font-size:13px;
+    color:var(--ink-dim);
+    margin:0 0 6px 0;
+  }
+  .hero-number{
+    font-family:var(--mono);
+    font-size:44px;
+    font-variant-numeric:tabular-nums;
+    margin:0;
+    line-height:1.1;
+  }
+  .hero-number.good{color:var(--good);}
+  .hero-number.warn{color:var(--warn);}
+  .hero-sub{
+    font-size:13px;
+    color:var(--ink-faint);
+    margin-top:8px;
+  }
+
+  .stat-row{
+    display:flex;
+    gap:0;
+    border-bottom:1px solid var(--line);
+    margin-bottom:22px;
+  }
+  .stat{
+    flex:1;
+    padding:14px 14px 18px 0;
+  }
+  .stat + .stat{
+    border-left:1px solid var(--line);
+    padding-left:14px;
+  }
+  .stat-label{font-size:12.5px;color:var(--ink-dim);margin:0 0 6px 0;}
+  .stat-value{
+    font-family:var(--mono);
+    font-size:20px;
+    font-variant-numeric:tabular-nums;
+    margin:0;
+  }
+
+  section{margin-bottom:8px;}
+  .section-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    padding:14px 0 10px 0;
+    cursor:pointer;
+    user-select:none;
+  }
+  .section-title{
+    font-family:var(--serif);
+    font-size:18px;
+    margin:0;
+  }
+  .section-count{
+    font-size:12.5px;
+    color:var(--ink-faint);
+  }
+  .chevron{
+    color:var(--ink-faint);
+    font-size:13px;
+    transition:transform .15s ease;
+  }
+  .chevron.open{transform:rotate(90deg);}
+
+  .section-body{display:none;padding-bottom:14px;}
+  .section-body.open{display:block;}
+
+  .item-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 0;
+    border-top:1px solid var(--line);
+    gap:10px;
+  }
+  .item-main{flex:1;min-width:0;}
+  .item-name{font-size:14.5px;color:var(--ink);}
+  .item-meta{font-size:12px;color:var(--ink-faint);margin-top:2px;}
+  .item-amounts{text-align:right;flex-shrink:0;}
+  .item-amount{
+    font-family:var(--mono);
+    font-size:15px;
+    font-variant-numeric:tabular-nums;
+  }
+  .item-weekly{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--ink-faint);
+    margin-top:2px;
+  }
+  .item-del{
+    background:none;border:none;color:var(--ink-faint);
+    font-size:18px;cursor:pointer;padding:0 0 0 8px;line-height:1;
+  }
+  .item-del:hover{color:var(--warn);}
+
+  .del-confirm{display:flex;gap:6px;flex-shrink:0;}
+  .item-del-yes, .item-del-no{
+    font-size:12px;
+    padding:6px 9px;
+    border-radius:4px;
+    cursor:pointer;
+    border:1px solid var(--line);
+    background:var(--surface-raised);
+    color:var(--ink);
+    white-space:nowrap;
+  }
+  .item-del-yes{border-color:var(--warn);color:var(--warn);}
+  .item-del-no{color:var(--ink-dim);}
+
+  .empty-note{
+    font-size:13px;color:var(--ink-faint);
+    padding:12px 0;border-top:1px solid var(--line);
+  }
+
+  .add-form{
+    border-top:1px solid var(--line);
+    padding-top:14px;
+    margin-top:4px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .field-row{display:flex;gap:8px;}
+  .field{flex:1;display:flex;flex-direction:column;gap:4px;}
+  label{font-size:11.5px;color:var(--ink-dim);}
+  input, select{
+    background:var(--surface-raised);
+    border:1px solid var(--line);
+    color:var(--ink);
+    border-radius:4px;
+    padding:9px 10px;
+    font-size:14px;
+    font-family:var(--sans);
+    width:100%;
+  }
+  input::placeholder{color:var(--ink-faint);}
+  input:focus, select:focus{outline:1px solid var(--ink-dim);}
+
+  .btn{
+    background:var(--surface-raised);
+    border:1px solid var(--line);
+    color:var(--ink);
+    padding:10px 14px;
+    border-radius:4px;
+    font-size:14px;
+    cursor:pointer;
+    align-self:flex-start;
+  }
+  .btn:active{background:var(--line);}
+  .btn-primary{border-color:var(--good);color:var(--good);}
+
+  .upcoming{
+    margin-top:26px;
+    padding-top:6px;
+  }
+
+  .weeks-ahead{
+    margin-bottom:22px;
+    padding-bottom:8px;
+    border-bottom:1px solid var(--line);
+  }
+  .week-row{
+    display:flex;
+    justify-content:space-between;
+    padding:9px 0;
+    border-top:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .week-row.current{color:var(--ink);}
+  .week-row .amt{
+    font-family:var(--mono);
+    font-variant-numeric:tabular-nums;
+  }
+  .week-row.current .amt{color:var(--warn);}
+  .week-row.total{
+    font-family:var(--serif);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+  .week-row.total .amt{color:var(--ink);}
+  .upcoming-row{
+    display:flex;
+    justify-content:space-between;
+    padding:9px 0;
+    border-top:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .upcoming-row .days{
+    color:var(--ink-faint);
+    font-size:12px;
+    margin-left:8px;
+  }
+  .upcoming-row .amt{
+    font-family:var(--mono);
+    font-variant-numeric:tabular-nums;
+  }
+  .soon .amt{color:var(--warn);}
+
+  .footnote{
+    font-size:12px;
+    color:var(--ink-faint);
+    margin-top:26px;
+    line-height:1.6;
+  }
+
+  .save-status{
+    font-size:12px;
+    min-height:16px;
+    margin:-4px 0 14px 0;
+    color:var(--ink-faint);
+  }
+  .save-status.error{color:var(--warn);}
+  .save-status.ok{color:var(--good);}
+
+  .balance-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:10px 0;
+    border-bottom:1px solid var(--line);
+    margin-bottom:4px;
+  }
+  .balance-row label{
+    font-size:13px;
+    color:var(--ink-dim);
+    flex:1;
+  }
+  .balance-row input{
+    width:110px;
+    text-align:right;
+    font-family:var(--mono);
+    background:var(--surface-raised);
+    border:1px solid var(--line);
+    color:var(--good);
+    border-radius:4px;
+    padding:8px 10px;
+    font-size:15px;
+  }
+
+  .backup-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:18px;
+  }
+  .backup-btn{
+    flex:1 1 auto;
+    min-width:100px;
+    font-size:12.5px;
+    padding:9px 8px;
+    text-align:center;
+  }
+
+  .load-fail{
+    border:1px solid var(--warn);
+    border-radius:6px;
+    padding:18px;
+    margin-top:10px;
+  }
+  .load-fail-title{
+    font-family:var(--serif);
+    font-size:17px;
+    margin:0 0 10px 0;
+    color:var(--ink);
+  }
+  .load-fail-body{
+    font-size:13.5px;
+    color:var(--ink-dim);
+    line-height:1.6;
+    margin:0 0 16px 0;
+  }
+  #restore-textarea{
+    width:100%;
+    min-height:110px;
+    background:var(--surface-raised);
+    border:1px solid var(--line);
+    color:var(--ink);
+    border-radius:4px;
+    padding:10px;
+    font-size:12px;
+    font-family:var(--mono);
+    resize:vertical;
+    margin-bottom:4px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+const STORAGE_KEY = 'ledger-data';
+let data = { debts: [], expenses: [], incomes: [], hormiga: [], settings: { hormigaLimit: 50, currentBalance: 0 } };
+let sectionsOpen = { income:true, debts:false, expenses:false, hormiga:false };
+let loaded = false;
+
+const fmtMoney = n => {
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+};
+
+function startOfWeek(d){
+  const date = new Date(d);
+  const day = date.getDay(); // 0 Sun .. 6 Sat
+  const diff = (day === 0 ? -6 : 1) - day; // move to Monday
+  date.setDate(date.getDate() + diff);
+  date.setHours(0,0,0,0);
+  return date;
+}
+
+function nextExpenseDueDate(dueDay, from){
+  const d = new Date(from);
+  d.setHours(0,0,0,0);
+  let candidate = new Date(d.getFullYear(), d.getMonth(), dueDay);
+  if(candidate < d) candidate = new Date(d.getFullYear(), d.getMonth()+1, dueDay);
+  return candidate;
+}
+
+let saveStatus = null; // null | 'saving' | 'ok' | 'error'
+let saveStatusTimer = null;
+
+function setSaveStatus(status){
+  saveStatus = status;
+  renderStatusOnly();
+  if(saveStatusTimer) clearTimeout(saveStatusTimer);
+  if(status === 'ok'){
+    saveStatusTimer = setTimeout(()=>{ saveStatus = null; renderStatusOnly(); }, 1800);
+  }
+}
+
+function renderStatusOnly(){
+  const el = document.getElementById('save-status');
+  if(!el) return;
+  if(saveStatus === 'saving') el.textContent = 'Guardando…';
+  else if(saveStatus === 'ok') el.textContent = 'Guardado ✓';
+  else if(saveStatus === 'error') el.textContent = 'No se pudo guardar — reintentando en segundo plano';
+  else el.textContent = '';
+  el.className = 'save-status ' + (saveStatus || '');
+}
+
+let loadState = 'ok'; // localStorage es síncrono: no hay estado de "cargando" ni reintentos de red
+let saveBlocked = false;
+
+function loadData(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      data = {
+        debts: parsed.debts||[],
+        expenses: parsed.expenses||[],
+        incomes: parsed.incomes||[],
+        hormiga: parsed.hormiga||[],
+        settings: { hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50, currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0 }
+      };
+    }
+    loadState = 'ok';
+  }catch(e){
+    // localStorage no disponible (modo incógnito muy restrictivo, o navegador muy viejo).
+    loadState = 'unavailable';
+  }
+  loaded = true;
+  render();
+}
+
+function downloadBackup(){
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `control-semanal-respaldo-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+let showBackupBox = false;
+let copyStatus = '';
+
+function toggleBackupBox(){
+  showBackupBox = !showBackupBox;
+  copyStatus = '';
+  render();
+  if(showBackupBox){
+    setTimeout(()=>{
+      const el = document.getElementById('backup-textarea');
+      if(el){ el.focus(); el.select(); }
+    }, 50);
+  }
+}
+
+async function copyBackupText(){
+  const text = document.getElementById('backup-textarea').value;
+  try{
+    await navigator.clipboard.writeText(text);
+    copyStatus = 'Copiado ✓ — ahora pégalo en Notas o donde quieras guardarlo.';
+  }catch(e){
+    // El portapapeles automático puede estar bloqueado: recurrimos a selección manual.
+    const el = document.getElementById('backup-textarea');
+    el.focus();
+    el.select();
+    try{
+      document.execCommand('copy');
+      copyStatus = 'Copiado ✓ — ahora pégalo en Notas o donde quieras guardarlo.';
+    }catch(e2){
+      copyStatus = 'No pudimos copiarlo automáticamente. El texto ya está seleccionado: mantén presionado y elige "Copiar".';
+    }
+  }
+  render();
+  setTimeout(()=>{
+    const el = document.getElementById('backup-textarea');
+    if(el){ el.focus(); el.select(); }
+  }, 50);
+}
+
+let pendingRestoreData = null;
+let restoreError = null;
+let showRestoreBox = false;
+
+function toggleRestoreBox(){
+  showRestoreBox = !showRestoreBox;
+  restoreError = null;
+  render();
+}
+
+function restoreFromTextarea(){
+  const el = document.getElementById('restore-textarea');
+  const val = el ? el.value : '';
+  if(!val || !val.trim()){
+    restoreError = 'Pega el contenido del archivo antes de restaurar.';
+    render();
+    return;
+  }
+  try{
+    const parsed = JSON.parse(val);
+    if(typeof parsed !== 'object' || parsed === null) throw new Error('formato inválido');
+    pendingRestoreData = parsed;
+    restoreError = null;
+    showRestoreBox = false;
+  }catch(err){
+    pendingRestoreData = null;
+    restoreError = 'Ese texto no es un respaldo válido — revisa que copiaste todo el contenido del archivo, desde la primera { hasta la última }.';
+  }
+  render();
+}
+
+function confirmRestore(){
+  const parsed = pendingRestoreData;
+  data = {
+    debts: parsed.debts||[],
+    expenses: parsed.expenses||[],
+    incomes: parsed.incomes||[],
+    hormiga: parsed.hormiga||[],
+    settings: { hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50, currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0 }
+  };
+  pendingRestoreData = null;
+  saveBlocked = false;
+  loadState = 'ok';
+  saveData();
+  render();
+}
+
+function cancelRestore(){
+  pendingRestoreData = null;
+  render();
+}
+
+function saveData(){
+  if(loadState === 'unavailable'){
+    setSaveStatus('error');
+    return;
+  }
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    setSaveStatus('ok');
+  }catch(e){
+    // Típicamente por cuota llena (muy improbable con este volumen de datos) o modo incógnito estricto.
+    setSaveStatus('error');
+  }
+}
+
+function addDebt(name, balance, rate, dueDate, monthlyPayment){
+  data.debts.push({id:'d'+Date.now(), name, balance:Number(balance), rate:Number(rate)||0, dueDate, monthlyPayment:Number(monthlyPayment)});
+  saveData(); render();
+}
+function addExpense(name, amount, dueDay){
+  data.expenses.push({id:'e'+Date.now(), name, amount:Number(amount), dueDay:Number(dueDay)});
+  saveData(); render();
+}
+function addIncome(amount, date, source){
+  data.incomes.push({id:'i'+Date.now(), amount:Number(amount), date, source:source||''});
+  saveData(); render();
+}
+function removeItem(kind, id){
+  data[kind] = data[kind].filter(x => x.id !== id);
+  saveData(); render();
+}
+
+let confirmingDeleteId = null;
+function requestDelete(id){
+  confirmingDeleteId = id;
+  render();
+}
+function cancelDelete(){
+  confirmingDeleteId = null;
+  render();
+}
+function confirmDelete(kind, id){
+  confirmingDeleteId = null;
+  removeItem(kind, id);
+}
+function deleteControl(kind, id){
+  if(confirmingDeleteId === id){
+    return `<span class="del-confirm">
+      <button class="item-del-yes" onclick="confirmDelete('${kind}','${id}')">Sí, borrar</button>
+      <button class="item-del-no" onclick="cancelDelete()">Cancelar</button>
+    </span>`;
+  }
+  return `<button class="item-del" onclick="requestDelete('${id}')">×</button>`;
+}
+function addHormiga(amount, date, desc){
+  data.hormiga.push({id:'h'+Date.now(), amount:Number(amount), date, desc:desc||''});
+  saveData(); render();
+}
+function setHormigaLimit(val){
+  const n = Number(val);
+  data.settings.hormigaLimit = isNaN(n) ? 0 : n;
+  saveData(); render();
+}
+function setCurrentBalance(val){
+  const n = Number(val);
+  data.settings.currentBalance = isNaN(n) ? 0 : n;
+  saveData(); render();
+}
+
+function computeAll(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const weekStart = startOfWeek(today);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+6); weekEnd.setHours(23,59,59,999);
+  const in7 = new Date(today); in7.setDate(in7.getDate()+7);
+
+  const weeklyEquivDebt = data.debts.map(d => ({...d, weekly: (d.monthlyPayment||0)/4.345}));
+  const weeklyEquivExp = data.expenses.map(e => ({...e, weekly: (e.amount||0)/4.345}));
+
+  const weeklyTarget = weeklyEquivDebt.reduce((s,d)=>s+d.weekly,0) + weeklyEquivExp.reduce((s,e)=>s+e.weekly,0);
+
+  let dueThisWeek = 0;
+  const upcoming = [];
+  data.debts.forEach(d=>{
+    if(!d.dueDate) return;
+    const dd = new Date(d.dueDate+'T00:00:00');
+    const days = Math.round((dd-today)/86400000);
+    if(dd >= today && dd <= in7) dueThisWeek += (d.monthlyPayment||0);
+    if(days >= 0 && days <= 30) upcoming.push({name:d.name, amount:d.monthlyPayment||0, days, date:dd});
+  });
+  data.expenses.forEach(e=>{
+    const dd = nextExpenseDueDate(e.dueDay, today);
+    const days = Math.round((dd-today)/86400000);
+    if(dd >= today && dd <= in7) dueThisWeek += (e.amount||0);
+    if(days >= 0 && days <= 30) upcoming.push({name:e.name, amount:e.amount, days, date:dd});
+  });
+  upcoming.sort((a,b)=>a.date-b.date);
+
+  const incomeThisWeek = data.incomes
+    .filter(i=>{ const dd=new Date(i.date+'T00:00:00'); return dd>=weekStart && dd<=weekEnd; })
+    .reduce((s,i)=>s+(i.amount||0),0);
+
+  const hormigaThisWeek = data.hormiga
+    .filter(h=>{ const dd=new Date(h.date+'T00:00:00'); return dd>=weekStart && dd<=weekEnd; })
+    .reduce((s,h)=>s+(h.amount||0),0);
+
+  const hormigaLimit = (data.settings && data.settings.hormigaLimit) || 0;
+  const hormigaOver = hormigaThisWeek - hormigaLimit;
+
+  const availableThisWeek = incomeThisWeek - hormigaThisWeek;
+  const need = Math.max(weeklyTarget, dueThisWeek);
+  const shortfall = need - availableThisWeek;
+
+  const currentBalance = (data.settings && data.settings.currentBalance) || 0;
+  const totalWithBalance = currentBalance + availableThisWeek;
+  const realGap = need - totalWithBalance; // positivo = aún te falta, negativo = te sobra
+
+  const totalDebt = data.debts.reduce((s,d)=>s+(d.balance||0),0);
+  const monthlyTotal = data.debts.reduce((s,d)=>s+(d.monthlyPayment||0),0) + data.expenses.reduce((s,e)=>s+(e.amount||0),0);
+
+  // Recurring items projected as "day of month" for multi-week lookahead
+  const recurring = [];
+  data.debts.forEach(d=>{
+    if(!d.dueDate) return;
+    recurring.push({ name:d.name, amount:d.monthlyPayment||0, dayOfMonth: new Date(d.dueDate+'T00:00:00').getDate() });
+  });
+  data.expenses.forEach(e=>{
+    recurring.push({ name:e.name, amount:e.amount||0, dayOfMonth:e.dueDay });
+  });
+
+  function amountDueInRange(rangeStart, rangeEnd){
+    let total = 0;
+    const d = new Date(rangeStart);
+    while(d <= rangeEnd){
+      const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+      recurring.forEach(it=>{
+        const effectiveDay = Math.min(it.dayOfMonth, lastDayOfMonth);
+        if(d.getDate() === effectiveDay) total += it.amount;
+      });
+      d.setDate(d.getDate()+1);
+    }
+    return total;
+  }
+
+  const weeksAhead = [];
+  for(let w=0; w<4; w++){
+    const ws = new Date(weekStart); ws.setDate(ws.getDate() + w*7);
+    const we = new Date(ws); we.setDate(we.getDate()+6); we.setHours(23,59,59,999);
+    const due = amountDueInRange(ws, we);
+    weeksAhead.push({ weekStart: ws, weekEnd: we, due, isCurrent: w===0 });
+  }
+
+  return {weeklyTarget, dueThisWeek, incomeThisWeek, hormigaThisWeek, hormigaLimit, hormigaOver, availableThisWeek, shortfall, totalDebt, monthlyTotal, upcoming, weeklyEquivDebt, weeklyEquivExp, need, weeksAhead, currentBalance, totalWithBalance, realGap};
+}
+
+function toggleSection(key){
+  sectionsOpen[key] = !sectionsOpen[key];
+  render();
+}
+
+function renderBackupBox(){
+  if(!showBackupBox) return '';
+  const text = JSON.stringify(data, null, 2)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return `<div class="load-fail">
+    <p class="load-fail-title">Tu respaldo (ya seleccionado, listo para copiar)</p>
+    <p class="load-fail-body">Toca "Copiar", o si no funciona, mantén presionado el texto y elige "Copiar" tú mismo. Después pégalo en Notas, WhatsApp (contigo mismo), o donde lo vayas a guardar.</p>
+    <textarea id="backup-textarea" readonly>${text}</textarea>
+    <button class="btn btn-primary" style="margin-top:8px;" onclick="copyBackupText()">Copiar</button>
+    <button class="btn" style="margin-top:8px;" onclick="toggleBackupBox()">Cerrar</button>
+    ${copyStatus ? `<p class="load-fail-body" style="color:var(--good);margin-top:8px;">${copyStatus}</p>` : ''}
+  </div>`;
+}
+
+function renderRestoreDialogs(){
+  let html = '';
+  if(showRestoreBox){
+    html += `<div class="load-fail">
+      <p class="load-fail-title">Pega aquí el contenido de tu respaldo</p>
+      <p class="load-fail-body">Abre el archivo .json que descargaste (en tu app de Archivos/Descargas), selecciona todo el texto, cópialo, y pégalo en el cuadro de abajo.</p>
+      <textarea id="restore-textarea" placeholder='{"debts": [...], ...}'></textarea>
+      <button class="btn btn-primary" style="margin-top:8px;" onclick="restoreFromTextarea()">Restaurar desde este texto</button>
+      <button class="btn" style="margin-top:8px;" onclick="toggleRestoreBox()">Cancelar</button>
+    </div>`;
+  }
+  if(pendingRestoreData){
+    const counts = ['debts','expenses','incomes','hormiga'].map(k=>{
+      const n = (pendingRestoreData[k]||[]).length;
+      const labels = {debts:'deudas', expenses:'gastos fijos', incomes:'ingresos', hormiga:'gastos hormiga'};
+      return `${n} ${labels[k]}`;
+    }).join(', ');
+    html += `<div class="load-fail" style="border-color:var(--good);">
+      <p class="load-fail-title">¿Restaurar este respaldo?</p>
+      <p class="load-fail-body">Contiene: ${counts}. Esto va a <strong>reemplazar todos los datos actuales</strong> de la app por los de este archivo.</p>
+      <button class="btn btn-primary" onclick="confirmRestore()">Sí, restaurar</button>
+      <button class="btn" style="margin-top:8px;" onclick="cancelRestore()">Cancelar</button>
+    </div>`;
+  }
+  if(restoreError){
+    html += `<div class="load-fail"><p class="load-fail-body" style="color:var(--warn);">${restoreError}</p></div>`;
+  }
+  return html;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  if(!loaded){ app.innerHTML = '<p style="color:#8B93A0;padding-top:40px;">Cargando…</p>'; return; }
+
+  if(loadState === 'unavailable'){
+    app.innerHTML = `
+      <p class="today">${new Date().toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'})}</p>
+      <h1>Control semanal</h1>
+      <div class="load-fail">
+        <p class="load-fail-title">Tu navegador está bloqueando el guardado local</p>
+        <p class="load-fail-body">Esto pasa sobre todo en modo incógnito/privado muy estricto. Abre este archivo en una pestaña normal (no incógnita) de Chrome o Safari para que pueda guardar tus datos.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const c = computeAll();
+  const today = new Date();
+  const todayStr = today.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
+
+  let html = '';
+  html += `<p class="today">${todayStr}</p>`;
+  html += `<h1>Control semanal</h1>`;
+  html += `<p class="save-status" id="save-status"></p>`;
+
+  html += `<div class="backup-row">
+    <button class="btn backup-btn" onclick="toggleBackupBox()">📋 Copiar respaldo</button>
+    <button class="btn backup-btn" onclick="downloadBackup()">⬇ Descargar archivo</button>
+    <button class="btn backup-btn" onclick="toggleRestoreBox()">⬆ Restaurar</button>
+  </div>
+  ${renderBackupBox()}
+  ${renderRestoreDialogs()}`;
+
+  html += `<div class="balance-row">
+    <label for="current-balance">¿Cuánto tienes ahora en la mano/cuenta?</label>
+    <input type="number" id="current-balance" value="${c.currentBalance}" placeholder="0.00" onchange="setCurrentBalance(this.value)">
+  </div>`;
+
+  const heroClass = c.shortfall > 0 ? 'warn' : 'good';
+  const heroText = c.shortfall > 0 ? fmtMoney(c.shortfall) : fmtMoney(0);
+  html += `<div class="hero">
+    <p class="hero-label">${c.shortfall > 0 ? 'Te falta ganar esta semana' : 'Vas cubierto esta semana'}</p>
+    <p class="hero-number ${heroClass}">${heroText}</p>
+    <p class="hero-sub">Ingresado: ${fmtMoney(c.incomeThisWeek)} − hormiga: ${fmtMoney(c.hormigaThisWeek)} = disponible ${fmtMoney(c.availableThisWeek)} · Meta: ${fmtMoney(c.need)}</p>
+  </div>`;
+
+  const gapClass = c.realGap > 0 ? 'warn' : 'good';
+  const gapLabel = c.realGap > 0 ? 'Sumando lo que ya tienes, aún te faltan' : 'Sumando lo que ya tienes, te sobran';
+  const gapText = fmtMoney(Math.abs(c.realGap));
+  html += `<div class="hero" style="border-top:none;padding-top:0;">
+    <p class="hero-label">${gapLabel}</p>
+    <p class="hero-number ${gapClass}" style="font-size:32px;">${gapText}</p>
+    <p class="hero-sub">Tienes ${fmtMoney(c.currentBalance)} + disponible esta semana ${fmtMoney(c.availableThisWeek)} = ${fmtMoney(c.totalWithBalance)} frente a una meta de ${fmtMoney(c.need)}</p>
+  </div>`;
+
+  html += `<div class="stat-row">
+    <div class="stat">
+      <p class="stat-label">Meta semanal promedio</p>
+      <p class="stat-value">${fmtMoney(c.weeklyTarget)}</p>
+    </div>
+    <div class="stat">
+      <p class="stat-label">Total mensual</p>
+      <p class="stat-value">${fmtMoney(c.monthlyTotal)}</p>
+    </div>
+    <div class="stat">
+      <p class="stat-label">Deuda total</p>
+      <p class="stat-value">${fmtMoney(c.totalDebt)}</p>
+    </div>
+  </div>`;
+
+  const fmtRange = (s,e) => `${s.toLocaleDateString('es-ES',{day:'numeric',month:'short'})} – ${e.toLocaleDateString('es-ES',{day:'numeric',month:'short'})}`;
+  html += `<div class="weeks-ahead">
+    <p class="section-title" style="padding-bottom:6px;">Próximas semanas</p>
+    ${c.weeksAhead.map((w,i)=>`
+      <div class="week-row ${w.isCurrent?'current':''}">
+        <span>${w.isCurrent ? 'Esta semana' : fmtRange(w.weekStart, w.weekEnd)}</span>
+        <span class="amt">${w.isCurrent ? fmtMoney(Math.max(c.shortfall,0)) + ' por ganar' : fmtMoney(w.due)}</span>
+      </div>`).join('')}
+    <div class="week-row total">
+      <span>Total del mes (4 semanas)</span>
+      <span class="amt">${fmtMoney(c.weeksAhead.reduce((s,w)=>s+w.due,0))}</span>
+    </div>
+  </div>`;
+
+  // INGRESOS
+  html += renderSection('income', 'Ingresos de esta semana', data.incomes.length, `
+    ${data.incomes.length ? data.incomes.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).map(i=>`
+      <div class="item-row">
+        <div class="item-main">
+          <div class="item-name">${i.source ? i.source : 'Ingreso'}</div>
+          <div class="item-meta">${new Date(i.date+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</div>
+        </div>
+        <div class="item-amounts"><span class="item-amount">${fmtMoney(i.amount)}</span></div>
+        ${deleteControl('incomes', i.id)}
+      </div>`).join('') : '<div class="empty-note">Sin ingresos registrados esta semana.</div>'}
+    <div class="add-form">
+      <div class="field-row">
+        <div class="field"><label>Monto</label><input type="number" id="inc-amount" placeholder="0.00"></div>
+        <div class="field"><label>Fecha</label><input type="date" id="inc-date" value="${new Date().toISOString().slice(0,10)}"></div>
+      </div>
+      <div class="field"><label>Fuente (opcional)</label><input type="text" id="inc-source" placeholder="Trading, tatuajes, mantenimiento…"></div>
+      <button class="btn btn-primary" onclick="submitIncome()">Añadir ingreso</button>
+    </div>
+  `);
+
+  // GASTOS HORMIGA
+  const hormigaWarn = c.hormigaOver > 0;
+  html += renderSection('hormiga', 'Gastos hormiga', data.hormiga.length, `
+    <div class="item-row" style="border-top:none;padding-top:0;">
+      <div class="item-main">
+        <div class="item-meta">Límite semanal</div>
+      </div>
+      <div class="item-amounts">
+        <input type="number" id="hormiga-limit" value="${c.hormigaLimit}" style="width:90px;text-align:right;" onchange="setHormigaLimit(this.value)">
+      </div>
+    </div>
+    <div class="item-row">
+      <div class="item-main"><div class="item-meta">Gastado esta semana</div></div>
+      <div class="item-amounts"><span class="item-amount" style="${hormigaWarn?'color:var(--warn);':''}">${fmtMoney(c.hormigaThisWeek)}</span></div>
+    </div>
+    ${hormigaWarn ? `<div class="empty-note" style="color:var(--warn);border-top:none;">Te pasaste del límite por ${fmtMoney(c.hormigaOver)} esta semana.</div>` : ''}
+    ${data.hormiga.length ? data.hormiga.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).map(h=>`
+      <div class="item-row">
+        <div class="item-main">
+          <div class="item-name">${h.desc ? h.desc : 'Gasto hormiga'}</div>
+          <div class="item-meta">${new Date(h.date+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</div>
+        </div>
+        <div class="item-amounts"><span class="item-amount">${fmtMoney(h.amount)}</span></div>
+        ${deleteControl('hormiga', h.id)}
+      </div>`).join('') : '<div class="empty-note">Sin gastos hormiga registrados esta semana.</div>'}
+    <div class="add-form">
+      <div class="field-row">
+        <div class="field"><label>Monto</label><input type="number" id="hor-amount" placeholder="0.00"></div>
+        <div class="field"><label>Fecha</label><input type="date" id="hor-date" value="${new Date().toISOString().slice(0,10)}"></div>
+      </div>
+      <div class="field"><label>Descripción (opcional)</label><input type="text" id="hor-desc" placeholder="Café, uber, antojo…"></div>
+      <button class="btn btn-primary" onclick="submitHormiga()">Añadir gasto hormiga</button>
+    </div>
+  `);
+
+  // DEUDAS
+  html += renderSection('debts', 'Deudas', data.debts.length, `
+    ${data.debts.length ? data.debts.map(d=>`
+      <div class="item-row">
+        <div class="item-main">
+          <div class="item-name">${d.name}</div>
+          <div class="item-meta">Saldo ${fmtMoney(d.balance)}${d.rate?` · ${d.rate}% interés`:''}${d.dueDate?` · vence ${new Date(d.dueDate+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}`:''}</div>
+        </div>
+        <div class="item-amounts">
+          <div class="item-amount">${fmtMoney(d.monthlyPayment)}/mes</div>
+          <div class="item-weekly">${fmtMoney((d.monthlyPayment||0)/4.345)}/sem</div>
+        </div>
+        ${deleteControl('debts', d.id)}
+      </div>`).join('') : '<div class="empty-note">Sin deudas registradas.</div>'}
+    <div class="add-form">
+      <div class="field"><label>Nombre</label><input type="text" id="debt-name" placeholder="Ej: Amigo $12,500"></div>
+      <div class="field-row">
+        <div class="field"><label>Saldo pendiente</label><input type="number" id="debt-balance" placeholder="0.00"></div>
+        <div class="field"><label>Interés % (opcional)</label><input type="number" id="debt-rate" placeholder="0"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Pago mensual</label><input type="number" id="debt-payment" placeholder="0.00"></div>
+        <div class="field"><label>Próx. vencimiento</label><input type="date" id="debt-due"></div>
+      </div>
+      <button class="btn btn-primary" onclick="submitDebt()">Añadir deuda</button>
+    </div>
+  `);
+
+  // GASTOS FIJOS
+  html += renderSection('expenses', 'Gastos fijos mensuales', data.expenses.length, `
+    ${data.expenses.length ? data.expenses.map(e=>`
+      <div class="item-row">
+        <div class="item-main">
+          <div class="item-name">${e.name}</div>
+          <div class="item-meta">Día ${e.dueDay} de cada mes</div>
+        </div>
+        <div class="item-amounts">
+          <div class="item-amount">${fmtMoney(e.amount)}/mes</div>
+          <div class="item-weekly">${fmtMoney((e.amount||0)/4.345)}/sem</div>
+        </div>
+        ${deleteControl('expenses', e.id)}
+      </div>`).join('') : '<div class="empty-note">Sin gastos fijos registrados.</div>'}
+    <div class="add-form">
+      <div class="field"><label>Nombre</label><input type="text" id="exp-name" placeholder="Ej: Carro, seguro, T-Mobile"></div>
+      <div class="field-row">
+        <div class="field"><label>Monto mensual</label><input type="number" id="exp-amount" placeholder="0.00"></div>
+        <div class="field"><label>Día del mes que vence</label><input type="number" id="exp-day" min="1" max="31" placeholder="1-31"></div>
+      </div>
+      <button class="btn btn-primary" onclick="submitExpense()">Añadir gasto</button>
+    </div>
+  `);
+
+  // PRÓXIMOS VENCIMIENTOS
+  html += `<div class="upcoming">
+    <p class="section-title" style="padding-bottom:6px;">Próximos 30 días</p>
+    ${c.upcoming.length ? c.upcoming.map(u=>`
+      <div class="upcoming-row ${u.days<=7?'soon':''}">
+        <span>${u.name} <span class="days">${u.days===0?'hoy':u.days===1?'mañana':'en '+u.days+' días'}</span></span>
+        <span class="amt">${fmtMoney(u.amount)}</span>
+      </div>`).join('') : '<div class="empty-note">Nada programado en los próximos 30 días.</div>'}
+  </div>`;
+
+  html += `<p class="footnote">Esta versión guarda tus datos en el almacenamiento de este navegador (no depende de Claude ni de internet para guardar). Ábrela siempre igual: con Chrome o Safari, desde el mismo archivo — no en modo incógnito. La meta semanal promedio reparte cada pago mensual entre 4.345 semanas. "Vence en 7 días" y el faltante usan el mayor de los dos, para que nunca te agarre corto justo antes de una fecha límite. Los gastos hormiga se restan de lo que entra antes de calcular el faltante, así el número refleja lo que de verdad te queda libre.</p>`;
+
+  app.innerHTML = html;
+}
+
+function renderSection(key, title, count, bodyHtml){
+  const open = sectionsOpen[key];
+  return `<section>
+    <div class="section-head" onclick="toggleSection('${key}')">
+      <p class="section-title">${title} <span class="section-count">(${count})</span></p>
+      <span class="chevron ${open?'open':''}">›</span>
+    </div>
+    <div class="section-body ${open?'open':''}">${bodyHtml}</div>
+  </section>`;
+}
+
+function submitIncome(){
+  const amount = document.getElementById('inc-amount').value;
+  const date = document.getElementById('inc-date').value;
+  const source = document.getElementById('inc-source').value;
+  if(!amount || !date) return;
+  addIncome(amount, date, source);
+}
+function submitHormiga(){
+  const amount = document.getElementById('hor-amount').value;
+  const date = document.getElementById('hor-date').value;
+  const desc = document.getElementById('hor-desc').value;
+  if(!amount || !date) return;
+  addHormiga(amount, date, desc);
+}
+function submitDebt(){
+  const name = document.getElementById('debt-name').value;
+  const balance = document.getElementById('debt-balance').value;
+  const rate = document.getElementById('debt-rate').value;
+  const payment = document.getElementById('debt-payment').value;
+  const due = document.getElementById('debt-due').value;
+  if(!name || !payment) return;
+  addDebt(name, balance||0, rate||0, due, payment);
+}
+function submitExpense(){
+  const name = document.getElementById('exp-name').value;
+  const amount = document.getElementById('exp-amount').value;
+  const day = document.getElementById('exp-day').value;
+  if(!name || !amount || !day) return;
+  addExpense(name, amount, day);
+}
+
+loadData();
+</script>
+</body>
+</html>
