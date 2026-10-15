@@ -22,6 +22,9 @@ Versión 2.1 — todo en una sola app:
   del teléfono y escuchar la nota en voz alta.
 - Widget de pantalla de inicio con lo de la semana y accesos a las demás apps.
 
+Versión 2.2: los extractos de TD Bank también se pueden subir en PDF. Se leen en el
+teléfono con pdf.js (`assets/pdfjs`, v3.11.174, licencia Apache-2.0), sin internet.
+
 Los datos se guardan con `localStorage` dentro del WebView (almacenamiento local
 del propio dispositivo), así que no dependen de ninguna conexión ni servicio
 externo — persisten igual que en un navegador normal.

@@ -1239,7 +1239,7 @@ function normDesc(s){ return String(s || '').toUpperCase().replace(/\s+/g,' ').t
 function txFingerprint(t){ return t.date+'|'+t.dir+'|'+Math.round(t.amount*100)+'|'+normDesc(t.desc); }
 
 // Nombre corto del comercio, para agrupar ("VISA DDA PUR 461234 SHELL OIL 5744 JERSEY CITY" → "SHELL OIL").
-const DESC_NOISE = /\b(VISA|DDA|PUR|PURCHASE|POS|DEBIT|CREDIT|CARD|CRD|DBT|CHECKCARD|ACH|ELECTRONIC|PMT|WEB|PAYMENT|RECURRING|ONLINE|XFER|AP|AUT|INTL|DES|ID|INDN|CO|PPD|CCD|TO|FROM|THE|SQ|TST|PP|DEPOSIT|DEP|WITHDRAWAL|WDRL)\b/g;
+const DESC_NOISE = /\b(VISA|DDA|PUR|PURCHASE|POS|DEBIT|CREDIT|CARD|CRD|DBT|CHECKCARD|DBCRD|CRCRD|ACH|ELECTRONIC|PMT|WEB|PAYMENT|RECURRING|ONLINE|XFER|AP|AUT|INTL|DES|ID|INDN|CO|PPD|CCD|TO|FROM|THE|SQ|TST|PP|DEPOSIT|DEP|WITHDRAWAL|WDRL)\b/g;
 function merchantKey(desc){
   const s = normDesc(desc).replace(/\b([A-Z])-(?=[A-Z])/g,'$1').replace(/[^A-Z ]/g,' ').replace(DESC_NOISE,' ').replace(/\s+/g,' ').trim();
   const words = s.split(' ').filter(w => w.length > 1);
@@ -1289,27 +1289,33 @@ function readFileText(f){
 }
 
 // Se pueden elegir varios extractos a la vez (por ejemplo los últimos 3 meses).
+let importBusy = false;
 async function handleStatementFiles(input){
   const files = Array.from(input.files || []);
   if(!files.length) return;
   importError = null;
-  const pdfs = files.filter(f => /\.pdf$/i.test(f.name));
-  if(pdfs.length === files.length){
-    importError = 'Esos archivos son PDF. La app necesita los extractos en formato CSV: en TD Bank elige "Descargar" y el formato CSV (o Excel/CSV).';
-    input.value = ''; render(); return;
-  }
+  importBusy = true; render();
   try{
     const parsed = [];
     for(const f of files){
-      if(/\.pdf$/i.test(f.name)) continue;
-      parsed.push({ name: f.name, text: await readFileText(f) });
+      const isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+      if(isPdf){
+        let lines;
+        try{ lines = await pdfToLines(await readFileBuffer(f)); }
+        catch(e){ parsed.push({ name: f.name, error: 'no pude abrir el PDF (' + (e && e.message ? e.message : 'error') + ')' }); continue; }
+        if(!lines.length){ parsed.push({ name: f.name, error: 'el PDF no tiene texto (parece una foto escaneada)' }); continue; }
+        const r = parsePdfStatementLines(lines);
+        parsed.push({ name: f.name, pdf: r });
+      } else {
+        parsed.push({ name: f.name, text: await readFileText(f) });
+      }
     }
     buildImportPreview(parsed);
-    if(pdfs.length) importPreview.warnings.push(`Se saltaron ${pdfs.length} archivo(s) PDF; súbelos en CSV.`);
   }catch(err){
     importPreview = null;
-    importError = 'No pude leer los archivos. Asegúrate de descargarlos desde TD Bank en formato CSV y vuelve a intentarlo.' + (err && err.message ? ' (' + err.message + ')' : '');
+    importError = 'No pude leer los archivos. Revisa que sean extractos de TD Bank (PDF o CSV) y vuelve a intentarlo.' + (err && err.message ? ' (' + err.message + ')' : '');
   }
+  importBusy = false;
   input.value = '';
   render();
   window.scrollTo(0,0);
@@ -1332,9 +1338,14 @@ function buildImportPreview(files){
   let skipped = 0;
   files.forEach(f => {
     try{
-      const r = parseStatement(f.text);
+      if(f.error) throw new Error(f.error);
+      let r;
+      if(f.pdf){
+        if(!f.pdf.txs.length) throw new Error('no encontré movimientos en el PDF');
+        r = f.pdf;
+      } else r = parseStatement(f.text);
       r.txs.forEach(t => { t.fp = txFingerprint(t); });
-      perFile.push({ name: f.name, txs: r.txs });
+      perFile.push({ name: f.name, txs: r.txs, endBalance: f.pdf ? f.pdf.endBalance : null, endDate: f.pdf ? f.pdf.endDate : null });
       skipped += r.skipped;
     }catch(e){ warnings.push(f.name + ': ' + e.message); }
   });
@@ -1380,6 +1391,10 @@ function buildImportPreview(files){
   // Saldo final: el del extracto más reciente (si el archivo trae columna de saldo).
   let lastBalance = null, lastBalanceDate = null;
   perFile.forEach(pf => {
+    if(pf.endBalance !== null && pf.endBalance !== undefined && pf.endDate){
+      if(lastBalanceDate === null || pf.endDate > lastBalanceDate){ lastBalance = pf.endBalance; lastBalanceDate = pf.endDate; }
+      return;
+    }
     const withBal = pf.txs.filter(t => t.balance !== null && !isNaN(t.balance));
     if(!withBal.length) return;
     const newestFirst = pf.txs[0].date >= pf.txs[pf.txs.length-1].date;
@@ -1409,6 +1424,16 @@ function setPreviewCategory(i, cat){
     if(o !== t && o.dir === t.dir && o.auto !== 'manual-set' && o.auto !== 'manual' && merchantKey(o.desc) === key) o.category = cat;
   });
   upsertRule(key, t.dir, cat);
+  render();
+}
+// Por si el PDF puso un movimiento al revés (entrada/salida).
+function flipPreviewDir(i){
+  if(!importPreview || !importPreview.fresh[i]) return;
+  const t = importPreview.fresh[i];
+  t.dir = t.dir === 'in' ? 'out' : 'in';
+  t.fp = txFingerprint(t);
+  const g = guessCategory(t);
+  t.category = g.category; t.auto = g.auto;
   render();
 }
 function toggleUpdateBalance(v){ if(importPreview){ importPreview.updateBalance = !!v; } }
@@ -1526,6 +1551,145 @@ function niceMax(v){
 function shortMoney(n){
   if(n >= 1000) return '$' + (n/1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/,'') + 'k';
   return '$' + Math.round(n);
+}
+
+// =====================================================================
+//  EXTRACTOS EN PDF (TD Bank) — se leen en el teléfono, sin internet
+// =====================================================================
+let pdfLibPromise = null;
+function loadScript(src){
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error('no se pudo cargar ' + src));
+    document.head.appendChild(s);
+  });
+}
+// pdf.js se carga solo la primera vez que subes un PDF (pesa un poco y no hace falta antes).
+function loadPdfLib(){
+  if(!pdfLibPromise){
+    pdfLibPromise = loadScript('pdfjs/pdf.worker.min.js')     // corre en el mismo hilo (sin Worker)
+      .then(() => loadScript('pdfjs/pdf.min.js'))
+      .then(() => {
+        const lib = window.pdfjsLib;
+        if(!lib) throw new Error('lector de PDF no disponible');
+        lib.GlobalWorkerOptions.workerSrc = 'pdfjs/pdf.worker.min.js';
+        return lib;
+      })
+      .catch(e => { pdfLibPromise = null; throw e; });
+  }
+  return pdfLibPromise;
+}
+function readFileBuffer(f){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(new Error('no se pudo abrir ' + f.name));
+    r.readAsArrayBuffer(f);
+  });
+}
+// Convierte cada página en renglones de texto, respetando la posición de las palabras.
+async function pdfToLines(buffer){
+  const lib = await loadPdfLib();
+  const doc = await lib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
+  const lines = [];
+  for(let p = 1; p <= doc.numPages; p++){
+    const page = await doc.getPage(p);
+    const tc = await page.getTextContent();
+    const rows = [];
+    tc.items.forEach(it => {
+      if(!it.str || !it.str.trim()) return;
+      const x = it.transform[4], y = it.transform[5];
+      let row = rows.find(r => Math.abs(r.y - y) < 2.5);
+      if(!row){ row = { y, items: [] }; rows.push(row); }
+      row.items.push({ x, w: it.width || 0, s: it.str });
+    });
+    rows.sort((a,b) => b.y - a.y);
+    rows.forEach(r => {
+      r.items.sort((a,b) => a.x - b.x);
+      let txt = '', end = null;
+      r.items.forEach(it => {
+        if(end !== null && it.x - end > 1.5 && !/\s$/.test(txt)) txt += ' ';
+        txt += it.s; end = it.x + it.w;
+      });
+      txt = txt.replace(/\s+/g, ' ').trim();
+      if(txt) lines.push(txt);
+    });
+  }
+  return lines;
+}
+
+const MONTHS_EN = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
+                   ene:1,abr:4,ago:8,dic:12};
+function statementPeriod(lines){
+  const joined = lines.slice(0, 80).join(' ');
+  let m = joined.match(/statement period:?\s*([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\s*[-–to]+\s*([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/i);
+  if(m){
+    const m1 = MONTHS_EN[m[1].toLowerCase()], m2 = MONTHS_EN[m[4].toLowerCase()];
+    if(m1 && m2) return { start: ymd(+m[3], m1, +m[2]), end: ymd(+m[6], m2, +m[5]) };
+  }
+  m = joined.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*(?:-|–|to|through|thru)\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
+  if(m){
+    const y1 = +m[3] < 100 ? +m[3] + 2000 : +m[3], y2 = +m[6] < 100 ? +m[6] + 2000 : +m[6];
+    return { start: ymd(y1, +m[1], +m[2]), end: ymd(y2, +m[4], +m[5]) };
+  }
+  m = joined.match(/\b(20\d\d)\b/);
+  return m ? { start: null, end: null, year: +m[1] } : null;
+}
+
+const PDF_IN_HEAD  = /^(electronic deposits|deposits|other credits|credits|deposits (and|&) (other )?(additions|credits)|interest (paid|earned)|incoming)/i;
+const PDF_OUT_HEAD = /^(electronic payments|other withdrawals|withdrawals|checks paid|checks|service charges|fees|atm|point of sale|debit card|card purchases|purchases|withdrawals (and|&) (other )?(subtractions|debits))/i;
+const PDF_STOP     = /^(daily balance summary|daily balance|balance summary|how to balance|call 1-|for consumer accounts|in case of errors)/i;
+const PDF_SKIP     = /^(subtotal|total|beginning balance|ending balance|posting date|date description|description amount|page \d|continued)/i;
+
+// Lee un extracto en PDF y devuelve los movimientos en el mismo formato que los CSV.
+function parsePdfStatementLines(lines){
+  const period = statementPeriod(lines);
+  const endYear = period && period.end ? +period.end.slice(0,4) : (period && period.year) || new Date().getFullYear();
+  const endMonth = period && period.end ? +period.end.slice(5,7) : 12;
+  const toDate = (mo, d, y) => {
+    if(y) return ymd(+y < 100 ? +y + 2000 : +y, +mo, +d);
+    return ymd(+mo > endMonth ? endYear - 1 : endYear, +mo, +d); // extractos de diciembre–enero
+  };
+  const lineRe = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s+(.*?)\s+(-?\(?\$?\s?[\d,]*\d\.\d{2}\)?-?)(?:\s+(-?\$?[\d,]*\d\.\d{2}-?))?$/;
+
+  const txs = [];
+  let section = null;     // 'in' | 'out' | null
+  let inActivity = false; // ya pasamos el resumen de la cuenta
+  let last = null, contLines = 0, skipped = 0;
+  let endBalance = null;
+
+  lines.forEach(raw => {
+    const line = raw.trim();
+    const bal = line.match(/^ending balance\s+(-?\$?[\d,]*\d\.\d{2})/i);
+    if(bal && endBalance === null) endBalance = parseBankAmount(bal[1]);
+    if(/daily account activity|account activity|transaction (history|detail)/i.test(line)){ inActivity = true; section = null; last = null; return; }
+    if(PDF_STOP.test(line)){ section = null; last = null; return; }
+    const headIn = PDF_IN_HEAD.test(line), headOut = PDF_OUT_HEAD.test(line);
+    const m = line.match(lineRe);
+    if(!m && (headIn || headOut)){ section = headIn ? 'in' : 'out'; last = null; return; }
+    if(PDF_SKIP.test(line)){ last = null; return; }
+    if(m){
+      const date = toDate(m[1], m[2], m[3]);
+      const a = parseBankAmount(m[5]);
+      const desc = m[4].replace(/\s+/g, ' ').trim();
+      if(!date || a === null || a === 0 || !desc){ skipped++; last = null; return; }
+      let dir = section;
+      if(a < 0) dir = 'out';
+      if(!dir) dir = /deposit|credit|refund|payroll|zelle.*from|transfer from|interest|reversal/i.test(desc) ? 'in' : 'out';
+      last = { date, desc, amount: Math.round(Math.abs(a)*100)/100, dir, balance: null, fromPdf: true };
+      txs.push(last);
+      contLines = 0;
+      return;
+    }
+    // Renglón que continúa la descripción del movimiento anterior.
+    if(last && contLines < 2 && line.length < 90 && !/\d\.\d{2}$/.test(line)){
+      last.desc = (last.desc + ' ' + line).replace(/\s+/g, ' ').trim();
+      contLines++;
+      return;
+    }
+    last = null;
+  });
+  return { txs, skipped, endBalance, endDate: period && period.end ? period.end : null, inActivity };
 }
 
 // =====================================================================
@@ -2461,23 +2625,27 @@ function recurringBody(rec){
 function renderImportTab(){
   if(importPreview) return renderImportPreview();
   let html = `<div class="card">
-    <label class="upload-zone" for="statement-input">
+    ${importBusy ? `<div class="upload-zone" style="cursor:default;">
       <span class="ico">${ICONS.import}</span>
-      <span class="big">Elegir extractos (CSV)</span>
+      <span class="big">Leyendo extractos…</span>
+      <span class="small">Esto tarda unos segundos con los PDF</span>
+    </div>` : `<label class="upload-zone" for="statement-input">
+      <span class="ico">${ICONS.import}</span>
+      <span class="big">Elegir extractos (PDF o CSV)</span>
       <span class="small">Puedes elegir varios a la vez, por ejemplo los últimos 3 meses</span>
-    </label>
-    <input type="file" id="statement-input" accept=".csv,text/csv,text/comma-separated-values,text/plain,application/vnd.ms-excel" multiple style="display:none" onchange="handleStatementFiles(this)">
+    </label>`}
+    <input type="file" id="statement-input" accept=".pdf,application/pdf,.csv,text/csv,text/comma-separated-values,text/plain,application/vnd.ms-excel" multiple style="display:none" onchange="handleStatementFiles(this)">
     ${importError ? `<div class="error-box">${escapeAttr(importError)}</div>` : ''}
   </div>
   <div class="card">
     <div class="card-head"><p class="card-title">Cómo sacar el extracto de TD Bank</p></div>
     <ol class="steps">
       <li>Entra a <b>tdbank.com</b> desde el navegador (Chrome) e inicia sesión.</li>
-      <li>Abre tu cuenta y busca la opción <b>Descargar / Download</b> (ícono de flecha) en la lista de movimientos.</li>
-      <li>Elige las fechas (una semana, un mes, o los últimos 3 meses).</li>
-      <li>Elige el formato <b>CSV</b> (a veces dice "Excel/CSV") y descárgalo.</li>
-      <li>Vuelve aquí y toca <b>Elegir extractos</b>.</li>
+      <li>Abre tu cuenta y entra a <b>Statements / Estados de cuenta</b>.</li>
+      <li>Descarga el PDF de cada mes que quieras (por ejemplo los últimos 3).</li>
+      <li>Vuelve aquí, toca <b>Elegir extractos</b> y selecciónalos todos juntos.</li>
     </ol>
+    <p class="item-meta" style="margin-top:10px;">También sirve el archivo CSV de "Descargar movimientos" si alguna vez lo prefieres: trae los movimientos más recientes, incluso los de esta semana.</p>
     <p class="item-meta" style="margin-top:10px;">No importa si subes fechas que ya habías subido: los movimientos repetidos se detectan y no se cuentan dos veces. Tampoco los que ya anotaste a mano.</p>
   </div>`;
 
@@ -2535,7 +2703,7 @@ function renderImportPreview(){
   }
   html += `<div class="card">
     <div class="card-head"><p class="card-title">Movimientos nuevos</p></div>
-    <p class="item-meta" style="margin:-4px 0 8px 0;">La app ya les puso categoría. Si alguna está mal, cámbiala aquí: los demás del mismo comercio se cambian solos.</p>
+    <p class="item-meta" style="margin:-4px 0 8px 0;">La app ya les puso categoría. Si alguna está mal, cámbiala aquí: los demás del mismo comercio se cambian solos.${p.fresh.some(t=>t.fromPdf) ? ' Si un movimiento del PDF quedó como entrada y era salida (o al revés), toca ⇄.' : ''}</p>
     ${p.fresh.map((t,i) => `
       <div class="item-row ${i===0?'list-first':''}" style="align-items:flex-start;">
         <div class="item-main">
@@ -2546,6 +2714,7 @@ function renderImportPreview(){
         <div class="item-amounts" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
           <span class="item-amount ${t.dir==='in'?'in':''}">${t.dir==='in'?'+':'-'}${fmtMoney(t.amount)}</span>
           <select class="cat-select" onchange="setPreviewCategory(${i}, this.value)">${catOptions(t.dir, t.category)}</select>
+          ${t.fromPdf ? `<button class="card-link" style="font-size:11.5px;padding:0;" onclick="flipPreviewDir(${i})">⇄ ${t.dir==='in'?'es salida':'es entrada'}</button>` : ''}
         </div>
       </div>`).join('')}
   </div>`;
