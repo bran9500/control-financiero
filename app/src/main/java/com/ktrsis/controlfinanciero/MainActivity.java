@@ -137,6 +137,24 @@ public class MainActivity extends Activity {
 
     /** Funciones que la página puede llamar como Android.saveFile(...) y Android.scheduleReminders(...). */
     private class Bridge {
+        /** Abre una de las subaplicaciones: "rotador", "bot" o "notas". */
+        @JavascriptInterface
+        public void openApp(String name) {
+            runOnUiThread(() -> {
+                Class<?> c = null;
+                if ("rotador".equals(name)) c = com.ktrsis.rotador.MainActivity.class;
+                else if ("bot".equals(name)) c = com.ktrsis.bot.MainActivity.class;
+                else if ("notas".equals(name)) c = com.ktrsis.notas.NotesActivity.class;
+                if (c != null) startActivity(new Intent(MainActivity.this, c));
+            });
+        }
+
+        /** Datos ya formateados para el widget de la pantalla de inicio. */
+        @JavascriptInterface
+        public void updateWidget(String json) {
+            try { WeekWidget.saveAndRefresh(MainActivity.this, json); } catch (Exception ignored) { }
+        }
+
         /** Guarda un archivo de texto en Descargas. Devuelve dónde quedó, o "" si falló. */
         @JavascriptInterface
         public String saveFile(String name, String mime, String content) {

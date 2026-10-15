@@ -1,0 +1,837 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html,body{margin:0}[hidden]{display:none!important}</style>
+<title>Rotador de Lotes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Cormorant+Garamond:ital,wght@1,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: una sola columna de mando, pensada para media pantalla del celular (pantalla dividida) */
+:root{
+  --bg:#0e1116; --panel:#171b22; --line:#262c36; --fg:#e8ebf0; --muted:#8b93a1;
+  --win:#2fc47a; --loss:#ef5a5a; --accent:#d9b45a; --dead:#4a505b;
+  --gold:#d9b45a; --gold-dim:rgba(217,180,90,.35); --gold-deep:#a8842f;
+  --gold-grad:linear-gradient(100deg,#f3dd9b 0%,#d9b45a 45%,#a8842f 100%);
+  --script:"Cormorant Garamond",Georgia,serif;
+  --display:"Big Shoulders Display",Impact,"Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+/* Temas: cada uno redefine solo el color de acento */
+:root[data-skin="esmeralda"]{--accent:#4cc79a;--gold:#4cc79a;--gold-dim:rgba(76,199,154,.35);--gold-deep:#2b8a67;--gold-grad:linear-gradient(100deg,#b8f0d8 0%,#4cc79a 45%,#2b8a67 100%)}
+:root[data-skin="zafiro"]{--accent:#6f9cff;--gold:#6f9cff;--gold-dim:rgba(111,156,255,.38);--gold-deep:#3e63c4;--gold-grad:linear-gradient(100deg,#cfdcff 0%,#6f9cff 45%,#3e63c4 100%)}
+:root[data-skin="rubi"]{--accent:#ee6b8c;--gold:#ee6b8c;--gold-dim:rgba(238,107,140,.38);--gold-deep:#b23c5c;--gold-grad:linear-gradient(100deg,#ffd0dc 0%,#ee6b8c 45%,#b23c5c 100%)}
+:root[data-skin="amatista"]{--accent:#b08cf0;--gold:#b08cf0;--gold-dim:rgba(176,140,240,.38);--gold-deep:#7650c0;--gold-grad:linear-gradient(100deg,#e6d9ff 0%,#b08cf0 45%,#7650c0 100%)}
+:root[data-skin="platino"]{--accent:#cfd6e0;--gold:#cfd6e0;--gold-dim:rgba(207,214,224,.35);--gold-deep:#8a94a3;--gold-grad:linear-gradient(100deg,#ffffff 0%,#cfd6e0 45%,#8a94a3 100%)}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);padding-inline:16px;padding-block:12px 24px}
+.wrap{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+h1{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.04em;text-transform:uppercase;margin:0}
+.iconbtn{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:6px 10px;font:500 12px var(--body);cursor:pointer}
+.iconbtn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{align-items:flex-end;padding-bottom:10px;border-bottom:1px solid transparent;border-image:linear-gradient(90deg,var(--gold-deep),var(--gold) 30%,transparent) 1}
+.hello{display:flex;flex-direction:column;gap:0;min-width:0}
+.greet{font:italic 600 30px/1.05 var(--script);background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hello h1{font-size:13px;letter-spacing:.22em;color:var(--muted);font-weight:600}
+.iconbtn.gold{border-color:var(--gold-dim);color:var(--gold)}
+.now{background:var(--panel);border:1px solid var(--gold-dim);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.now .who{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.now .who b{color:var(--accent)}
+.stake{font-family:var(--display);font-weight:800;font-size:72px;line-height:.95;font-variant-numeric:tabular-nums}
+.stake small{font-size:32px;color:var(--muted);margin-right:2px}
+.hint{font-size:13px;color:var(--muted)}
+.hint b{color:var(--fg);font-weight:500}
+
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.act{border:0;border-radius:12px;padding:18px 8px;font:800 24px var(--display);letter-spacing:.06em;text-transform:uppercase;color:#0e1116;cursor:pointer}
+.act.w{background:var(--win)} .act.l{background:var(--loss)}
+.act:active{transform:scale(.97)}
+.act.flash{box-shadow:0 0 0 3px var(--gold)}
+.cutbtn{border-color:var(--gold-dim);color:var(--gold)}
+.cutbtn.armed{background:var(--gold);color:#0e1116;border-color:var(--gold)}
+.sess li.sel{border-color:var(--gold);box-shadow:inset 3px 0 0 var(--gold)}
+.sess .ck{width:18px;height:18px;border:1.5px solid var(--gold-dim);border-radius:4px;display:inline-grid;place-items:center;margin-right:6px;vertical-align:-3px;font-size:12px;color:#0e1116}
+.sess li.sel .ck{background:var(--gold);border-color:var(--gold)}
+.mergebar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.mergebar .yes{background:var(--gold);border-color:var(--gold);color:#0e1116}
+.neu{color:var(--gold)}
+/* Introducción */
+.onb{position:fixed;inset:0;z-index:20;background:var(--bg);overflow-y:auto;padding-inline:16px;padding-block:calc(env(safe-area-inset-top,0px) + 18px) 28px}
+.onb .wrap{gap:16px;min-height:100%}
+.onb-dots{display:flex;gap:6px}
+.onb-dots i{flex:1;height:3px;border-radius:2px;background:var(--line)}
+.onb-dots i.on{background:var(--gold)}
+.onb h2{font:italic 600 34px/1.05 var(--script);margin:6px 0 0;background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.onb p.lead{color:var(--muted);font-size:14px;line-height:1.5;margin:0;max-width:52ch}
+.onb .field{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+.onb input[type=text],.onb input[type=number],.onb select{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px;font:500 16px var(--body);width:100%;box-sizing:border-box}
+.onb input:focus,.onb select:focus{border-color:var(--gold);outline:none}
+.choices{display:flex;flex-direction:column;gap:8px}
+.choice{display:flex;flex-direction:column;gap:2px;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;color:var(--fg);font:500 15px var(--body);cursor:pointer}
+.choice small{color:var(--muted);font-size:12px;font-weight:400}
+.choice.on{border-color:var(--gold);box-shadow:inset 3px 0 0 var(--gold)}
+.swatches{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.swatch{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 6px;color:var(--fg);font:500 12px var(--body);cursor:pointer}
+.swatch i{width:34px;height:34px;border-radius:50%;display:block}
+.swatch.on{border-color:var(--gold)}
+.onb .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.onb .tips{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.onb .tips li{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.45;color:var(--muted)}
+.onb .tips b{color:var(--fg);font-weight:600}
+.onb-nav{display:flex;gap:10px;margin-top:auto;padding-top:8px}
+.onb-nav button{flex:1;border-radius:12px;padding:14px;font:700 18px var(--display);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--line);background:none;color:var(--muted)}
+.onb-nav .next{background:var(--gold-grad);border:0;color:#0e1116}
+.onb-nav .next:disabled{opacity:.4}
+.onb .note{font-size:12px;color:var(--muted);margin:0}
+.profile{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.profile label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.profile input,.profile select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px;font:500 14px var(--body);width:100%;box-sizing:border-box}
+.volcard{background:var(--panel);border:1px solid var(--gold-dim);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.volrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.volrow span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.volrow b{font:500 16px var(--mono);font-variant-numeric:tabular-nums}
+.goalbar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.goalbar i{display:block;height:100%;background:var(--gold-grad);border-radius:4px}
+.goalsub{font-size:12px;color:var(--muted)}
+.goalsub b{color:var(--fg);font-weight:500}
+.goalok{color:var(--gold);font-weight:600}
+.goalform{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.goalform label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.goalform input{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px;font:500 14px var(--mono);width:100%;box-sizing:border-box}
+.act:disabled{background:var(--dead);color:var(--muted);cursor:not-allowed}
+.sub{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+
+.lots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.lot{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.lot.on{border-color:var(--gold);box-shadow:inset 0 -3px 0 var(--gold)}
+.lot.dead{opacity:.55}
+.lot .n{font:600 12px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+.lot.on .n{color:var(--accent)}
+.dots{display:flex;gap:4px}
+.dot{flex:1;height:6px;border-radius:3px;background:var(--line)}
+.dot.used{background:var(--loss)} .dot.cur{background:var(--accent)}
+.lot .pl{font:500 15px var(--mono);font-variant-numeric:tabular-nums}
+.pos{color:var(--win)} .neg{color:var(--loss)}
+.lot .st{font-size:11px;color:var(--muted)}
+.lot button{font:500 11px var(--body);background:none;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:4px;cursor:pointer}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:center}
+.stats div{display:flex;flex-direction:column;gap:2px}
+.stats span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stats b{font:500 16px var(--mono);font-variant-numeric:tabular-nums}
+
+.pool{font-size:13px;color:var(--muted);background:var(--panel);border-radius:10px;padding:10px 12px;border:1px solid var(--line)}
+.pool b{color:var(--fg);font-weight:500}
+
+details{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+summary{cursor:pointer;font-weight:600;font-size:13px}
+.cfg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.cfg label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.cfg input,.cfg select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px;font:500 14px var(--mono);width:100%;box-sizing:border-box}
+.seq{margin-top:10px;font:500 12px var(--mono);color:var(--muted);overflow-x:auto;white-space:nowrap}
+.seq b{color:var(--fg)}
+.warn{color:var(--loss)}
+
+.log{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font:500 12px var(--mono)}
+.log li{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding-bottom:4px}
+
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+.confirm button{font:600 12px var(--body);border-radius:6px;padding:6px 10px;cursor:pointer;border:1px solid var(--line);background:none;color:var(--fg)}
+.confirm .yes{background:var(--loss);border-color:var(--loss);color:#0e1116}
+
+body.mini .hide-mini,body.mini #hint,body.mini h1,body.mini #resetWrap,body.mini .lot .st,body.mini .lot button{display:none!important}
+body.mini{padding-block:6px}
+body.mini .wrap{gap:8px}
+body.mini header{justify-content:flex-end}
+body.mini .iconbtn{padding:4px 8px;font-size:11px}
+body.mini .now{flex-direction:row;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px}
+body.mini .stake{font-size:44px}
+body.mini .stake small{font-size:22px}
+body.mini .act{padding:10px 6px;font-size:20px;border-radius:10px}
+body.mini .lot{padding:6px;gap:4px}
+body.mini .lot .pl{font-size:12px}
+body.mini .stats b{font-size:13px}
+body.mini .stats span{font-size:9px}
+
+/* Vertical: tira angosta arriba a la izquierda, para ventana flotante */
+body.vert .hide-mini,body.vert #hint,body.vert h1,body.vert .sub,body.vert .lots,body.vert .stats{display:none!important}
+body.vert{padding:6px}
+body.vert .wrap{max-width:120px;margin:0;gap:6px}
+body.vert header{justify-content:flex-start}
+body.vert .iconbtn{padding:3px 6px;font-size:10px;width:100%}
+body.vert .now{padding:6px 8px;gap:0;border-radius:8px;align-items:flex-start}
+body.vert .now .who{font-size:10px;letter-spacing:.04em}
+body.vert .stake{font-size:36px}
+body.vert .stake small{font-size:18px}
+body.vert .actions{grid-template-columns:1fr;gap:6px}
+body.vert .act{padding:12px 4px;font-size:17px;border-radius:8px}
+body.vert .undo-v,body.vert .greet,body.vert #undoBtn,body.vert #resetWrap{display:none!important}
+body.vert header.top{padding-bottom:4px}
+body.vert .sub{display:flex!important}
+body.vert #cutBtn{width:100%;padding:6px 4px;font-size:11px}
+body.vert .lotrow{display:flex}
+body.deskmini .wrap{max-width:none}
+body.deskmini header.top{-webkit-app-region:drag;cursor:move;justify-content:space-between;gap:4px}
+body.deskmini header.top button{-webkit-app-region:no-drag}
+body.deskmini #miniClose{display:inline-block}
+#miniClose{display:none;padding:3px 8px}
+.ministats{display:none;font:500 11px var(--mono);color:var(--muted)}
+body.vert .ministats{display:block}
+.lotrow{display:none;gap:4px;margin-top:2px;flex-wrap:wrap}
+.lotrow span{flex:1 0 28%}
+.lotrow span{flex:1;text-align:center;font:500 11px var(--mono);color:var(--muted);padding-bottom:2px;border-bottom:3px solid transparent}
+.lotrow span.on{color:var(--gold);font-weight:700;border-bottom-color:var(--gold)}
+.lotrow span.x{color:var(--loss)}
+.undo-v{display:none;width:100%}
+.sess{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.sess li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer}
+.sess li:focus-visible{outline:2px solid var(--accent)}
+.sess .d{font-weight:600;font-size:13px}
+.sess .m{font:500 12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.sess .n{font:500 14px var(--mono);text-align:right;grid-row:span 2;align-self:center;font-variant-numeric:tabular-nums}
+.empty{font-size:13px;color:var(--muted);margin:8px 0 0}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.kpi{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kpi b{font:500 17px var(--mono);font-variant-numeric:tabular-nums}
+.kpi small{font-size:11px;color:var(--muted)}
+.mh{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+.bars{display:flex;align-items:center;gap:3px;height:90px;border-bottom:1px solid var(--line);position:relative}
+.bars .col{flex:1;height:100%;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.bars .up,.bars .dn{height:50%;display:flex}
+.bars .up{align-items:flex-end}.bars .dn{align-items:flex-start;border-top:1px solid var(--line)}
+.bars i{display:block;width:100%;border-radius:2px}
+.bars .up i{background:var(--win)}.bars .dn i{background:var(--loss)}
+.tbl{width:100%;border-collapse:collapse;font:500 12px var(--mono);font-variant-numeric:tabular-nums}
+.tbl th{font:600 10px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:4px 4px}
+.tbl td{padding:5px 4px;border-top:1px solid var(--line)}
+.tbl td:not(:first-child),.tbl th:not(:first-child){text-align:right}
+.meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden;min-width:40px}
+.meter i{display:block;height:100%;background:var(--accent)}
+.sheet{position:fixed;inset:0;background:var(--bg);overflow-y:auto;z-index:10;padding-inline:16px;padding-block:calc(env(safe-area-inset-top,0px) + 12px) 24px}
+.sheet .wrap{gap:12px}
+.sheet header button{white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.act:active{transform:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="hello">
+      <span class="greet" id="greet">Hola, Bran</span>
+      <h1 id="subTitle">Rotador de Lotes</h1>
+    </div>
+    <button class="iconbtn gold" id="miniBtn" type="button">Modo compacto</button>
+    <button class="iconbtn" id="miniClose" type="button" aria-label="Cerrar ventana flotante">×</button>
+  </header>
+
+  <section class="now" aria-live="polite">
+    <div class="who" id="who">Lote <b>1</b> · paso 1 de 5</div>
+    <div class="lotrow" id="lotRow"></div>
+    <div class="stake" id="stake"><small>$</small>1.00</div>
+    <div class="ministats" id="miniStats"></div>
+    <div class="hint" id="hint">Si pierde, el lote 1 sube a <b>$2.18</b> en su próximo turno.</div>
+  </section>
+
+  <div class="actions">
+    <button class="act w" id="winBtn" type="button">Ganó</button>
+    <button class="act l" id="lossBtn" type="button">Perdió</button>
+  </div>
+  <button class="iconbtn undo-v" id="undoBtn2" type="button">Deshacer</button>
+
+  <div class="sub">
+    <button class="iconbtn" id="undoBtn" type="button">Deshacer</button>
+    <button class="iconbtn cutbtn" id="cutBtn" type="button" hidden>Cortar ciclo</button>
+    <span id="resetWrap"><button class="iconbtn" id="resetBtn" type="button">Cerrar y guardar sesión</button></span>
+  </div>
+
+  <div class="lots" id="lots"></div>
+
+  <div class="stats">
+    <div><span>Ops</span><b id="sOps">0</b></div>
+    <div><span>Gan / Per</span><b id="sWL">0/0</b></div>
+    <div><span>Acierto</span><b id="sPct">–</b></div>
+    <div><span>Neto</span><b id="sNet">$0.00</b></div>
+  </div>
+
+  <div class="volcard hide-mini" id="volCard"></div>
+
+  <div class="pool hide-mini" id="pool"></div>
+
+  <details class="hide-mini" id="cfgBox">
+    <summary>Ajustes</summary>
+    <div class="cfg">
+      <label for="payout"><span id="payoutLbl">Payout %</span><input id="payout" type="number" min="50" max="100" step="1" value="85"></label>
+      <label for="base">Entrada base $<input id="base" type="number" min="1" step="0.1" value="1"></label>
+      <label for="nLots">Número de lotes<select id="nLots"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
+      <label for="steps">Pasos por lote<input id="steps" type="number" min="1" max="8" step="1" value="5"></label>
+      <label for="mode">Secuencia
+        <select id="mode">
+          <option value="quick">Duplicar, último ajustado</option>
+          <option value="double">Duplicar ×2</option>
+          <option value="exact">Recuperación exacta</option>
+        </select>
+      </label>
+    </div>
+    <div class="seq" id="seq"></div>
+  </details>
+
+  <details class="hide-mini" id="profBox">
+    <summary>Perfil y estilo</summary>
+    <div class="profile">
+      <label for="pfName">Tu nombre<input id="pfName" type="text" maxlength="24" autocomplete="given-name"></label>
+      <label for="pfMarket">Qué operas<select id="pfMarket"></select></label>
+      <label for="pfBroker">Broker o plataforma<input id="pfBroker" type="text" maxlength="28" placeholder="Opcional"></label>
+      <div class="field"><span>Estilo</span><div class="swatches" id="pfSkins"></div></div>
+      <div class="mergebar"><button class="iconbtn gold" id="pfIntro" type="button">Ver la introducción otra vez</button></div>
+    </div>
+  </details>
+
+  <details class="hide-mini" id="goalBox">
+    <summary>Meta de volumen</summary>
+    <p class="empty">Para bonos del broker que se liberan al mover cierto volumen. Cuenta todo lo que apuestes desde la fecha que elijas, en todas las sesiones.</p>
+    <div class="goalform">
+      <label for="goalAmt">Meta $<input id="goalAmt" type="number" min="1" step="1" inputmode="decimal" placeholder="3000"></label>
+      <label for="goalSince">Desde<input id="goalSince" type="date"></label>
+    </div>
+    <div class="mergebar">
+      <button class="iconbtn yes" id="goalSave" type="button">Guardar meta</button>
+      <button class="iconbtn" id="goalClear" type="button">Quitar meta</button>
+    </div>
+  </details>
+
+  <details class="hide-mini">
+    <summary>Historial</summary>
+    <ul class="log" id="log"></ul>
+  </details>
+
+  <details class="hide-mini" id="archBox">
+    <summary>Sesiones guardadas</summary>
+    <ul class="sess" id="sessList"></ul>
+    <div class="mergebar" id="mergeBar"></div>
+  </details>
+
+  <details class="hide-mini" id="metBox">
+    <summary>Métricas</summary>
+    <div id="metrics"></div>
+  </details>
+</div>
+
+<div class="onb" id="onb" hidden>
+  <div class="wrap">
+    <div class="onb-dots" id="onbDots"></div>
+    <div id="onbBody"></div>
+    <div class="onb-nav">
+      <button type="button" id="onbBack">Atrás</button>
+      <button type="button" class="next" id="onbNext">Siguiente</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="wrap">
+    <header>
+      <h1 id="shTitle">Sesión</h1>
+      <button class="iconbtn" id="shClose" type="button">Volver</button>
+    </header>
+    <div id="shBody"></div>
+    <div class="sub"><span id="shDelWrap"></span></div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const NA=window.Android||null;
+const DESK=window.Desk||null;                       // programa de escritorio (Electron)
+const MINI=/[?&]mini=1/.test(location.search);       // ventana flotante de escritorio
+const KEY="rotador-lotes-v1";
+const MAXL=6;
+let S;
+
+function fresh(cfg,n){
+  return {cfg:cfg||{payout:92,base:1,steps:5,mode:"quick",v:2},
+    lots:Array.from({length:n||3},()=>({step:0,losses:0,pl:0,dead:false})),
+    turn:0,ops:0,w:0,l:0,log:[],hist:[],mini:false};
+}
+function load(){try{const r=localStorage.getItem(KEY);if(r)return JSON.parse(r)}catch(e){}return fresh()}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+const r2=x=>Math.ceil(x*100-1e-9)/100;
+function seq(){
+  const {payout,base,steps,mode}=S.cfg,p=payout/100,out=[];let lost=0;
+  for(let i=0;i<steps;i++){
+    const s=mode==="double"?r2(base*2**i)
+      :mode==="quick"?(i<steps-1?r2(base*2**i):Math.ceil(lost/p/base-1e-9)*base)
+      :(i===0?r2(base):r2((lost+base*p)/p));
+    out.push(s);lost+=s;
+  }
+  return out;
+}
+const money=v=>(v<0?"−$":"$")+Math.abs(v).toFixed(2);
+
+function nextAlive(from){
+  const N=S.lots.length;for(let k=1;k<=N;k++){const i=(from+k)%N;if(!S.lots[i].dead)return i}
+  return -1;
+}
+
+function result(win){
+  const i=S.turn;if(i<0||S.lots[i].dead)return;
+  S.hist.push(JSON.stringify({lots:S.lots,turn:S.turn,ops:S.ops,w:S.w,l:S.l,log:S.log,start:S.start,burned:S.burned}));
+  if(S.hist.length>50)S.hist.shift();
+  const L=S.lots[i],sq=seq(),stake=sq[L.step],p=S.cfg.payout/100;
+  S.ops++;
+  const now=Date.now();if(!S.start)S.start=now;
+  const burns=!win&&L.step>=sq.length-1;if(burns)S.burned=(S.burned||0)+1;
+  const tag=`L${i+1} p${L.step+1}`;const extra={ts:now,lot:i,s:L.step,win:!!win};if(burns)extra.burn=true;
+  if(win){const g=r2(stake*p);L.pl=r2(L.pl+g);S.w++;L.step=0;L.losses=0;
+    S.log.unshift({t:tag,r:"Ganó",v:g,stake,...extra});
+  }else{L.pl=r2(L.pl-stake);S.l++;L.losses++;
+    S.log.unshift({t:tag,r:"Perdió",v:-stake,stake,...extra});
+    if(L.step>=sq.length-1){L.dead=true;L.step=0}else L.step++;
+  }
+  S.log=S.log.slice(0,2000);
+  S.turn=nextAlive(i);
+  save();render();
+}
+
+function cut(){
+  const i=S.turn;if(i<0)return;const L=S.lots[i];if(L.dead||!L.step)return;
+  S.hist.push(JSON.stringify({lots:S.lots,turn:S.turn,ops:S.ops,w:S.w,l:S.l,log:S.log,start:S.start,burned:S.burned,cuts:S.cuts}));
+  const sq=seq();let lost=0;for(let k=0;k<L.step;k++)lost+=sq[k];
+  const now=Date.now();if(!S.start)S.start=now;
+  S.log.unshift({t:`L${i+1} p${L.step+1}`,r:"Cortó",v:0,stake:sq[L.step],lost:r2(lost),ts:now,lot:i,s:L.step,cut:true});
+  S.cuts=(S.cuts||0)+1;L.step=0;L.losses=0;S.turn=nextAlive(i);save();render();
+}
+function undo(){const h=S.hist.pop();if(!h)return;Object.assign(S,JSON.parse(h));save();render()}
+
+function render(){
+  const v=MINI?2:(S.view||0);
+  document.body.classList.toggle("mini",v===1);
+  document.body.classList.toggle("vert",v===2);
+  $("miniBtn").textContent=MINI?"Abrir completa":DESK?"Ventana flotante":NA?(NA.overlayRunning()?"Cerrar flotante":"Abrir flotante"):["Compacto","Vertical","Ver todo"][v];
+  const sq=seq(),budget=r2(sq.reduce((a,b)=>a+b,0)),n=sq.length;
+  const i=S.turn;
+  if(i<0){
+    $("who").innerHTML="<b>Los 3 lotes se quemaron</b>";
+    $("stake").innerHTML="<small>$</small>0.00";
+    $("hint").textContent="Revisa la sesión antes de seguir. Nueva sesión reinicia todo.";
+    $("winBtn").disabled=$("lossBtn").disabled=true;
+  }else{
+    const L=S.lots[i];
+    $("who").innerHTML=v===2?`L<b>${i+1}</b> · P${L.step+1}/${n}`:`Lote <b>${i+1}</b> · paso ${L.step+1} de ${n}`;
+    $("stake").innerHTML=`<small>$</small>${sq[L.step].toFixed(2)}`;
+    $("hint").innerHTML=L.step<n-1
+      ?`Si pierde, el lote ${i+1} sube a <b>$${sq[L.step+1].toFixed(2)}</b> en su próximo turno.`
+      :`<span class="warn">Último paso de este lote.</span> Si pierde, el lote queda quemado.`;
+    $("winBtn").disabled=$("lossBtn").disabled=false;
+  }
+  $("lotRow").innerHTML=S.lots.map((L,k)=>`<span class="${k===i?"on":L.dead?"x":""}">L${k+1}:${L.dead?"✕":L.step+1}</span>`).join("");
+  const canCut=i>=0&&S.lots[i].step>0;
+  $("cutBtn").hidden=!canCut;
+  if(!canCut)disarmCut();
+  const hr=new Date().getHours();
+  const nm=(PROFILE&&PROFILE.name)||"";
+  $("greet").textContent=(hr<5?"Buenas noches":hr<12?"Buenos días":hr<19?"Buenas tardes":"Buenas noches")+(nm?", "+nm:"");
+  $("subTitle").textContent="Rotador de Lotes"+(PROFILE&&PROFILE.broker?" · "+PROFILE.broker:"");
+  $("payoutLbl").textContent=marketOf().kind==="ratio"?"Ganancia por cada $1 (%)":"Payout %";
+  $("lots").innerHTML=S.lots.map((L,k)=>{
+    const dots=sq.map((_,j)=>`<div class="dot ${L.dead?"used":j<L.step?"used":j===L.step?"cur":""}"></div>`).join("");
+    return `<div class="lot ${k===i?"on":""} ${L.dead?"dead":""}">
+      <div class="n"><span>Lote ${k+1}</span><span>${L.dead?"✕":"$"+sq[L.step].toFixed(0)}</span></div>
+      <div class="dots">${dots}</div>
+      <div class="pl ${L.pl>0?"pos":L.pl<0?"neg":""}">${money(L.pl)}</div>
+      ${L.dead?`<button type="button" data-rev="${k}">Reactivar</button>`:`<div class="st">${L.step===0?"en base":(L.step===1?"1 pérdida":L.step+" pérdidas seguidas")}</div>`}
+    </div>`}).join("");
+  const net=r2(S.lots.reduce((a,L)=>a+L.pl,0)+(S.plOff||0));
+  $("sOps").textContent=S.ops;$("sWL").textContent=`${S.w}/${S.l}`;
+  $("sPct").textContent=S.ops?Math.round(S.w/S.ops*100)+"%":"–";
+  $("sNet").textContent=money(net);$("sNet").className=net>0?"pos":net<0?"neg":"";
+  const left=S.lots.reduce((a,L)=>a+(L.dead?0:n-L.step),0);
+  const alive=S.lots.filter(L=>!L.dead).length;
+  const NL=S.lots.length;
+  $("miniStats").textContent=`${S.ops} ops · ${money(net)}`;$("miniStats").className="ministats "+(net>0?"pos":net<0?"neg":"");
+  $("pool").innerHTML=`Te quedan <b>${left} de ${n*NL}</b> balas en ${alive} lote${alive===1?"":"s"}. Cada lote cuesta <b>$${budget.toFixed(2)}</b> si se quema entero; ${NL>1?`los ${NL} juntos`:"en total"}, <b>$${(budget*NL).toFixed(2)}</b>. Ese es tu capital en riesgo.`;
+  if(document.activeElement!==$("nLots"))$("nLots").value=NL;
+  const p=S.cfg.payout/100;let lost=0;
+  $("seq").innerHTML=sq.map((s,j)=>{const net=r2(s*p-lost);lost+=s;return `<b>$${s.toFixed(2)}</b>${net<0?`<span class="warn">(${money(net)})</span>`:`(+${net.toFixed(2)})`}`}).join(" → ")+`<br>Total por lote: $${budget.toFixed(2)}`;
+  $("log").innerHTML=S.log.length?S.log.map(logRow).join(""):"<li>Aún no hay operaciones.</li>";
+  for(const id of ["payout","base","steps","mode"])$(id).value=S.cfg[id];
+  renderVolume();
+  fillGoalForm();
+  fillProfile();
+  renderArchive();
+}
+
+let lastPress=0;
+function press(btn,win){const now=Date.now();if(now-lastPress<700)return;lastPress=now;
+  btn.classList.add("flash");setTimeout(()=>btn.classList.remove("flash"),350);
+  try{navigator.vibrate&&navigator.vibrate(20)}catch(e){}
+  result(win)}
+$("winBtn").onclick=()=>press($("winBtn"),true);
+$("lossBtn").onclick=()=>press($("lossBtn"),false);
+let cutTimer=null;
+function disarmCut(){clearTimeout(cutTimer);cutTimer=null;const b=$("cutBtn");b.classList.remove("armed");b.textContent="Cortar ciclo"}
+$("cutBtn").onclick=()=>{const b=$("cutBtn");
+  if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="¿Cortar? Toca otra vez";cutTimer=setTimeout(disarmCut,2500);return}
+  disarmCut();if(NA)NA.cut();else cut()};
+$("undoBtn").onclick=()=>undo();
+$("undoBtn2").onclick=()=>undo();
+$("miniBtn").onclick=()=>{if(DESK){MINI?DESK.showMain():DESK.toggleMini();return}if(NA){NA.toggleOverlay();return}S.view=((S.view||0)+1)%3;save();render()};
+$("lots").onclick=e=>{const k=e.target.dataset.rev;if(k==null)return;if(NA){NA.revive(+k);return}
+  S.hist.push(JSON.stringify({lots:S.lots,turn:S.turn,ops:S.ops,w:S.w,l:S.l,log:S.log}));
+  S.lots[k]={step:0,losses:0,pl:S.lots[k].pl,dead:false};if(S.turn<0)S.turn=+k;save();render()};
+function restoreReset(){$("resetWrap").innerHTML=`<button class="iconbtn" id="resetBtn" type="button">Cerrar y guardar sesión</button>`;bindReset()}
+bindReset();
+function bindReset(){$("resetBtn").onclick=()=>{
+  $("resetWrap").innerHTML=`<span class="confirm">${S.ops?"¿Guardar esta sesión y empezar otra?":"No hay operaciones. ¿Empezar de cero?"} <button class="yes" id="rsY" type="button">Sí</button><button id="rsN" type="button">No</button></span>`;
+  $("rsY").onclick=()=>{if(NA){NA.reset();restoreReset();return}archiveLocal();const m=S.view;S=fresh(S.cfg,S.lots.length);S.view=m;save();restoreReset();render()};
+  $("rsN").onclick=restoreReset;}}
+for(const id of ["payout","base","steps"])$(id).onchange=()=>{const v=parseFloat($(id).value);if(!isNaN(v)){S.cfg[id]=id==="steps"?Math.max(1,Math.min(8,Math.round(v))):v;S.lots.forEach(L=>{if(L.step>=S.cfg.steps)L.step=S.cfg.steps-1});if(NA)pushCfg();else{save();render()}}};
+$("mode").onchange=()=>{S.cfg.mode=$("mode").value;if(NA)pushCfg();else{save();render()}};
+const SKEY="rotador-sesiones-v1";
+function getSessions(){
+  if(NA){try{return JSON.parse(NA.getSessions())}catch(e){return[]}}
+  try{return JSON.parse(localStorage.getItem(SKEY)||"[]")}catch(e){return[]}
+}
+function archiveLocal(){
+  if(!S.ops)return;
+  const net=r2(S.lots.reduce((a,L)=>a+L.pl,0)+(S.plOff||0));
+  const list=getSessions();
+  list.unshift({start:S.start||Date.now(),end:Date.now(),ops:S.ops,w:S.w,l:S.l,net,burned:S.burned||0,cfg:{...S.cfg},lots:S.lots.map(L=>L.pl),log:S.log});
+  try{localStorage.setItem(SKEY,JSON.stringify(list))}catch(e){}
+}
+function deleteSession(i){
+  if(NA){NA.deleteSession(i);return}
+  const list=getSessions();list.splice(i,1);
+  try{localStorage.setItem(SKEY,JSON.stringify(list))}catch(e){}
+  render();
+}
+const DIAS=["dom","lun","mar","mié","jue","vie","sáb"],MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const pad=n=>String(n).padStart(2,"0");
+const fDate=ts=>{if(!ts)return"Sin fecha";const d=new Date(ts);return `${DIAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]}`};
+const fTime=ts=>{if(!ts)return"";const d=new Date(ts);return `${pad(d.getHours())}:${pad(d.getMinutes())}`};
+const pct=(a,b)=>b?Math.round(a/b*100)+"%":"–";
+const stepOf=e=>e.s!=null?e.s:(+((e.t||"").split("p")[1])||1)-1;
+const isWin=e=>e.win!=null?e.win:e.v>0;
+function maxLossStreak(entries){let m=0,c=0;for(const e of entries){if(isWin(e))c=0;else{c++;if(c>m)m=c}}return m}
+
+const fmtUsd=v=>"$"+(+v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const volOf=entries=>r2((entries||[]).reduce((a,e)=>a+(e.cut?0:(+e.stake||0)),0));
+const GKEY="rotador-meta-v1";
+function getGoal(){try{const r=NA?NA.getGoal():localStorage.getItem(GKEY);return r?JSON.parse(r):null}catch(e){return null}}
+function setGoal(g){const j=g?JSON.stringify(g):"";if(NA)NA.setGoal(j);else{try{localStorage.setItem(GKEY,j)}catch(e){}render()}}
+function goalProgress(g){
+  const since=g.since||0;let v=0;
+  const add=(entries,fallbackTs)=>{for(const e of entries||[]){if(e.cut)continue;if((e.ts||fallbackTs||0)>=since)v+=+e.stake||0}};
+  for(const se of getSessions())add(se.log,se.start);
+  add(S.log,S.start||Date.now());
+  return r2(v);
+}
+function renderVolume(){
+  const vol=volOf(S.log),g=getGoal();
+  let h=`<div class="volrow"><span>Volumen movido en esta sesión</span><b>${fmtUsd(vol)}</b></div>`;
+  if(g&&g.target>0){
+    const done=goalProgress(g),pc=Math.min(100,done/g.target*100),left=r2(Math.max(0,g.target-done));
+    h+=`<div class="volrow"><span>Meta de volumen${g.since?" · desde "+fDate(g.since):""}</span><b>${fmtUsd(done)} / ${fmtUsd(g.target)}</b></div>
+      <div class="goalbar"><i style="width:${pc}%"></i></div>
+      <div class="goalsub">${left>0?`Faltan <b>${fmtUsd(left)}</b> · ${Math.floor(pc)}%`:`<span class="goalok">Meta cumplida ✓</span> Ya puedes revisar tu bono en el broker.`}</div>`;
+  }
+  $("volCard").innerHTML=h;
+}
+function fillGoalForm(){
+  if(document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#goalBox"))return;
+  const g=getGoal();
+  $("goalAmt").value=g&&g.target?g.target:"";
+  if(g&&g.since){const d=new Date(g.since);$("goalSince").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}else $("goalSince").value="";
+}
+$("goalSave").onclick=()=>{
+  const t=parseFloat($("goalAmt").value);if(!(t>0)){$("goalAmt").focus();return}
+  const d=$("goalSince").value;let since=0;
+  if(d){const [y,m,dd]=d.split("-").map(Number);since=new Date(y,m-1,dd).getTime()}
+  setGoal({target:t,since});
+};
+$("goalClear").onclick=()=>{setGoal(null);$("goalAmt").value="";$("goalSince").value=""};
+function logRow(e,withTime){
+  const t=withTime&&e.ts?fTime(e.ts)+" · ":"";
+  if(e.cut)return `<li><span>${t}${e.t} · cortado</span><span class="neu">Cortó (−$${(+e.lost||0).toFixed(2)} asumido)</span></li>`;
+  return `<li><span>${t}${e.t} · $${(+e.stake).toFixed(2)}${e.burn?" ✕":""}</span><span class="${e.v>0?"pos":"neg"}">${e.r} ${money(e.v)}</span></li>`;
+}
+function sessionStats(se){
+  const raw=[...(se.log||[])].reverse();
+  const cuts=se.cuts!=null?se.cuts:raw.filter(e=>e.cut).length;
+  const ent=raw.filter(e=>!e.cut);
+  const burned=se.burned!=null?se.burned:ent.filter(e=>e.burn).length;
+  const cycles=se.w+burned+cuts;
+  return {ent,burned,cuts,cycles,streak:maxLossStreak(ent)};
+}
+
+function renderArchive(){
+  const list=getSessions();
+  $("sessList").innerHTML=list.length?list.map((se,i)=>`<li tabindex="0" data-s="${i}" class="${MERGE&&MERGE.has(i)?"sel":""}">
+      <span class="d">${MERGE?`<span class="ck">${MERGE.has(i)?"✓":""}</span>`:""}${fDate(se.start)} · ${fTime(se.start)}–${fTime(se.end)}${(se.merged||1)>1?` · ${se.merged} unidas`:""}</span>
+      <span class="n ${se.net>0?"pos":se.net<0?"neg":""}">${money(se.net)}</span>
+      <span class="m">${se.ops} ops · ${se.w}/${se.l} · ${pct(se.w,se.ops)} · vol ${fmtUsd(volOf(se.log))}${se.burned?` · ${se.burned} quemado${se.burned>1?"s":""}`:""}</span>
+    </li>`).join(""):`<p class="empty">Todavía no hay sesiones guardadas. Cuando toques "Cerrar y guardar sesión", la sesión aparece aquí con su fecha.</p>`;
+  renderMergeBar(list);
+  renderMetrics(list);
+}
+let MERGE=null; // null = modo normal; Set = índices elegidos para fusionar
+function renderMergeBar(list){
+  const bar=$("mergeBar");
+  if(list.length<2){bar.innerHTML="";MERGE=null;return}
+  if(!MERGE){bar.innerHTML=`<button class="iconbtn gold" id="mgStart" type="button">Fusionar sesiones</button>`;$("mgStart").onclick=()=>{MERGE=new Set();renderArchive()};return}
+  const n=MERGE.size;
+  bar.innerHTML=`<span class="empty" style="margin:0">Toca las sesiones a unir.</span>
+    <button class="iconbtn yes" id="mgGo" type="button" ${n<2?"disabled":""}>Fusionar ${n||""}</button>
+    <button class="iconbtn" id="mgCancel" type="button">Cancelar</button>`;
+  $("mgCancel").onclick=()=>{MERGE=null;renderArchive()};
+  $("mgGo").onclick=()=>{if(MERGE.size<2)return;mergeSessions([...MERGE]);MERGE=null};
+}
+function mergeSessions(idx){
+  const list=getSessions();idx.sort((a,b)=>a-b);
+  const parts=idx.map(i=>list[i]).filter(Boolean);
+  const nl=Math.max(...parts.map(p=>(p.lots||[]).length));
+  const m={
+    start:Math.min(...parts.map(p=>p.start||Infinity)),
+    end:Math.max(...parts.map(p=>p.end||0)),
+    ops:parts.reduce((a,p)=>a+p.ops,0), w:parts.reduce((a,p)=>a+p.w,0), l:parts.reduce((a,p)=>a+p.l,0),
+    net:r2(parts.reduce((a,p)=>a+p.net,0)),
+    burned:parts.reduce((a,p)=>a+(sessionStats(p).burned),0),
+    cuts:parts.reduce((a,p)=>a+(sessionStats(p).cuts),0),
+    cfg:parts[0].cfg,
+    lots:Array.from({length:nl},(_,k)=>r2(parts.reduce((a,p)=>a+((p.lots||[])[k]||0),0))),
+    log:parts.flatMap(p=>p.log||[]).sort((a,b)=>(b.ts||0)-(a.ts||0)),
+    merged:parts.reduce((a,p)=>a+(p.merged||1),0)
+  };
+  const out=list.filter((_,i)=>!idx.includes(i));
+  out.splice(idx[0],0,m);
+  out.sort((a,b)=>(b.start||0)-(a.start||0));
+  if(NA)NA.setSessions(JSON.stringify(out));
+  else{try{localStorage.setItem(SKEY,JSON.stringify(out))}catch(e){}render()}
+}
+
+function renderMetrics(list){
+  if(!list.length){$("metrics").innerHTML=`<p class="empty">Las métricas salen de las sesiones guardadas. Cierra tu primera sesión para verlas.</p>`;return}
+  let ops=0,w=0,net=0,burned=0,cuts=0,pos=0;const all=[];
+  for(const se of list){ops+=se.ops;w+=se.w;net+=se.net;const st=sessionStats(se);burned+=st.burned;cuts+=st.cuts;if(se.net>0)pos++;all.push(...st.ent)}
+  net=r2(net);const cycles=w+burned+cuts;const vol=r2(list.reduce((a,se)=>a+volOf(se.log),0));
+  const best=list.reduce((a,b)=>b.net>a.net?b:a),worst=list.reduce((a,b)=>b.net<a.net?b:a);
+  // acierto por paso
+  const maxS=Math.max(1,...all.map(stepOf).map(x=>x+1));
+  const bySt=Array.from({length:maxS},()=>({n:0,w:0}));
+  for(const e of all){const k=stepOf(e);if(bySt[k]){bySt[k].n++;if(isWin(e))bySt[k].w++}}
+  // por hora
+  const byH={};for(const e of all){if(!e.ts)continue;const h=new Date(e.ts).getHours();(byH[h]=byH[h]||{n:0,w:0}).n++;if(isWin(e))byH[h].w++}
+  const hours=Object.keys(byH).map(Number).sort((a,b)=>a-b);
+  // barras por sesión (últimas 20, antigua → reciente)
+  const last=list.slice(0,20).reverse();const mx=Math.max(0.01,...last.map(s=>Math.abs(s.net)));
+  const bars=last.map(s=>{const h=Math.round(Math.abs(s.net)/mx*100);return `<div class="col" title="${fDate(s.start)}: ${money(s.net)}"><div class="up">${s.net>0?`<i style="height:${h}%"></i>`:""}</div><div class="dn">${s.net<0?`<i style="height:${h}%"></i>`:""}</div></div>`}).join("");
+  const p=(list[0].cfg&&list[0].cfg.payout||92)/100,be=Math.round(1/(1+p)*1000)/10;
+  $("metrics").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><span>Neto total</span><b class="${net>0?"pos":net<0?"neg":""}">${money(net)}</b><small>${list.length} sesiones · ${pos} en positivo</small></div>
+      <div class="kpi"><span>Acierto global</span><b class="${w/ops*100>=be?"pos":"neg"}">${pct(w,ops)}</b><small>${w}/${ops-w} · equilibrio ${be}%</small></div>
+      <div class="kpi"><span>Promedio por sesión</span><b class="${net>0?"pos":net<0?"neg":""}">${money(r2(net/list.length))}</b><small>${Math.round(ops/list.length)} ops por sesión</small></div>
+      <div class="kpi"><span>Lotes quemados</span><b class="${burned?"neg":""}">${burned}</b><small>${cycles?Math.round(burned/cycles*1000)/10:0}% de ${cycles} ciclos</small></div>
+      <div class="kpi"><span>Volumen total</span><b>${fmtUsd(vol)}</b><small>hasta la fecha</small></div>
+      <div class="kpi"><span>Rinde sobre volumen</span><b class="${net>0?"pos":net<0?"neg":""}">${vol?(Math.round(net/vol*1000)/10)+"%":"–"}</b><small>${vol?money(r2(net/vol))+" por cada $1 movido":""}</small></div>
+      <div class="kpi"><span>Volumen por sesión</span><b>${fmtUsd(r2(vol/list.length))}</b><small>promedio</small></div>
+      <div class="kpi"><span>Volumen mayor</span><b>${fmtUsd(Math.max(...list.map(x=>volOf(x.log))))}</b><small>en una sesión</small></div>
+      <div class="kpi"><span>Mejor sesión</span><b class="pos">${money(best.net)}</b><small>${fDate(best.start)}</small></div>
+      <div class="kpi"><span>Peor sesión</span><b class="${worst.net<0?"neg":""}">${money(worst.net)}</b><small>${fDate(worst.start)}</small></div>
+      <div class="kpi"><span>Peor racha</span><b>${maxLossStreak(all)}</b><small>pérdidas seguidas</small></div>
+      <div class="kpi"><span>Ciclos cortados</span><b class="neu">${cuts}</b><small>${cycles?Math.round(cuts/cycles*1000)/10:0}% de los ciclos</small></div>
+      <div class="kpi"><span>Operaciones</span><b>${ops}</b><small>en total</small></div>
+    </div>
+    <div class="mh">Neto por sesión (últimas ${last.length})</div>
+    <div class="bars">${bars}</div>
+    <div class="mh">Acierto por paso de martingala</div>
+    <table class="tbl"><tr><th>Paso</th><th>Ops</th><th>Ganadas</th><th>Acierto</th><th></th></tr>
+      ${bySt.map((b,k)=>`<tr><td>P${k+1}</td><td>${b.n}</td><td>${b.w}</td><td>${pct(b.w,b.n)}</td><td><div class="meter"><i style="width:${b.n?b.w/b.n*100:0}%"></i></div></td></tr>`).join("")}
+    </table>
+    ${hours.length?`<div class="mh">Acierto por hora</div>
+    <table class="tbl"><tr><th>Hora</th><th>Ops</th><th>Acierto</th><th></th></tr>
+      ${hours.map(h=>{const b=byH[h];return `<tr><td>${pad(h)}:00</td><td>${b.n}</td><td class="${b.w/b.n*100>=be?"pos":"neg"}">${pct(b.w,b.n)}</td><td><div class="meter"><i style="width:${b.w/b.n*100}%"></i></div></td></tr>`}).join("")}
+    </table>`:""}`;
+}
+
+function openSession(i){
+  const se=getSessions()[i];if(!se)return;
+  const st=sessionStats(se);
+  $("shTitle").textContent=fDate(se.start);
+  const c=se.cfg||{};
+  $("shBody").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><span>Neto</span><b class="${se.net>0?"pos":se.net<0?"neg":""}">${money(se.net)}</b><small>${fTime(se.start)}–${fTime(se.end)}</small></div>
+      <div class="kpi"><span>Acierto</span><b>${pct(se.w,se.ops)}</b><small>${se.w} ganadas · ${se.l} perdidas</small></div>
+      <div class="kpi"><span>Operaciones</span><b>${se.ops}</b><small>${st.cycles} ciclos</small></div>
+      <div class="kpi"><span>Quemados</span><b class="${st.burned?"neg":""}">${st.burned}</b><small>peor racha: ${st.streak}</small></div>
+      <div class="kpi"><span>Cortados</span><b class="neu">${st.cuts}</b><small>ciclos asegurados</small></div>
+      <div class="kpi"><span>Volumen</span><b>${fmtUsd(volOf(se.log))}</b><small>${volOf(se.log)?"rinde "+(Math.round(se.net/volOf(se.log)*1000)/10)+"%":"–"}</small></div>
+      <div class="kpi"><span>Fusionada</span><b>${se.merged||1}</b><small>sesión${(se.merged||1)>1?"es unidas":""}</small></div>
+    </div>
+    ${se.lots?`<div class="mh">Por lote</div><table class="tbl"><tr><th>Lote</th><th>Neto</th></tr>${se.lots.map((v,k)=>`<tr><td>Lote ${k+1}</td><td class="${v>0?"pos":v<0?"neg":""}">${money(v)}</td></tr>`).join("")}</table>`:""}
+    <div class="mh">Configuración</div>
+    <p class="empty" style="margin:0">Payout ${c.payout||"–"}% · base $${c.base||"–"} · ${c.steps||"–"} pasos · ${c.mode==="double"?"duplicar ×2":c.mode==="exact"?"recuperación exacta":"duplicar, último ajustado"}</p>
+    <div class="mh">Operaciones (${st.ent.length})</div>
+    <ul class="log">${se.log&&se.log.length?se.log.map(e=>logRow(e,true)).join(""):"<li>Sin detalle de operaciones.</li>"}</ul>`;
+  const delBtn=()=>{$("shDelWrap").innerHTML=`<button class="iconbtn" id="shDel" type="button">Borrar esta sesión</button>`;
+    $("shDel").onclick=()=>{$("shDelWrap").innerHTML=`<span class="confirm">¿Borrar la sesión del ${fDate(se.start)}? <button class="yes" id="sdY" type="button">Sí, borrar</button><button id="sdN" type="button">No</button></span>`;
+      $("sdY").onclick=()=>{deleteSession(i);closeSheet()};$("sdN").onclick=delBtn}};
+  delBtn();
+  $("sheet").hidden=false;$("sheet").scrollTop=0;
+}
+function closeSheet(){$("sheet").hidden=true}
+$("shClose").onclick=closeSheet;
+$("sessList").onclick=e=>{const li=e.target.closest("li[data-s]");if(!li)return;const i=+li.dataset.s;
+  if(MERGE){MERGE.has(i)?MERGE.delete(i):MERGE.add(i);renderArchive();return}openSession(i)};
+$("sessList").onkeydown=e=>{if(e.key==="Enter"){const li=e.target.closest("li[data-s]");if(li)openSession(+li.dataset.s)}};
+
+const PKEY="rotador-perfil-v1";
+const MARKETS=[
+  {id:"otc",label:"Opciones binarias OTC",hint:"Pocket Option, Quotex, IQ Option los fines de semana",kind:"binary",payout:92},
+  {id:"bin",label:"Opciones binarias en mercado real",hint:"Pares de divisas, oro, índices en horario de mercado",kind:"binary",payout:85},
+  {id:"sint",label:"Índices sintéticos",hint:"Volatility, Boom & Crash, Step (Deriv y similares)",kind:"binary",payout:95},
+  {id:"fx",label:"Forex o CFD",hint:"Con stop loss y take profit fijos por operación",kind:"ratio",payout:100},
+  {id:"cripto",label:"Criptomonedas",hint:"Futuros o spot con riesgo fijo por operación",kind:"ratio",payout:100},
+  {id:"otro",label:"Otro mercado",hint:"Cualquier operación con ganancia fija si aciertas",kind:"binary",payout:80}
+];
+const SKINS=[["dorado","Dorado","#d9b45a"],["esmeralda","Esmeralda","#4cc79a"],["zafiro","Zafiro","#6f9cff"],["rubi","Rubí","#ee6b8c"],["amatista","Amatista","#b08cf0"],["platino","Platino","#cfd6e0"]];
+let PROFILE=null;
+try{PROFILE=JSON.parse(localStorage.getItem(PKEY)||"null")}catch(e){}
+function saveProfile(){try{localStorage.setItem(PKEY,JSON.stringify(PROFILE))}catch(e){}}
+function marketOf(){return MARKETS.find(m=>m.id===(PROFILE&&PROFILE.market))||MARKETS[0]}
+function applySkin(sk){if(!sk||sk==="dorado")document.documentElement.removeAttribute("data-skin");else document.documentElement.setAttribute("data-skin",sk)}
+function setCfg(c){Object.assign(S.cfg,c);if(NA)pushCfg();else{save();render()}}
+
+// ----- Perfil y estilo (ajustes) -----
+$("pfMarket").innerHTML=MARKETS.map(m=>`<option value="${m.id}">${m.label}</option>`).join("");
+function skinButtons(cur){return SKINS.map(([id,name,c])=>`<button type="button" class="swatch ${cur===id?"on":""}" data-skin="${id}"><i style="background:${c}"></i>${name}</button>`).join("")}
+function fillProfile(){
+  if(document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#profBox"))return;
+  const P=PROFILE||{};
+  $("pfName").value=P.name||"";$("pfMarket").value=P.market||"otc";$("pfBroker").value=P.broker||"";
+  $("pfSkins").innerHTML=skinButtons(P.skin||"dorado");
+}
+const editProfile=(k,v)=>{PROFILE=Object.assign({},PROFILE||{},{[k]:v,done:true});saveProfile();render()};
+$("pfName").onchange=()=>editProfile("name",$("pfName").value.trim());
+$("pfBroker").onchange=()=>editProfile("broker",$("pfBroker").value.trim());
+$("pfMarket").onchange=()=>editProfile("market",$("pfMarket").value);
+$("pfSkins").onclick=e=>{const b=e.target.closest("[data-skin]");if(!b)return;applySkin(b.dataset.skin);editProfile("skin",b.dataset.skin);$("pfSkins").innerHTML=skinButtons(b.dataset.skin)};
+$("pfIntro").onclick=()=>openIntro();
+
+// ----- Introducción -----
+let OB=null,obStep=0;
+const OB_STEPS=5;
+function openIntro(){
+  const P=PROFILE||{};
+  OB={name:P.name||"",market:P.market||"",broker:P.broker||"",skin:P.skin||"dorado",
+      payout:S.cfg.payout,base:S.cfg.base,steps:S.cfg.steps,mode:S.cfg.mode,lots:S.lots.length,touched:false};
+  obStep=0;$("onb").hidden=false;drawIntro();
+}
+function drawIntro(){
+  $("onbDots").innerHTML=Array.from({length:OB_STEPS},(_,k)=>`<i class="${k<=obStep?"on":""}"></i>`).join("");
+  $("onbBack").style.visibility=obStep?"visible":"hidden";
+  $("onbNext").textContent=obStep===OB_STEPS-1?"Empezar":"Siguiente";
+  const m=MARKETS.find(x=>x.id===OB.market);
+  let h="";
+  if(obStep===0)h=`<h2>Bienvenido</h2>
+    <p class="lead">Esta app reparte tu riesgo en 3 lotes que se turnan y te dice cuánto poner en cada operación. Empecemos por lo básico.</p>
+    <label class="field" for="obName">¿Cómo te llamas?<input id="obName" type="text" maxlength="24" autocomplete="given-name" placeholder="Tu nombre" value="${esc(OB.name)}"></label>`;
+  if(obStep===1)h=`<h2>¿Qué operas${OB.name?", "+esc(OB.name):""}?</h2>
+    <p class="lead">Así ajusto los nombres y valores de partida. Lo puedes cambiar cuando quieras.</p>
+    <div class="choices" id="obMarkets">${MARKETS.map(x=>`<button type="button" class="choice ${OB.market===x.id?"on":""}" data-m="${x.id}">${x.label}<small>${x.hint}</small></button>`).join("")}</div>`;
+  if(obStep===2){const ratio=m&&m.kind==="ratio";h=`<h2>Tus parámetros</h2>
+    <p class="lead">${ratio?"Pon cuánto ganas por cada $1 que arriesgas. Si tu objetivo es 1.5 veces el riesgo, escribe 150.":"Pon el payout que te paga tu broker en los activos que operas."}</p>
+    <label class="field" for="obBroker">Broker o plataforma (opcional)<input id="obBroker" type="text" maxlength="28" placeholder="Ej. Pocket Option" value="${esc(OB.broker)}"></label>
+    <div class="grid2">
+      <label class="field" for="obPayout">${ratio?"Ganancia por $1 (%)":"Payout %"}<input id="obPayout" type="number" inputmode="decimal" min="1" max="1000" value="${OB.payout}"></label>
+      <label class="field" for="obBase">Entrada base $<input id="obBase" type="number" inputmode="decimal" min="0.01" step="0.01" value="${OB.base}"></label>
+      <label class="field" for="obLots">Número de lotes<select id="obLots">${[1,2,3,4,5,6].map(k=>`<option ${+OB.lots===k?"selected":""}>${k}</option>`).join("")}</select></label>
+      <label class="field" for="obSteps">Pasos por lote<input id="obSteps" type="number" inputmode="numeric" min="1" max="8" value="${OB.steps}"></label>
+      <label class="field" for="obMode">Secuencia<select id="obMode">
+        <option value="quick" ${OB.mode==="quick"?"selected":""}>Duplicar, último ajustado</option>
+        <option value="double" ${OB.mode==="double"?"selected":""}>Duplicar ×2</option>
+        <option value="exact" ${OB.mode==="exact"?"selected":""}>Recuperación exacta</option></select></label>
+    </div>
+    <p class="note" id="obSeq"></p>`}
+  if(obStep===3)h=`<h2>Elige tu estilo</h2>
+    <p class="lead">El color de acento de toda la app. Mira cómo cambia mientras eliges.</p>
+    <div class="swatches" id="obSkins">${skinButtons(OB.skin)}</div>`;
+  if(obStep===4)h=`<h2>Así funciona</h2>
+    <ul class="tips">
+      <li><b>Ganó o Perdió.</b> Marca el resultado y la app pasa al siguiente lote con el monto exacto. Si un lote pierde, sube al siguiente paso en su próximo turno.</li>
+      <li><b>Ventana flotante.</b> En Android la puedes poner encima de tu broker. El lote en juego sale marcado con una línea.</li>
+      <li><b>Cortar ciclo.</b> Si prefieres asegurar lo ganado antes de un paso alto, corta el ciclo y el lote vuelve a la base.</li>
+      <li><b>Sesiones y métricas.</b> Al cerrar la sesión se guarda con fecha. Ahí ves acierto, volumen, mejores horas y metas de bono.</li>
+      <li><b>Sin promesas.</b> La martingala no mejora tu acierto. Esta app te ayuda a controlar el riesgo y medir lo que haces.</li>
+    </ul>`;
+  $("onbBody").innerHTML=h;
+  wireIntro();
+}
+const esc=t=>String(t||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function previewSeq(){
+  const el=$("obSeq");if(!el)return;
+  const save0=S.cfg;S.cfg={...S.cfg,payout:+OB.payout||1,base:+OB.base||1,steps:Math.max(1,Math.min(8,Math.round(+OB.steps||5))),mode:OB.mode};
+  const sq=seq();S.cfg=save0;
+  const tot=r2(sq.reduce((a,b)=>a+b,0)),nl=+OB.lots||3;
+  el.textContent="Montos por lote: "+sq.map(x=>"$"+(+x).toFixed(2)).join(" → ")+" · cada lote $"+tot.toFixed(2)+" · los "+nl+" juntos $"+r2(tot*nl).toFixed(2)+" en riesgo";
+}
+function wireIntro(){
+  const n=$("obName");if(n){n.oninput=()=>{OB.name=n.value.trim();$("onbNext").disabled=!OB.name};$("onbNext").disabled=!OB.name;setTimeout(()=>n.focus(),50)}
+  else $("onbNext").disabled=obStep===1&&!OB.market;
+  const mk=$("obMarkets");if(mk)mk.onclick=e=>{const b=e.target.closest("[data-m]");if(!b)return;OB.market=b.dataset.m;
+    const m=MARKETS.find(x=>x.id===OB.market);if(!OB.touched)OB.payout=m.payout;drawIntro()};
+  for(const [id,k] of [["obBroker","broker"],["obPayout","payout"],["obBase","base"],["obSteps","steps"],["obMode","mode"],["obLots","lots"]]){
+    const el=$(id);if(el)el.oninput=el.onchange=()=>{OB[k]=el.value;if(k==="payout")OB.touched=true;previewSeq()}}
+  previewSeq();
+  const sk=$("obSkins");if(sk)sk.onclick=e=>{const b=e.target.closest("[data-skin]");if(!b)return;OB.skin=b.dataset.skin;applySkin(OB.skin);sk.innerHTML=skinButtons(OB.skin)};
+}
+$("onbBack").onclick=()=>{if(obStep>0){obStep--;drawIntro()}};
+$("onbNext").onclick=()=>{
+  if(obStep<OB_STEPS-1){obStep++;drawIntro();$("onb").scrollTop=0;return}
+  PROFILE={name:OB.name,market:OB.market||"otc",broker:(OB.broker||"").trim(),skin:OB.skin,done:true};
+  saveProfile();applySkin(PROFILE.skin);
+  setCfg({payout:Math.max(1,+OB.payout||92),base:Math.max(0.01,+OB.base||1),steps:Math.max(1,Math.min(8,Math.round(+OB.steps||5))),mode:OB.mode});
+  setLotCount(OB.lots);
+  $("onb").hidden=true;render();
+};
+
+function setLotCount(n){
+  n=Math.max(1,Math.min(MAXL,Math.round(+n||3)));
+  if(NA){NA.setLots(n);return}
+  if(n===S.lots.length)return;
+  S.hist.push(JSON.stringify({lots:S.lots,turn:S.turn,ops:S.ops,w:S.w,l:S.l,log:S.log,start:S.start,burned:S.burned,cuts:S.cuts,plOff:S.plOff}));
+  if(n>S.lots.length){while(S.lots.length<n)S.lots.push({step:0,losses:0,pl:0,dead:false})}
+  else{const gone=S.lots.splice(n);S.plOff=r2((S.plOff||0)+gone.reduce((a,L)=>a+L.pl,0))}
+  if(S.turn<0||S.turn>=n||S.lots[S.turn].dead)S.turn=nextAlive(n-1);
+  save();render();
+}
+$("nLots").onchange=()=>setLotCount($("nLots").value);
+
+function pushCfg(){NA.setConfig(S.cfg.payout,S.cfg.base,S.cfg.steps,S.cfg.mode)}
+
+if(NA){
+  load=()=>JSON.parse(NA.getState());
+  save=()=>{};
+  result=win=>NA.result(!!win);
+  undo=()=>NA.undo();
+  window.onNative=()=>{S=load();render()};
+  window.onNativeBack=()=>{if(!$("onb").hidden){if(obStep>0){obStep--;drawIntro();return true}return false}if(!$("sheet").hidden){closeSheet();return true}return false};
+}
+S=load();
+if(!S.cfg||!S.lots)S=fresh();
+if(S.view==null)S.view=S.mini?1:0;
+if(!NA&&S.cfg.v!==2){S.cfg.mode="quick";S.cfg.v=2;save()}
+applySkin(PROFILE&&PROFILE.skin);
+if(MINI&&DESK){document.body.classList.add("deskmini");$("miniClose").onclick=()=>DESK.toggleMini()}
+render();
+// Si la app está abierta en dos ventanas (completa + flotante), se mantienen iguales
+window.addEventListener("storage",e=>{
+  if(e.key===KEY&&!NA){S=load();render()}
+  if(e.key===PKEY){try{PROFILE=JSON.parse(e.newValue||"null")}catch(x){}applySkin(PROFILE&&PROFILE.skin);render()}
+  if(e.key===SKEY||e.key===GKEY)render();
+});
+if((!PROFILE||!PROFILE.done)&&!MINI)openIntro();
+</script>
+
+</html>

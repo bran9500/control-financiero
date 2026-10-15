@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notas</title>
+<style>
+  :root{
+    --bg:#12161C; --surface:#1B2129; --surface-raised:#232A35; --line:#2A313B;
+    --ink:#E8E6E0; --ink-dim:#8B93A0; --ink-faint:#5B6472; --good:#6FA98A; --warn:#C4693B; --rec:#E0564B;
+    --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{background:var(--bg);margin:0;color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:560px;margin:0 auto;padding:18px 14px 120px 14px;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 16px 2px;gap:10px;}
+  .page-title{font-family:var(--serif);font-size:26px;margin:0;}
+  .sub{font-size:12.5px;color:var(--ink-faint);margin:2px 0 0 0;}
+  .icon-btn{background:var(--surface);border:1px solid var(--line);color:var(--ink-dim);width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  .icon-btn svg{width:20px;height:20px;}
+  .search{width:100%;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:11px 13px;font-size:14px;margin-bottom:12px;}
+  .search::placeholder{color:var(--ink-faint);}
+  .note{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:10px;cursor:pointer;}
+  .note-title{font-size:15px;margin:0 0 4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .note-prev{font-size:13px;color:var(--ink-dim);margin:0;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .note-date{font-size:11.5px;color:var(--ink-faint);margin-top:8px;}
+  .empty{color:var(--ink-faint);font-size:14px;text-align:center;padding:50px 20px;line-height:1.6;}
+  .fab-row{position:fixed;left:0;right:0;bottom:18px;display:flex;justify-content:center;gap:12px;z-index:10;pointer-events:none;}
+  .fab{pointer-events:auto;display:flex;align-items:center;gap:8px;border:none;border-radius:999px;padding:14px 22px;font-size:15px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:var(--sans);}
+  .fab svg{width:20px;height:20px;}
+  .fab.primary{background:var(--good);color:#0E1A14;font-weight:600;}
+  .fab.secondary{background:var(--surface-raised);color:var(--ink);border:1px solid var(--line);}
+  .fab.rec{background:var(--rec);color:#fff;font-weight:600;}
+  textarea{
+    width:100%;min-height:55vh;background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;padding:16px;resize:none;
+  }
+  textarea:focus{outline:1px solid var(--ink-faint);}
+  .meta{font-size:12px;color:var(--ink-faint);margin:8px 4px 0 4px;display:flex;justify-content:space-between;}
+  .confirm{background:var(--surface);border:1px solid var(--warn);border-radius:14px;padding:14px;margin-bottom:12px;font-size:14px;color:var(--ink-dim);}
+  .confirm .row{display:flex;gap:8px;margin-top:10px;}
+  .btn{background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);padding:10px 14px;border-radius:12px;font-size:14px;cursor:pointer;}
+  .btn.danger{border-color:var(--warn);color:var(--warn);}
+  #toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#2C3440;color:var(--ink);font-size:13px;padding:10px 15px;border-radius:12px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:88%;text-align:center;z-index:20;}
+  #toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="toast"></div>
+<script>
+const KEY = 'notas-data';
+const ICON = {
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z"/></svg>',
+  stop:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/></svg>',
+  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg>'
+};
+
+let notes = [];
+let openId = null;
+let query = '';
+let speaking = false;
+let listening = false;
+let confirmDelete = false;
+
+function load(){ try{ notes = JSON.parse(localStorage.getItem(KEY) || '[]'); }catch(e){ notes = []; } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(notes)); }catch(e){ toast('No se pudo guardar'); } }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2600); }
+function hasNative(fn){ return window.Android && typeof Android[fn] === 'function'; }
+function titleOf(n){ const t=(n.text||'').trim().split('\n')[0]; return t ? t.slice(0,60) : 'Nota vacía'; }
+function fmtDate(ts){ const d=new Date(ts); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('es-ES',{hour:'numeric',minute:'2-digit'}); }
+function current(){ return notes.find(n=>n.id===openId); }
+
+function newNote(){
+  const n = { id:'n'+Date.now(), text:'', created:Date.now(), updated:Date.now() };
+  notes.unshift(n); save(); openId = n.id; confirmDelete=false; render();
+  setTimeout(()=>{ const t=document.getElementById('editor'); if(t) t.focus(); }, 60);
+  return n;
+}
+function openNote(id){ openId=id; confirmDelete=false; render(); }
+function closeNote(){
+  stopSpeak();
+  const n = current();
+  if(n && !n.text.trim()){ notes = notes.filter(x=>x.id!==n.id); save(); }
+  openId=null; confirmDelete=false; render();
+}
+function onEdit(el){
+  const n=current(); if(!n) return;
+  n.text=el.value; n.updated=Date.now();
+  notes = [n].concat(notes.filter(x=>x.id!==n.id));
+  save();
+  const m=document.getElementById('meta-date'); if(m) m.textContent='Guardada · '+fmtDate(n.updated);
+}
+function deleteNote(){
+  if(!confirmDelete){ confirmDelete=true; render(); return; }
+  stopSpeak();
+  notes = notes.filter(x=>x.id!==openId); save();
+  openId=null; confirmDelete=false; render(); toast('Nota borrada');
+}
+
+// ---- Dictado (reconocimiento de voz del teléfono) ----
+function dictate(){
+  if(!openId) newNote();
+  stopSpeak();
+  if(!hasNative('dictate')){ toast('El dictado funciona dentro de la app del teléfono'); return; }
+  listening = true; render();
+  Android.dictate();
+}
+// La app nativa llama esto con lo que entendió (o vacío si se canceló).
+window.onDictation = function(text){
+  listening = false;
+  const n = current();
+  if(n && text){
+    const sep = n.text && !/\s$/.test(n.text) ? (/[.!?]$/.test(n.text.trim()) ? ' ' : '. ') : '';
+    let t = text.trim();
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+    n.text = (n.text || '') + sep + t;
+    n.updated = Date.now();
+    save();
+  } else if(!text){ toast('No te escuché, intenta otra vez'); }
+  render();
+  const el = document.getElementById('editor'); if(el){ el.scrollTop = el.scrollHeight; }
+};
+
+// ---- Leer en voz alta ----
+function speak(){
+  const n=current(); if(!n || !n.text.trim()){ toast('La nota está vacía'); return; }
+  if(hasNative('speak')){ Android.speak(n.text); speaking=true; render(); return; }
+  if(window.speechSynthesis){
+    const u=new SpeechSynthesisUtterance(n.text); u.lang='es-US';
+    u.onend=()=>{ speaking=false; render(); };
+    speechSynthesis.speak(u); speaking=true; render();
+  }
+}
+function stopSpeak(){
+  if(!speaking) return;
+  if(hasNative('stopSpeaking')) Android.stopSpeaking();
+  else if(window.speechSynthesis) speechSynthesis.cancel();
+  speaking=false;
+}
+window.onSpeakDone = function(){ speaking=false; render(); };
+
+// Botón atrás del teléfono: si hay una nota abierta, vuelve a la lista.
+window.notesBack = function(){ if(openId){ closeNote(); return true; } return false; };
+// Desde el widget: nota nueva y dictar enseguida.
+window.quickDictate = function(){ newNote(); dictate(); };
+
+function render(){
+  const app=document.getElementById('app');
+  if(openId){
+    const n=current(); if(!n){ openId=null; return render(); }
+    app.innerHTML = `
+      <div class="topbar">
+        <button class="icon-btn" onclick="closeNote()" aria-label="Volver">${ICON.back}</button>
+        <div style="flex:1;min-width:0;"><p class="page-title" style="font-size:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(titleOf(n))}</p></div>
+        <button class="icon-btn" onclick="deleteNote()" aria-label="Borrar">${ICON.trash}</button>
+      </div>
+      ${confirmDelete ? `<div class="confirm">¿Borrar esta nota?<div class="row"><button class="btn danger" onclick="deleteNote()">Sí, borrar</button><button class="btn" onclick="confirmDelete=false;render()">Cancelar</button></div></div>` : ''}
+      <textarea id="editor" placeholder="Escribe o toca Dictar y habla…" oninput="onEdit(this)">${esc(n.text)}</textarea>
+      <div class="meta"><span id="meta-date">Guardada · ${fmtDate(n.updated)}</span><span>${(n.text.trim().match(/\S+/g)||[]).length} palabras</span></div>
+      <div class="fab-row">
+        <button class="fab ${listening?'rec':'primary'}" onclick="dictate()">${ICON.mic}${listening?'Escuchando…':'Dictar'}</button>
+        <button class="fab secondary" onclick="${speaking?'stopSpeak();render()':'speak()'}">${speaking?ICON.stop:ICON.play}${speaking?'Detener':'Leer'}</button>
+      </div>`;
+    return;
+  }
+  const q=query.trim().toLowerCase();
+  const list = notes.filter(n=>!q || (n.text||'').toLowerCase().includes(q));
+  app.innerHTML = `
+    <div class="topbar">
+      <div><p class="page-title">Notas</p><p class="sub">${notes.length} nota${notes.length===1?'':'s'}</p></div>
+      ${hasNative('goHome') ? `<button class="icon-btn" onclick="Android.goHome()" aria-label="Inicio">${ICON.home}</button>` : ''}
+    </div>
+    ${notes.length ? `<input class="search" placeholder="Buscar en tus notas" value="${esc(query)}" oninput="query=this.value;renderList()">` : ''}
+    <div id="list">${renderListHtml(list)}</div>
+    <div class="fab-row">
+      <button class="fab primary" onclick="quickDictate()">${ICON.mic}Dictar nota</button>
+      <button class="fab secondary" onclick="newNote()">${ICON.plus}Escribir</button>
+    </div>`;
+}
+function renderListHtml(list){
+  if(!notes.length) return `<div class="empty">Todavía no tienes notas.<br>Toca <b>Dictar nota</b> y habla: lo que digas se escribe solo.</div>`;
+  if(!list.length) return `<div class="empty">Nada coincide con "${esc(query)}".</div>`;
+  return list.map(n=>`
+    <div class="note" onclick="openNote('${n.id}')">
+      <p class="note-title">${esc(titleOf(n))}</p>
+      <p class="note-prev">${esc((n.text||'').split('\n').slice(1).join(' ').trim() || (n.text||'').slice(60))}</p>
+      <p class="note-date">${fmtDate(n.updated)}</p>
+    </div>`).join('');
+}
+function renderList(){
+  const q=query.trim().toLowerCase();
+  document.getElementById('list').innerHTML = renderListHtml(notes.filter(n=>!q || (n.text||'').toLowerCase().includes(q)));
+}
+
+load(); render();
+</script>
+</body>
+</html>

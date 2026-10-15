@@ -239,6 +239,15 @@
   .note-good{font-size:12px;color:var(--good);}
   .error-box{border:1px solid var(--warn);border-radius:12px;padding:12px;font-size:13px;color:var(--warn);margin-top:12px;line-height:1.5;}
 
+  /* ---------- Accesos a las otras apps ---------- */
+  .apps-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
+  .app-tile{display:flex;flex-direction:column;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 6px;color:var(--ink);font-size:12.5px;cursor:pointer;font-family:var(--sans);}
+  .app-ico{width:38px;height:38px;border-radius:12px;background:var(--surface-raised);display:flex;align-items:center;justify-content:center;color:var(--good);}
+  .app-ico svg{width:21px;height:21px;}
+  .card .apps-row{margin-bottom:8px;}
+  .card .app-tile{background:var(--surface-raised);}
+  .card .app-ico{background:var(--surface);}
+
   /* ---------- Barra de pestañas ---------- */
   .tabbar{
     position:fixed;left:0;right:0;bottom:0;z-index:20;
@@ -1723,7 +1732,29 @@ function exportSummary(){
 // =====================================================================
 //  RECORDATORIOS DE PAGOS (notificaciones del teléfono)
 // =====================================================================
+function pushWidget(){
+  if(!(window.Android && Android.updateWidget)) return;
+  try{
+    const c = computeAll();
+    const next = c.upcoming[0];
+    Android.updateWidget(JSON.stringify({
+      covered: c.shortfall <= 0,
+      falta: fmtMoney(Math.max(c.shortfall, 0)),
+      entro: fmtMoney(c.incomeThisWeek),
+      gastado: fmtMoney(c.hormigaThisWeek + c.gastoThisWeek),
+      saldo: fmtMoney(c.currentBalance),
+      proximo: next ? `Próximo: ${next.name} · ${next.days===0?'hoy':next.days===1?'mañana':'en '+next.days+' días'} · ${fmtMoney(next.amount)}` : 'Sin pagos en los próximos 30 días',
+      actualizado: new Date().toLocaleTimeString('es-ES', {hour:'numeric', minute:'2-digit'})
+    }));
+  }catch(e){}
+}
+function openSubApp(name){
+  if(window.Android && Android.openApp){ Android.openApp(name); return; }
+  showToast('Esta sección funciona dentro de la app del teléfono');
+}
+
 function scheduleNativeReminders(){
+  pushWidget();
   if(!(window.Android && Android.scheduleReminders)) return;
   const now = Date.now();
   const today = new Date(); today.setHours(0,0,0,0);
@@ -1951,8 +1982,18 @@ function renderTabbar(){
 }
 
 // ---------------------------------------------------------------- INICIO
+const SUB_APPS = [
+  ['rotador','Rotador','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg>'],
+  ['bot','Bot Señales','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 6-8"/><path d="M15 6h3v3"/></svg>'],
+  ['notas','Notas','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>']
+];
+function renderAppsRow(){
+  return `<div class="apps-row">${SUB_APPS.map(([k,l,ic]) => `
+    <button class="app-tile" onclick="openSubApp('${k}')"><span class="app-ico">${ic}</span><span>${l}</span></button>`).join('')}</div>`;
+}
+
 function renderHome(c){
-  let html = '';
+  let html = renderAppsRow();
 
   // Avisos de pagos que vencen en 3 días o menos
   const soon = c.upcoming.filter(u => u.days <= 3);
@@ -2591,6 +2632,13 @@ function renderMoreTab(c){
         </div>
         <div class="item-amounts"><span class="item-amount" style="color:var(--good);">${fmtMoney(p.balance)}</span></div>
       </div>`).join('') : '<div class="empty-note" style="padding-top:0;">Ninguna deuda saldada todavía.</div>'}`);
+
+  // Mis apps
+  html += `<div class="card">
+    <div class="card-head"><div><p class="card-title">Mis apps</p><p class="card-sub">Todo en un solo lugar</p></div></div>
+    ${renderAppsRow()}
+    <p class="item-meta" style="margin-top:4px;line-height:1.6;">Las ventanas flotantes del Rotador y del Bot se activan desde dentro de cada una, igual que antes. También puedes poner el widget "Control Financiero · Semana" en tu pantalla de inicio.</p>
+  </div>`;
 
   // Exportar resumen
   html += `<div class="card">

@@ -14,6 +14,14 @@ Versión 2.0:
   cobros que se repiten, recordatorios de pagos (notificaciones) y exportar un
   resumen para analizarlo con Claude.
 
+Versión 2.1 — todo en una sola app:
+- Rotador de Lotes (de bran9500/rotador-lotes) y Bot Señales (de bran9500/Prueba-1-bot-)
+  como subaplicaciones, cada una con su ventana flotante. Código en
+  `com.ktrsis.rotador` y `com.ktrsis.bot`, pantallas en `assets/rotador` y `assets/bot`.
+- Notas por voz (`com.ktrsis.notas`, `assets/notas`): dictar con el reconocimiento de voz
+  del teléfono y escuchar la nota en voz alta.
+- Widget de pantalla de inicio con lo de la semana y accesos a las demás apps.
+
 Los datos se guardan con `localStorage` dentro del WebView (almacenamiento local
 del propio dispositivo), así que no dependen de ninguna conexión ni servicio
 externo — persisten igual que en un navegador normal.
