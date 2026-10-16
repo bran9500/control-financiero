@@ -51,3 +51,13 @@ Versión 2.3 — todo conectado:
   fusionar fuentes de ingreso; Zelle separado por persona.
 - Categorías "Trading" (resultado neto aparte) y "Movimiento propio" (cajero, transferencias).
 - Widget con barra de avance, próximos pagos, próximas semanas, hormiga, deuda y pendientes.
+
+Versión 2.4 — revisar movimientos:
+- Tarjeta "Revisar movimientos" agrupada por comercio/persona: todas las categorías a un toque,
+  Descartar (no vuelve) y Después (vuelve en 3 días; a la segunda se descarta). Solo los últimos 45 días.
+- La app aprende con 2 confirmaciones (categoría y a qué deuda/gasto va un comercio); antes, pregunta.
+- Si un mismo comercio quedó en dos cosas distintas, o una deuda y un gasto fijo tienen casi el mismo
+  monto, pregunta si es lo mismo para no contarlo doble.
+- "Ya lo pagué" en cada pago pendiente para elegir el movimiento del banco que lo pagó.
+- Préstamos desde el banco (Zelle a alguien) con fecha de pago, aviso, y detección cuando te devuelven.
+- Los pagos anteriores a cuando registraste una deuda se conectan sin volver a restarse del saldo.

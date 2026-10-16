@@ -272,6 +272,10 @@
   .debt-detail{background:var(--surface-raised);border-radius:12px;padding:12px;margin:0 0 12px 0;}
   .debt-detail .mini-row:first-of-type{border-top:none;}
 
+  .q-cats{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px 0;}
+  .q-foot{display:flex;gap:16px;align-items:center;margin-top:10px;border-top:1px solid var(--line);padding-top:8px;flex-wrap:wrap;}
+  .up-btns{display:flex;gap:6px;width:100%;justify-content:flex-end;margin-top:6px;}
+  .mini-btn.good{color:var(--good);border-color:rgba(111,169,138,.5);}
   /* ---------- Barra de pestañas ---------- */
   .tabbar{
     position:fixed;left:0;right:0;bottom:0;z-index:20;
@@ -343,6 +347,8 @@ function normalizeData(parsed){
       trust: (parsed.bank && parsed.bank.trust) || {}
     },
     allocations: parsed.allocations || [],
+    dupIgnored: parsed.dupIgnored || [],
+    conflictOk: parsed.conflictOk || [],
     shifts: parsed.shifts || {},
     merges: parsed.merges || {}
   };
@@ -664,9 +670,9 @@ function applyLoanBalanceEffect(amount, wasActive, isActive){
   const newContribution = isActive ? -amount : 0;
   data.settings.currentBalance = (data.settings.currentBalance || 0) + (newContribution - oldContribution);
 }
-function addLoan(person, amount, date, note){
+function addLoan(person, amount, date, note, due){
   const amt = parseMoney(amount);
-  data.loans.push({id:'l'+Date.now(), person, amount:amt, date, note:note||'', returned:false});
+  data.loans.push({id:'l'+Date.now(), person, amount:amt, date, note:note||'', returned:false, due: due||''});
   applyLoanBalanceEffect(amt, false, true);
   saveData(); render();
 }
@@ -678,9 +684,11 @@ function updateLoan(id, person, amount, date, note, returned){
     const newAmount = parseMoney(amount);
     const isActive = !returned;
     // Revierte el efecto del monto viejo y aplica el del monto nuevo
-    if(wasActive) applyLoanBalanceEffect(existing.amount, true, false);
-    if(isActive) applyLoanBalanceEffect(newAmount, false, true);
-    data.loans[idx] = {...existing, person, amount:newAmount, date, note:note||'', returned: !!returned};
+    if(!existing.fromBank){
+      if(wasActive) applyLoanBalanceEffect(existing.amount, true, false);
+      if(isActive) applyLoanBalanceEffect(newAmount, false, true);
+    }
+    data.loans[idx] = {...existing, person, amount:newAmount, date, note:note||'', returned: !!returned, due: arguments[6] !== undefined ? arguments[6] : (existing.due||'')};
   }
   saveData(); render();
 }
@@ -690,7 +698,7 @@ function toggleLoanReturned(id){
     const wasActive = !l.returned;
     l.returned = !l.returned;
     const isActive = !l.returned;
-    applyLoanBalanceEffect(l.amount, wasActive, isActive);
+    if(!l.fromBank) applyLoanBalanceEffect(l.amount, wasActive, isActive);
     saveData(); render();
   }
 }
@@ -698,7 +706,8 @@ function removeLoan(id){
   const l = data.loans.find(x=>x.id===id);
   if(l){
     const wasActive = !l.returned;
-    applyLoanBalanceEffect(l.amount, wasActive, false);
+    if(!l.fromBank) applyLoanBalanceEffect(l.amount, wasActive, false);
+    if(l.txId){ const t = bankList().find(x => x.id === l.txId); if(t){ delete t.loanId; t.category = 'gasto'; } }
   }
   data.loans = data.loans.filter(x => x.id !== id);
   saveData(); render();
@@ -1061,6 +1070,8 @@ const BANK_CATS = {
   gasto:   { label:'Otros gastos',   dir:'out'  },
   fixed:   { label:'Gasto fijo',     dir:'out'  },
   debt:    { label:'Pago de deuda',  dir:'out'  },
+  loan:    { label:'Préstamo (le presté)', dir:'out' },
+  loanback:{ label:'Me devolvieron un préstamo', dir:'in' },
   trading: { label:'Trading',        dir:'both' },
   own:     { label:'Movimiento propio', dir:'both' },
   ignore:  { label:'No contar',      dir:'both' }
@@ -1476,11 +1487,13 @@ function confirmImport(){
   const imp = { id:'imp'+Date.now(), date: todayISO(), fileName: p.fileName, files: p.fileCount, added: p.fresh.length, dup: p.dup, from: p.from, to: p.to };
   p.fresh.forEach(t => { t.importId = imp.id; data.bank.transactions.push(t); });
   data.bank.imports.push(imp);
+  const autoLinked = autoLinkNew(p.fresh);
   let msg = p.fresh.length ? `Listo: ${p.fresh.length} movimiento${p.fresh.length===1?'':'s'} nuevo${p.fresh.length===1?'':'s'} guardado${p.fresh.length===1?'':'s'}` : 'No había movimientos nuevos en ese extracto';
   if(p.updateBalance && p.lastBalance !== null){
     data.settings.currentBalance = p.lastBalance;
     msg += ` · saldo actualizado a ${fmtMoney(p.lastBalance)}`;
   }
+  if(autoLinked) msg += ` · ${autoLinked} pago${autoLinked===1?'':'s'} se conectaron solos`;
   importPreview = null;
   saveData();
   activeTab = 'home';
@@ -1503,15 +1516,21 @@ function undoImport(id){
 }
 
 // ---- Reglas automáticas ----
+// Cada vez que confirmas la misma categoría para un comercio, sube la confianza. Con 2, la app lo hace sola.
 function upsertRule(key, dir, cat){
   const r = findRule(key, dir);
-  if(r) r.category = cat; else data.bank.rules.push({ key, dir, category: cat });
+  if(r){ r.count = r.category === cat ? (r.count || 1) + 1 : 1; r.category = cat; }
+  else data.bank.rules.push({ key, dir, category: cat, count: 1 });
 }
+function ruleTrusted(r){ return !!r && (r.count || 1) >= 2; }
 function setBankCategory(id, cat){
   const t = bankList().find(x => x.id === id);
   if(!t || !BANK_CATS[cat]) return;
   if(t.link && !((cat === 'debt' && t.link.type === 'debt') || (cat === 'fixed' && t.link.type === 'expense'))) unlinkTx(t);
+  if(t.category === 'loan' && cat !== 'loan') removeLoanFromTx(t);
+  if(t.category === 'loanback' && cat !== 'loanback') removeRepayment(t);
   t.category = cat;
+  t.reviewed = true;
   t.auto = 'manual-set';
   const key = merchantKey(t.desc);
   upsertRule(key, t.dir, cat);
@@ -1522,8 +1541,10 @@ function setBankCategory(id, cat){
     }
   });
   saveData();
-  // Pago de deuda o gasto fijo: preguntar a cuál va.
+  // Pago de deuda o gasto fijo: preguntar a cuál va. Préstamo: preguntar hasta cuándo.
   if((cat === 'debt' || cat === 'fixed') && !t.link){ openLinkSheet(t.id, cat === 'debt' ? 'debt' : 'expense'); return; }
+  if(cat === 'loan'){ createLoanFromTx(t); saveData(); sheet = { type:'loanDue', loanId: t.loanId }; render(); return; }
+  if(cat === 'loanback' && !t.loanId){ sheet = { type:'loanPick', txId: t.id }; render(); return; }
   render();
   showToast(`"${displayName(t)}" ahora es ${BANK_CATS[cat].label}` + (n ? ` (y ${n} más)` : '') + '. Los próximos extractos lo harán solos.');
 }
@@ -1798,88 +1819,277 @@ function saveSourceName(id){
 }
 
 // =====================================================================
-//  PREGUNTAS AL ABRIR LA APP ("¿Es Star Snacks?" Sí / No)
+//  REVISAR MOVIMIENTOS (tarjeta en Inicio)
+//  Agrupa por comercio/persona: lo que contestas se aplica a todos los de ese comercio.
 // =====================================================================
 const NOISE_ONE = new RegExp(DESC_NOISE.source);
-const GENERIC_WORDS = new Set(['JERSEY','CITY','BAYONNE','NEWARK','YORK','STORE','MARKET','PAYMENT','DEPOSIT','INC','LLC','COMPANY','SERVICE','SERVICES','ONLINE','BILL','TRANSFER','ZELLE','SENT','RECEIVED']);
+// Palabras del banco que no dicen nada del comercio: no sirven para comparar.
+const GENERIC_WORDS = new Set(['JERSEY','CITY','BAYONNE','NEWARK','YORK','STORE','MARKET','PAYMENT','PAYMENTS','DEPOSIT','INC','LLC','COMPANY',
+  'SERVICE','SERVICES','SVC','ONLINE','BILL','TRANSFER','ZELLE','SENT','RECEIVED','ELECTRONIC','PURCHASE','DEBIT','CREDIT','CARD','AUTOPAY',
+  'RECURRING','WITHDRAWAL','CHECK','FUNDS','DIRECT','PAYROLL','INTERNET','MOBILE','BANK','CORP','STORES','SUPERCENTER','CENTER','WWW']);
+const REVIEW_DAYS = 45;     // solo se pregunta por movimientos recientes
+const SNOOZE_DAYS = 3;      // "Después" lo esconde estos días; a la segunda vez se descarta
+
 function sigWords(s){
-  return normDesc(s).replace(/[^A-Z ]/g,' ').split(' ').filter(w => w.length >= 4 && !GENERIC_WORDS.has(w) && !NOISE_ONE.test(' '+w+' ') );
+  return normDesc(s).replace(/[^A-Z ]/g,' ').split(' ').filter(w => w.length >= 4 && !GENERIC_WORDS.has(w) && !NOISE_ONE.test(' '+w+' '));
 }
-// Sugerencia de nombre: igual comercio ya nombrado, o uno que comparte una palabra importante.
+// Dirección (entrada/salida) de un comercio ya nombrado, según sus movimientos.
+function keyDir(key){
+  const t = bankList().find(x => merchantKey(x.desc) === key);
+  return t ? t.dir : null;
+}
+// Sugerencia de nombre: mismo comercio ya nombrado, o uno que comparte una palabra propia (nunca mezcla entradas con salidas).
 function suggestName(t){
   const names = data.bank.names || {};
   const key = merchantKey(t.desc);
   if(names[key]) return { name: names[key], exact: true, key };
-  const words = sigWords(t.desc);
+  const words = sigWords(key);
   if(!words.length) return null;
   for(const k of Object.keys(names)){
+    if(keyDir(k) !== t.dir) continue;
     const kw = sigWords(k);
-    if(kw.some(w => words.includes(w))) return { name: names[k], exact: false, key: k };
+    if(kw.some(w => words.includes(w)) || sameCompact(words, kw)) return { name: names[k], exact: false, key: k };
   }
   return null;
 }
-let skippedQuestions = new Set(); // "Después": no vuelve a salir hasta que abras la app otra vez
-let questionRename = null;        // id del movimiento al que le dijiste "No" y estás escribiendo qué es
+
+// "STAR SNACKS" y "STARSNACKS" son lo mismo: se comparan pegados.
+function sameCompact(a, b){
+  const ca = a.join(''), cb = b.join('');
+  if(ca.length < 5 || cb.length < 5) return false;
+  return ca.includes(cb) || cb.includes(ca) || b.some(w => w.length >= 5 && ca.includes(w)) || a.some(w => w.length >= 5 && cb.includes(w));
+}
+let questionRename = null;   // grupo al que le dijiste "No" y estás escribiendo qué es
+let questionCats = null;     // grupo en el que abriste "Otra categoría"
+function groupKeyOf(t){ return t.dir + '|' + merchantKey(t.desc); }
+function groupTxs(gk){
+  const since = addDays(new Date(), -REVIEW_DAYS);
+  return bankList().filter(t => groupKeyOf(t) === gk && isoToDate(t.date) >= since && !t.qDismissed);
+}
+function pendingLoanFor(t){
+  const k = merchantKey(t.desc);
+  return data.loans.find(l => l.fromBank && !l.returned && l.personKey === k);
+}
 
 function pendingQuestions(){
-  const qs = [];
-  const since = addDays(new Date(), -120);
+  const today = todayISO();
+  const since = addDays(new Date(), -REVIEW_DAYS);
+  const groups = {};
   bankList().forEach(t => {
-    if(isoToDate(t.date) < since || skippedQuestions.has(t.id)) return;
-    // 1) Pagos de deuda / gasto fijo sin conectar
-    if((t.category === 'debt' || t.category === 'fixed') && !t.link && !t.linkAsked && t.dir === 'out'){
-      const mem = (data.bank.linkMemory || {})[t.dir + '|' + merchantKey(t.desc)];
+    if(t.qDismissed || isoToDate(t.date) < since) return;
+    if(t.qSnooze && t.qSnooze > today) return;
+    (groups[groupKeyOf(t)] = groups[groupKeyOf(t)] || []).push(t);
+  });
+  const qs = [];
+  // Pagos repetidos: una deuda y un gasto fijo con casi el mismo monto
+  detectDupes().forEach(d => qs.push({ kind:'dupe', gk:'dupe|'+d.debt.id+'|'+d.exp.id, dupe:d, date:'9999' }));
+  Object.keys(groups).forEach(gk => {
+    const txs = groups[gk].sort((a,b) => b.date.localeCompare(a.date));
+    const t = txs[0];
+    const key = merchantKey(t.desc);
+    const base = { gk, txs, t, date: t.date };
+    // 0) El mismo comercio quedó en dos cosas distintas: preguntar para que no se duplique
+    const conf = groupConflict(gk);
+    if(conf){ qs.push({ ...base, kind:'conflict', options: conf }); return; }
+    // 1) Alguien te devuelve un préstamo
+    const loan = t.dir === 'in' ? pendingLoanFor(t) : null;
+    const loanTx = txs.find(x => x.dir === 'in' && x.category !== 'loanback' && !x.reviewed && pendingLoanFor(x));
+    if(loan && loanTx){ qs.push({ ...base, t: loanTx, kind:'loanback', loan }); return; }
+    // 2) Pagos de deuda / gasto fijo sin conectar
+    const unlinked = txs.filter(x => (x.category === 'debt' || x.category === 'fixed') && !x.link && !x.linkAsked && x.dir === 'out');
+    if(unlinked.length){
+      const mem = (data.bank.linkMemory || {})[gk];
       const target = mem && (mem.type === 'debt' ? data.debts.find(d => d.id === mem.id) : data.expenses.find(e => e.id === mem.id));
-      qs.push({ kind:'link', t, target: target ? { type: mem.type, id: mem.id, name: target.name } : null });
+      qs.push({ ...base, t: unlinked[0], txs: unlinked, kind:'link', target: target ? { type: mem.type, id: mem.id, name: target.name } : null });
       return;
     }
-    // 2) Nombres
-    if(t.nameOk || t.category === 'ignore' || t.category === 'own') return;
-    const key = merchantKey(t.desc);
-    if((data.bank.trust[key] || 0) >= 2 && data.bank.names[key]){ t.nameOk = true; return; }
-    const sug = suggestName(t);
-    if(sug) qs.push({ kind:'name', t, sug });
+    // 3) Te devolvieron un préstamo pero falta decir cuál
+    const lb = txs.find(x => x.category === 'loanback' && !x.loanId);
+    if(lb){ qs.push({ ...base, t: lb, kind:'loanpick' }); return; }
+    // 4) Nombre parecido a uno que ya pusiste
+    if(!(data.bank.trust[key] >= 2) && txs.some(x => !x.nameOk) && t.category !== 'own' && t.category !== 'ignore'){
+      const sug = suggestName(t);
+      if(sug){ qs.push({ ...base, kind:'name', sug }); return; }
+    }
+    // 5) Comercio nuevo (o confirmado solo 1 vez): preguntar en qué categoría va
+    const rule = findRule(key, t.dir);
+    const unrev = txs.filter(x => !x.reviewed && x.auto !== 'manual-set' && x.auto !== 'manual' && !x.link);
+    if(unrev.length && !ruleTrusted(rule)){
+      qs.push({ ...base, t: unrev[0], txs: unrev, kind:'cat', last: rule ? rule.category : null });
+    }
   });
-  return qs.sort((a,b) => b.t.date.localeCompare(a.t.date));
+  return qs.sort((a,b) => (b.date||'').localeCompare(a.date||''));
 }
-function answerName(id, yes){
-  const t = bankList().find(x => x.id === id);
-  if(!t) return;
+
+function setGroupCategory(gk, cat){
+  const txs = groupTxs(gk);
+  if(!txs.length || !BANK_CATS[cat]) return;
+  const t = txs[0];
+  const key = merchantKey(t.desc);
+  txs.forEach(x => {
+    if(x.category !== cat){
+      if(x.link) unlinkTx(x);
+      if(x.category === 'loan') removeLoanFromTx(x);
+      if(x.category === 'loanback') removeRepayment(x);
+    }
+    x.category = cat; x.auto = 'manual-set'; x.reviewed = true;
+  });
+  upsertRule(key, t.dir, cat);
+  questionCats = null;
+  saveData();
+  if(cat === 'debt' || cat === 'fixed'){ openLinkSheet(t.id, cat === 'debt' ? 'debt' : 'expense'); return; }
+  if(cat === 'loan'){ txs.forEach(x => createLoanFromTx(x)); saveData(); sheet = { type:'loanDue', loanId: t.loanId }; render(); return; }
+  if(cat === 'loanback'){ sheet = { type:'loanPick', txId: t.id }; render(); return; }
+  render();
+  showToast(`"${displayName(t)}" → ${BANK_CATS[cat].label}` + (txs.length > 1 ? ` (${txs.length} movimientos)` : '') + '. Lo recordaré.');
+}
+function dismissGroup(gk){
+  if(gk.startsWith('dupe|')){ const [, d, e] = gk.split('|'); ignoreDupe(d, e); return; }
+  groupTxs(gk).forEach(x => { x.qDismissed = true; x.reviewed = true; });
+  questionRename = null; questionCats = null;
+  saveData(); render();
+  showToast('Descartado: no vuelve a aparecer');
+}
+function snoozeGroup(gk){
+  if(gk.startsWith('dupe|')){ skippedDupes.add(gk); render(); return; }
+  let dismissed = false;
+  const until = dayISO(addDays(new Date(), SNOOZE_DAYS));
+  groupTxs(gk).forEach(x => {
+    x.qSnoozes = (x.qSnoozes || 0) + 1;
+    if(x.qSnoozes >= 2){ x.qDismissed = true; dismissed = true; } else x.qSnooze = until;
+  });
+  questionRename = null; questionCats = null;
+  saveData(); render();
+  showToast(dismissed ? 'Ya lo habías dejado para después: lo descarté para que no se acumule' : `Te lo vuelvo a preguntar en ${SNOOZE_DAYS} días`);
+}
+function answerName(gk, yes){
+  const txs = groupTxs(gk);
+  if(!txs.length) return;
+  const t = txs[0];
   const sug = suggestName(t);
   if(yes && sug){
     const key = merchantKey(t.desc);
     if(!sug.exact) data.bank.names[key] = sug.name;
     data.bank.trust[key] = (data.bank.trust[key] || 0) + 1;
-    t.nameOk = true;
-    // los demás del mismo comercio ya quedan con ese nombre
-    bankList().forEach(o => { if(merchantKey(o.desc) === key) o.nameOk = o.nameOk || (data.bank.trust[key] >= 2); });
+    txs.forEach(x => { x.nameOk = true; });
+    // Si el comercio parecido ya tenía categoría, se usa la misma
+    const simRule = (data.bank.rules || []).find(r => r.key === sug.key && r.dir === t.dir);
+    if(simRule && !findRule(key, t.dir)){ upsertRule(key, t.dir, simRule.category); txs.forEach(x => { if(!x.link){ x.category = simRule.category; x.reviewed = true; } }); }
     saveData(); render();
-    showToast(data.bank.trust[key] >= 2 ? `Aprendido: "${niceName(key)}" es "${sug.name}". Ya no te pregunto por ese.` : `Listo, es "${sug.name}"`);
+    showToast(`Listo: "${sug.name}"` + (txs.length > 1 ? ` (${txs.length} movimientos)` : ''));
   } else {
-    questionRename = id;
+    questionRename = gk;
     render();
     setTimeout(() => { const el = document.getElementById('q-rename'); if(el) el.focus(); }, 50);
   }
 }
-function saveQuestionRename(id){
-  const t = bankList().find(x => x.id === id);
+function saveQuestionRename(gk){
+  const txs = groupTxs(gk);
   const el = document.getElementById('q-rename');
-  if(!t || !el) return;
+  if(!txs.length || !el) return;
   const name = el.value.trim();
-  const key = merchantKey(t.desc);
+  const key = merchantKey(txs[0].desc);
   if(name){ data.bank.names[key] = name; data.bank.trust[key] = 1; }
-  t.nameOk = true;
+  txs.forEach(x => { x.nameOk = true; });
   questionRename = null;
   saveData(); render();
-  if(name) showToast(`Guardado como "${name}". La próxima vez te pregunto si es ese.`);
+  if(name) showToast(`Guardado como "${name}"`);
 }
-function skipQuestion(id){ skippedQuestions.add(id); questionRename = null; render(); }
-function answerLink(id, yes){
-  const t = bankList().find(x => x.id === id);
+function answerLink(gk, yes){
+  const txs = groupTxs(gk).filter(x => (x.category === 'debt' || x.category === 'fixed') && !x.link);
+  if(!txs.length) return;
+  const mem = (data.bank.linkMemory || {})[gk];
+  if(yes && mem){ chooseLink(txs[0].id, mem.type, mem.id); return; }
+  openLinkSheet(txs[0].id, txs[0].category === 'debt' ? 'debt' : 'expense');
+}
+function answerLoanBack(txId, loanId, yes){
+  const t = bankList().find(x => x.id === txId);
   if(!t) return;
-  const mem = (data.bank.linkMemory || {})[t.dir + '|' + merchantKey(t.desc)];
-  if(yes && mem){ chooseLink(id, mem.type, mem.id); return; }
-  openLinkSheet(id, t.category === 'debt' ? 'debt' : 'expense');
+  if(!yes){ t.reviewed = true; saveData(); render(); return; }
+  if(t.link) unlinkTx(t);
+  t.category = 'loanback'; t.auto = 'manual-set'; t.reviewed = true;
+  applyRepayment(t, loanId);
+  saveData(); render();
+}
+function toggleQuestionCats(gk){ questionCats = questionCats === gk ? null : gk; render(); }
+
+// ---- Un mismo comercio puesto en dos cosas distintas ----
+function assignmentOf(x){
+  if(x.link){
+    const tg = x.link.type === 'debt' ? data.debts.find(d => d.id === x.link.id) : data.expenses.find(e => e.id === x.link.id);
+    return { id: x.link.type + ':' + x.link.id, label: tg ? tg.name + (x.link.type === 'debt' ? ' (deuda)' : ' (gasto fijo)') : '?', link: x.link };
+  }
+  return { id: 'cat:' + x.category, label: BANK_CATS[x.category] ? BANK_CATS[x.category].label : x.category, cat: x.category };
+}
+function groupConflict(gk){
+  if((data.conflictOk || []).includes(gk)) return null;
+  const opts = {};
+  bankList().forEach(x => {
+    if(groupKeyOf(x) !== gk || x.qDismissed) return;
+    if(!(x.auto === 'manual-set' || x.link)) return;
+    if(['loan','loanback','own','trading','ignore'].includes(x.category)) return;
+    const a = assignmentOf(x);
+    if(!opts[a.id]) opts[a.id] = { ...a, n: 0 };
+    opts[a.id].n++;
+  });
+  const list = Object.values(opts);
+  return list.length > 1 ? list : null;
+}
+function resolveConflict(gk, optId){
+  const conf = groupConflict(gk);
+  const opt = conf && conf.find(o => o.id === optId);
+  if(!opt) return;
+  const txs = bankList().filter(x => groupKeyOf(x) === gk && !x.qDismissed);
+  if(opt.link){
+    const t0 = txs.find(x => !(x.link && x.link.id === opt.link.id)) || txs[0];
+    txs.forEach(x => { if(x.link && x.link.id !== opt.link.id) unlinkTx(x); x.auto = 'manual-set'; });
+    chooseLink(t0.id, opt.link.type, opt.link.id);
+  } else {
+    txs.forEach(x => { if(x.link) unlinkTx(x); x.category = opt.cat; x.auto = 'manual-set'; x.reviewed = true; });
+    upsertRule(merchantKey(txs[0].desc), txs[0].dir, opt.cat);
+    saveData(); render();
+    showToast(`Listo: todo "${displayName(txs[0])}" quedó como ${opt.label}`);
+  }
+}
+function keepConflict(gk){
+  if(!data.conflictOk) data.conflictOk = [];
+  data.conflictOk.push(gk);
+  saveData(); render();
+}
+
+// ---- Pagos repetidos: deuda y gasto fijo que son el mismo pago (ej. el carro) ----
+let skippedDupes = new Set();
+function detectDupes(){
+  const ign = data.dupIgnored || [];
+  const out = [];
+  data.debts.forEach(d => {
+    if(!(d.monthlyPayment > 0)) return;
+    data.expenses.forEach(e => {
+      if(expenseFreq(e) !== 'month') return;
+      const gk = 'dupe|'+d.id+'|'+e.id;
+      if(ign.includes(d.id+'|'+e.id) || skippedDupes.has(gk)) return;
+      if(Math.abs((e.amount||0) - d.monthlyPayment) <= Math.max(5, d.monthlyPayment * 0.03)) out.push({ debt:d, exp:e });
+    });
+  });
+  return out;
+}
+function ignoreDupe(did, eid){
+  if(!data.dupIgnored) data.dupIgnored = [];
+  data.dupIgnored.push(did+'|'+eid);
+  saveData(); render();
+}
+// "Sí, es el mismo": se queda la deuda (lleva el saldo) y se quita el gasto fijo; sus pagos pasan a la deuda.
+function mergeDupe(did, eid){
+  const d = data.debts.find(x => x.id === did), e = data.expenses.find(x => x.id === eid);
+  if(!d || !e) return;
+  let moved = 0;
+  bankList().forEach(t => { if(t.link && t.link.type === 'expense' && t.link.id === eid){ unlinkTx(t); linkTx(t, 'debt', did); moved++; } });
+  data.allocations = (data.allocations || []).filter(a => a.expenseId !== eid);
+  Object.keys(data.bank.linkMemory || {}).forEach(k => { const m = data.bank.linkMemory[k]; if(m.type === 'expense' && m.id === eid) data.bank.linkMemory[k] = { type:'debt', id:did, count: m.count || 1 }; });
+  if(!d.dueDate){ const day = String(Math.min(28, e.dueDay||1)).padStart(2,'0'); d.dueDate = todayISO().slice(0,8) + day; }
+  data.expenses = data.expenses.filter(x => x.id !== eid);
+  saveData(); render();
+  showToast(`Listo: "${e.name}" y "${d.name}" ahora son un solo pago` + (moved ? ` (${moved} pagos pasaron a la deuda)` : ''));
 }
 
 // =====================================================================
@@ -2093,6 +2303,7 @@ function scheduleNativeReminders(){
     });
   };
   occurrencesInRange(today, addDays(today, 36)).forEach(o => { if(o.remaining > 0.004) push(o.name, o.remaining, o.date); });
+  data.loans.forEach(l => { if(l.due && !l.returned){ const dd = isoToDate(l.due); if(dd >= today) push(`${l.person} te paga el préstamo`, l.amount - loanRepaid(l), dd); } });
   try{ Android.scheduleReminders(JSON.stringify(items.slice(0, 60))); }catch(e){}
 }
 
@@ -2164,25 +2375,33 @@ function debtPayments(did){
 }
 
 // Conecta un movimiento del banco a una deuda o gasto fijo. A una deuda le resta el monto del saldo.
-function linkTx(t, type, id){
+// Fecha en que registraste una deuda (sale del id). Los pagos anteriores ya estaban descontados del saldo que escribiste.
+function debtCreated(d){
+  if(d.createdAt) return d.createdAt;
+  const m = /^d(\d{12,})$/.exec(d.id || '');
+  return m ? dayISO(new Date(+m[1])) : null;
+}
+function linkTx(t, type, id, force){
   unlinkTx(t);
+  let applied = false;
   if(type === 'debt'){
     const d = data.debts.find(x => x.id === id);
     if(!d) return;
-    d.balance = Math.round(((d.balance||0) - t.amount) * 100) / 100;
+    const created = debtCreated(d);
+    applied = !!force || !created || t.date >= created;
+    if(applied) d.balance = Math.round(((d.balance||0) - t.amount) * 100) / 100;
     t.category = 'debt';
   } else {
     if(!data.expenses.find(x => x.id === id)) return;
     t.category = 'fixed';
   }
-  t.link = { type, id };
+  t.link = { type, id, applied };
+  t.reviewed = true;
   t.auto = t.auto === 'manual' ? 'manual' : 'manual-set';
-  if(!data.bank.linkMemory) data.bank.linkMemory = {};
-  data.bank.linkMemory[t.dir + '|' + merchantKey(t.desc)] = { type, id };
 }
 function unlinkTx(t){
   if(!t.link) return;
-  if(t.link.type === 'debt'){
+  if(t.link.type === 'debt' && t.link.applied !== false){
     const d = data.debts.find(x => x.id === t.link.id);
     if(d) d.balance = Math.round(((d.balance||0) + t.amount) * 100) / 100;
   }
@@ -2312,19 +2531,47 @@ function removeScheduledPayment(debtId, sid){
 let sheet = null; // {type:'link', txId, kind} | {type:'shift', key, baseIso, date, name} | {type:'week', idx} | {type:'source', name} | {type:'alloc', expenseId, periodDate, amount} | {type:'rename', txId}
 function closeSheet(){ sheet = null; render(); }
 function openLinkSheet(txId, kind){ sheet = { type:'link', txId, kind }; render(); }
-function chooseLink(txId, type, id){
+// Conecta este pago y todos los del mismo comercio/persona que aún no estén conectados.
+function chooseLink(txId, type, id, force){
   const t = bankList().find(x => x.id === txId);
   if(!t) return;
-  linkTx(t, type, id);
+  linkTx(t, type, id, force);
+  const gk = groupKeyOf(t);
+  if(!data.bank.linkMemory) data.bank.linkMemory = {};
+  const prev = data.bank.linkMemory[gk];
+  data.bank.linkMemory[gk] = { type, id, count: prev && prev.type === type && prev.id === id ? (prev.count || 1) + 1 : 1 };
+  let others = 0;
+  bankList().forEach(o => {
+    if(o === t || o.link || o.dir !== t.dir || groupKeyOf(o) !== gk || o.qDismissed) return;
+    if(o.category === 'loan' || o.category === 'loanback' || o.category === 'own' || o.category === 'trading' || o.category === 'income') return;
+    linkTx(o, type, id); others++;
+  });
+  upsertRule(merchantKey(t.desc), t.dir, type === 'debt' ? 'debt' : 'fixed');
   sheet = null;
   saveData(); render();
+  const extra = others ? ` También conecté ${others} pago${others===1?'':'s'} más de "${displayName(t)}".` : '';
   if(type === 'debt'){
     const d = data.debts.find(x => x.id === id);
-    showToast(`Se restaron ${fmtMoney(t.amount)} de "${d.name}". ` + (d.balance <= 0 ? '¡Esa deuda quedó en cero!' : `Ahora debes ${fmtMoney(d.balance)}.`));
+    const msg = t.link.applied ? `Se restaron ${fmtMoney(t.amount)} de "${d.name}". ` + (d.balance <= 0 ? '¡Esa deuda quedó en cero!' : `Ahora debes ${fmtMoney(d.balance)}.`)
+      : `Conectado a "${d.name}". No se restó del saldo porque ese pago es de antes de que registraras la deuda.`;
+    showToast(msg + extra);
   } else {
     const e = data.expenses.find(x => x.id === id);
-    showToast(`Pago de ${fmtMoney(t.amount)} conectado a "${e.name}"`);
+    showToast(`Pago de ${fmtMoney(t.amount)} conectado a "${e.name}".` + extra + ' Los próximos se conectan solos.');
   }
+}
+// Al subir un extracto: los comercios que ya conectaste antes se conectan solos.
+function autoLinkNew(txs){
+  let n = 0;
+  txs.forEach(t => {
+    if(t.link || t.dir !== 'out' || t.auto === 'manual') return;
+    const mem = (data.bank.linkMemory || {})[groupKeyOf(t)];
+    if(!mem || (mem.count || 1) < 2) return; // todavía no está seguro: te pregunta
+    const ok = mem.type === 'debt' ? data.debts.find(d => d.id === mem.id) : data.expenses.find(e => e.id === mem.id);
+    if(!ok) return;
+    linkTx(t, mem.type, mem.id); n++;
+  });
+  return n;
 }
 function createAndLink(txId, kind){
   const t = bankList().find(x => x.id === txId);
@@ -2334,8 +2581,8 @@ function createAndLink(txId, kind){
   if(kind === 'debt'){
     const pay = parseMoney((document.getElementById('nl-pay') || {}).value);
     const id = 'd'+Date.now();
-    data.debts.push({ id, name:name.trim(), balance: amt, rate:0, dueDate:'', monthlyPayment: pay });
-    chooseLink(txId, 'debt', id);
+    data.debts.push({ id, name:name.trim(), balance: amt, rate:0, dueDate:'', monthlyPayment: pay, createdAt: todayISO() });
+    chooseLink(txId, 'debt', id, true);
   } else {
     const freq = (document.getElementById('nl-freq') || {}).value === 'week' ? 'week' : 'month';
     const id = 'e'+Date.now();
@@ -2348,6 +2595,83 @@ function unlinkFromSheet(txId){
   const t = bankList().find(x => x.id === txId);
   if(t){ unlinkTx(t); t.linkAsked = true; }
   sheet = null; saveData(); render();
+}
+
+// =====================================================================
+//  "YA LO PAGUÉ": elegir el movimiento del banco que pagó un pago pendiente
+// =====================================================================
+function markPaidCandidates(dateIso, amount, wide){
+  const d0 = isoToDate(dateIso);
+  const span = wide ? 25 : 12;
+  return bankList()
+    .filter(t => t.dir === 'out' && !t.link && t.category !== 'own' && t.category !== 'trading' && t.category !== 'loan'
+      && Math.abs((isoToDate(t.date) - d0) / 86400000) <= span)
+    .map(t => ({ t, score: Math.abs(t.amount - amount) / Math.max(1, amount) * 3 + Math.abs((isoToDate(t.date) - d0) / 86400000) / span }))
+    .sort((a,b) => a.score - b.score)
+    .slice(0, wide ? 40 : 8)
+    .map(x => x.t);
+}
+function openMarkPaid(u){ sheet = { type:'markpaid', u, wide:false }; render(); }
+function chooseMarkPaid(txId){
+  if(!sheet || sheet.type !== 'markpaid') return;
+  const u = sheet.u;
+  chooseLink(txId, u.kind === 'debt' ? 'debt' : 'expense', u.refId);
+}
+
+// =====================================================================
+//  PRÉSTAMOS DESDE EL BANCO (le prestaste a alguien)
+// =====================================================================
+function loanPersonName(t){
+  return displayName(t).replace(/^Zelle\s+/i, '') || 'Préstamo';
+}
+function createLoanFromTx(t){
+  if(t.loanId && data.loans.find(l => l.id === t.loanId)) return;
+  const id = 'l' + Date.now() + Math.floor(Math.random()*1000);
+  data.loans.push({ id, person: loanPersonName(t), amount: t.amount, date: t.date, note:'Desde el banco', returned:false,
+                    fromBank:true, txId: t.id, personKey: merchantKey(t.desc), due:'', repayments:[] });
+  t.loanId = id;
+}
+function removeLoanFromTx(t){
+  if(!t.loanId) return;
+  data.loans = data.loans.filter(l => !(l.id === t.loanId && l.fromBank));
+  delete t.loanId;
+}
+function loanRepaid(l){ return (l.repayments || []).reduce((s,r) => s + r.amount, 0); }
+function applyRepayment(t, loanId){
+  const l = data.loans.find(x => x.id === loanId);
+  if(!l) return;
+  removeRepayment(t);
+  l.repayments = l.repayments || [];
+  const left = Math.max(0, l.amount - loanRepaid(l));
+  l.repayments.push({ txId: t.id, amount: Math.min(t.amount, left || t.amount), date: t.date });
+  t.loanId = loanId;
+  if(loanRepaid(l) >= l.amount - 0.009) l.returned = true;
+  sheet = null;
+  showToast(l.returned ? `${l.person} terminó de pagarte el préstamo ✓` : `${l.person} te abonó ${fmtMoney(t.amount)}. Le faltan ${fmtMoney(l.amount - loanRepaid(l))}.`);
+}
+function removeRepayment(t){
+  if(!t.loanId) return;
+  const l = data.loans.find(x => x.id === t.loanId);
+  if(l && l.repayments){
+    l.repayments = l.repayments.filter(r => r.txId !== t.id);
+    if(loanRepaid(l) < l.amount - 0.009) l.returned = false;
+  }
+  delete t.loanId;
+}
+function setLoanDue(loanId, iso){
+  const l = data.loans.find(x => x.id === loanId);
+  if(!l) return;
+  l.due = iso || '';
+  sheet = null;
+  saveData(); render();
+  showToast(iso ? `Listo: te aviso 2 días antes y el ${fmtShortDate(iso)}, el día que ${l.person} te tiene que pagar` : 'Préstamo guardado sin fecha');
+}
+function pickLoanForRepayment(txId, loanId){
+  const t = bankList().find(x => x.id === txId);
+  if(!t) return;
+  t.category = 'loanback'; t.reviewed = true;
+  applyRepayment(t, loanId);
+  saveData(); render();
 }
 function renderSavingsTab(which){
   const label = which==='emergency' ? 'Fondo de emergencia' : 'Inversiones';
@@ -2484,13 +2808,14 @@ function submitLoan(){
   const amount = document.getElementById('loan-amount').value;
   const date = document.getElementById('loan-date').value;
   const note = document.getElementById('loan-note').value;
+  const due = (document.getElementById('loan-due') || {}).value || '';
   if(!person || !amount || !date) return;
   if(editingItem && editingItem.kind==='loans'){
     const existing = data.loans.find(l=>l.id===editingItem.id);
-    updateLoan(editingItem.id, person, amount, date, note, existing ? existing.returned : false);
+    updateLoan(editingItem.id, person, amount, date, note, existing ? existing.returned : false, due);
     editingItem = null;
   } else {
-    addLoan(person, amount, date, note);
+    addLoan(person, amount, date, note, due);
   }
   formOpen['loans'] = false;
 }
@@ -2568,6 +2893,7 @@ function renderAppsRow(){
 function renderHome(c){
   let html = renderAppsRow();
   html += renderQuestionsCard();
+  html += renderLoansDueCard();
 
   // Avisos de pagos que vencen en 3 días o menos (o ya vencidos esta semana sin pagar)
   const soon = c.upcoming.filter(u => u.days <= 3);
@@ -2669,8 +2995,8 @@ function renderSpendingCard(){
   html += `<div class="total-line"><span>Total gastado</span><b>${fmtMoney(total)}</b></div>`;
   const tops = topMerchants(b.s, b.e, 5);
   if(tops.length){
-    html += `<p class="sub-head">Donde más gastas</p>` + tops.map(m => `
-      <div class="merchant"><span class="m-name">${escapeAttr((data.bank.names||{})[m.key] || niceName(m.key))} <span class="item-meta" style="display:inline;">· ${m.count} ${m.count===1?'vez':'veces'}</span></span><span class="m-amt">${fmtMoney(m.total)}</span></div>`).join('');
+    html += `<p class="sub-head">Donde más gastas · toca para clasificar</p>` + tops.map(m => `
+      <div class="merchant" style="cursor:pointer;" onclick="openMerchantSheet('out', ${escapeAttr(JSON.stringify(m.key))})"><span class="m-name">${escapeAttr((data.bank.names||{})[m.key] || niceName(m.key))} <span class="item-meta" style="display:inline;">· ${m.count} ${m.count===1?'vez':'veces'}</span></span><span class="m-amt">${fmtMoney(m.total)}</span></div>`).join('');
   }
   html += `<p class="item-meta" style="margin-top:10px;">No incluye trading ni movimientos entre tus cuentas (cajero, transferencias propias).</p>`;
   return html + `</div>`;
@@ -2901,7 +3227,13 @@ function bankBody(){
 function loansBody(){
   const loanGroups = groupByMonth(data.loans.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)));
   const editingLoan = editingItem && editingItem.kind==='loans' ? data.loans.find(l=>l.id===editingItem.id) : null;
-  const pending = data.loans.filter(l => !l.returned).reduce((s,l) => s + (l.amount||0), 0);
+  const pending = data.loans.filter(l => !l.returned).reduce((s,l) => s + (l.amount||0) - loanRepaid(l), 0);
+  const today = isoToDate(todayISO());
+  const dueText = l => {
+    if(!l.due || l.returned) return '';
+    const d = Math.round((isoToDate(l.due) - today)/86400000);
+    return ` · <span style="color:${d<0?'var(--warn)':'var(--ink-dim)'};">${d<0?`vencido hace ${-d} día${d===-1?'':'s'}`:d===0?'te paga hoy':`te paga el ${fmtShortDate(l.due)}`}</span>`;
+  };
   return `
     <div class="item-row list-first" style="padding-top:0;">
       <div class="item-main"><div class="item-name">Te deben (sin devolver)</div></div>
@@ -2914,10 +3246,12 @@ function loansBody(){
       ${open ? g.items.map(l=>`
       <div class="item-row">
         <div class="item-main clickable" onclick="startEdit('loans','${l.id}')">
-          <div class="item-name">${escapeAttr(l.person)}${l.note?' · '+escapeAttr(l.note):''}</div>
-          <div class="item-meta">${fmtShortDate(l.date)}
+          <div class="item-name">${escapeAttr(l.person)}${l.note && !l.fromBank?' · '+escapeAttr(l.note):''}</div>
+          <div class="item-meta">${fmtShortDate(l.date)}${l.fromBank?' · del banco':''}${dueText(l)}
             <span class="badge ${l.returned?'returned':''}" onclick="event.stopPropagation(); toggleLoanReturned('${l.id}')">${l.returned?'Devuelto ✓':'Pendiente'}</span>
           </div>
+          ${loanRepaid(l) > 0 && !l.returned ? `<div class="item-meta note-good">Te ha devuelto ${fmtMoney(loanRepaid(l))} · faltan ${fmtMoney(l.amount - loanRepaid(l))}</div>` : ''}
+          ${!l.due && !l.returned ? `<button class="card-link" style="font-size:12.5px;padding:2px 0 0 0;" onclick="event.stopPropagation(); sheet={type:'loanDue', loanId:'${l.id}'};render()">＋ Poner fecha de pago</button>` : ''}
         </div>
         <div class="item-amounts"><span class="item-amount">${fmtMoney(l.amount)}</span></div>
         ${deleteControl('loans', l.id)}
@@ -2929,13 +3263,17 @@ function loansBody(){
         <div class="field"><label>Monto</label><input type="text" inputmode="decimal" id="loan-amount" placeholder="0.00" value="${editingLoan?editingLoan.amount:''}"></div>
         <div class="field"><label>Fecha</label><input type="date" id="loan-date" value="${editingLoan?editingLoan.date:todayISO()}"></div>
       </div>
-      <div class="field"><label>Nota (opcional)</label><input type="text" id="loan-note" placeholder="Opcional" value="${editingLoan?escapeAttr(editingLoan.note):''}"></div>
-      <p class="item-meta">El monto se descuenta de tu saldo y se devuelve cuando lo marcas como "Devuelto".</p>
+      <div class="field-row">
+        <div class="field"><label>¿Hasta cuándo te paga?</label><input type="date" id="loan-due" value="${editingLoan&&editingLoan.due?editingLoan.due:''}"></div>
+        <div class="field"><label>Nota (opcional)</label><input type="text" id="loan-note" placeholder="Opcional" value="${editingLoan?escapeAttr(editingLoan.note):''}"></div>
+      </div>
+      <p class="item-meta">${editingLoan && editingLoan.fromBank ? 'Este préstamo viene del banco: ya salió de tu cuenta.' : 'El monto se descuenta de tu saldo y se devuelve cuando lo marcas como "Devuelto".'} Te aviso 2 días antes y el día que te tiene que pagar.</p>
       <div class="field-row">
         <button class="btn btn-primary" onclick="submitLoan()">${editingLoan?'Guardar cambios':'Añadir préstamo'}</button>
         <button class="btn" onclick="${editingLoan?'cancelEdit()':"toggleFormOpen('loans')"}">Cancelar</button>
       </div>
-    </div>` : `<button class="add-toggle-btn" id="edit-anchor-loans" onclick="toggleFormOpen('loans')">+ Añadir préstamo</button>`}`;
+    </div>` : `<button class="add-toggle-btn" id="edit-anchor-loans" onclick="toggleFormOpen('loans')">+ Añadir préstamo</button>`}
+    <p class="item-meta" style="margin-top:10px;">Si le prestaste por Zelle, en Movimientos → Banco ponle la categoría "Préstamo (le presté)" y se crea aquí solo.</p>`;
 }
 
 // --------------------------------------------------------------- DEUDAS
@@ -3292,50 +3630,83 @@ function renderMoreTab(c){
 
 function renderUpcomingRow(u){
   const when = u.days < 0 ? `venció hace ${-u.days} día${u.days===-1?'':'s'}` : u.days===0 ? 'hoy' : u.days===1 ? 'mañana' : 'en '+u.days+' días';
-  return `<div class="upcoming-row ${u.days<=7?'soon':''}" style="align-items:center;">
-    <span style="min-width:0;">${escapeAttr(u.name)} <span class="days">${when}${u.shifted?' · movido':''}</span>
+  const uj = escapeAttr(JSON.stringify({ key:u.key, kind:u.kind, refId:u.refId, name:u.name, amount:u.amount, date: dayISO(u.date) }));
+  return `<div class="upcoming-row ${u.days<=7?'soon':''}" style="align-items:center;flex-wrap:wrap;">
+    <span style="min-width:0;flex:1;">${escapeAttr(u.name)} <span class="days">${when}${u.shifted?' · movido':''}</span>
       ${u.paid > 0 ? `<span class="days" style="display:block;margin:2px 0 0 0;">pagado ${fmtMoney(u.paid)} de ${fmtMoney(u.full)}</span>` : ''}</span>
-    <span style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-      <span class="amt">${fmtMoney(u.amount)}</span>
+    <span class="amt">${fmtMoney(u.amount)}</span>
+    <span class="up-btns">
+      <button class="mini-btn good" onclick='openMarkPaid(${uj})'>Ya lo pagué</button>
       <button class="mini-btn" onclick="sheet={type:'shift', key:'${u.key}', baseIso:'${u.baseIso}', date:'${dayISO(u.date)}', name:${escapeAttr(JSON.stringify(u.name))}};render()">Mover</button>
     </span>
   </div>`;
 }
 
+function catChips(gk, dir, current){
+  return `<div class="q-cats">${Object.keys(BANK_CATS).filter(k => BANK_CATS[k].dir === dir || BANK_CATS[k].dir === 'both')
+    .map(k => `<button class="chip ${k===current?'active':''}" onclick="setGroupCategory('${gk}','${k}')">${BANK_CATS[k].label}</button>`).join('')}</div>`;
+}
 function renderQuestionsCard(){
   const qs = pendingQuestions();
   if(!qs.length) return '';
-  const q = qs[0], t = q.t;
-  const what = `${t.dir==='in'?'Depósito':'Pago'} de <b style="color:var(--ink);">${fmtMoney(t.amount)}</b> · ${fmtShortDate(t.date)}`;
+  const q = qs[0];
+  const foot = (gk, extra) => `<div class="q-foot">${extra||''}
+      <button class="card-link" onclick="dismissGroup('${gk}')">Descartar</button>
+      <button class="card-link" style="color:var(--ink-dim);" onclick="snoozeGroup('${gk}')">Después</button></div>`;
   let body;
-  if(questionRename === t.id){
-    body = `<p class="q-text">${what}<br><span class="item-meta">${escapeAttr(t.desc)}</span></p>
-      <p class="q-text" style="margin-top:8px;">¿Qué es? Escríbele un nombre:</p>
-      <div class="field-row"><input type="text" id="q-rename" placeholder="Ej: Star Snacks, Trading, Renta…">
-      <button class="btn btn-primary" onclick="saveQuestionRename('${t.id}')">Guardar</button></div>
-      <button class="card-link" style="margin-top:6px;" onclick="skipQuestion('${t.id}')">Después</button>`;
-  } else if(q.kind === 'name'){
-    body = `<p class="q-text">${what}<br><span class="item-meta">${escapeAttr(t.desc)}</span></p>
-      <p class="q-ask">¿Es <b>${escapeAttr(q.sug.name)}</b>?</p>
-      <div class="q-btns">
-        <button class="btn btn-solid" onclick="answerName('${t.id}', true)">Sí</button>
-        <button class="btn" onclick="answerName('${t.id}', false)">No</button>
-        <button class="card-link" onclick="skipQuestion('${t.id}')">Después</button>
-      </div>`;
+  if(q.kind === 'dupe'){
+    const d = q.dupe;
+    body = `<p class="q-ask" style="margin-top:0;">¿"${escapeAttr(d.exp.name)}" y "${escapeAttr(d.debt.name)}" son el mismo pago?</p>
+      <p class="q-text">Tienes un gasto fijo de ${fmtMoney(d.exp.amount)} (día ${d.exp.dueDay}) y una deuda con pago de ${fmtMoney(d.debt.monthlyPayment)} al mes. Si son lo mismo, se está contando dos veces.</p>
+      <div class="q-btns" style="margin-top:10px;">
+        <button class="btn btn-solid" onclick="mergeDupe('${d.debt.id}','${d.exp.id}')">Sí, es el mismo</button>
+        <button class="btn" onclick="ignoreDupe('${d.debt.id}','${d.exp.id}')">No, son distintos</button>
+      </div>${foot(q.gk)}`;
   } else {
-    const label = t.category === 'debt' ? 'deuda' : 'gasto fijo';
-    body = `<p class="q-text">${what}<br><span class="item-meta">${escapeAttr(displayName(t))} · ${escapeAttr(t.desc)}</span></p>
-      ${q.target ? `<p class="q-ask">¿Este pago es para <b>${escapeAttr(q.target.name)}</b>?</p>
-        <div class="q-btns">
-          <button class="btn btn-solid" onclick="answerLink('${t.id}', true)">Sí</button>
-          <button class="btn" onclick="answerLink('${t.id}', false)">No, es otro</button>
-          <button class="card-link" onclick="skipQuestion('${t.id}')">Después</button>
-        </div>`
-      : `<p class="q-ask">¿A qué ${label} va este pago?</p>
-        <div class="q-btns">
-          <button class="btn btn-solid" onclick="openLinkSheet('${t.id}', '${t.category==='debt'?'debt':'expense'}')">Elegir ${label}</button>
-          <button class="card-link" onclick="skipQuestion('${t.id}')">Después</button>
-        </div>`}`;
+    const t = q.t, gk = q.gk;
+    const more = q.txs && q.txs.length > 1 ? ` <span class="item-meta" style="display:inline;">· y ${q.txs.length-1} más igual${q.txs.length>2?'es':''}</span>` : '';
+    const what = `<p class="q-text">${t.dir==='in'?'Entrada':'Pago'} de <b style="color:var(--ink);">${fmtMoney(t.amount)}</b> · ${fmtShortDate(t.date)}${more}<br>
+      <span style="color:var(--ink);">${escapeAttr(displayName(t))}</span> <span class="item-meta" style="display:inline;">· ${escapeAttr(t.desc)}</span></p>`;
+    const otherCats = questionCats === gk ? catChips(gk, t.dir, t.category) : '';
+    const otherBtn = `<button class="card-link" onclick="toggleQuestionCats('${gk}')">${questionCats === gk ? 'Ocultar categorías' : 'Otra categoría…'}</button>`;
+    if(questionRename === gk){
+      body = `${what}<p class="q-text" style="margin-top:8px;">¿Qué es? Escríbele un nombre:</p>
+        <div class="field-row"><input type="text" id="q-rename" placeholder="Ej: Star Snacks, Renta, Wash Hounds…">
+        <button class="btn btn-primary" onclick="saveQuestionRename('${gk}')">Guardar</button></div>${foot(gk)}`;
+    } else if(q.kind === 'name'){
+      body = `${what}<p class="q-ask">¿Es <b>${escapeAttr(q.sug.name)}</b>?</p>
+        <div class="q-btns"><button class="btn btn-solid" onclick="answerName('${gk}', true)">Sí</button>
+        <button class="btn" onclick="answerName('${gk}', false)">No</button></div>${otherCats}${foot(gk, otherBtn)}`;
+    } else if(q.kind === 'link'){
+      const label = t.category === 'debt' ? 'deuda' : 'gasto fijo';
+      body = `${what}${q.target ? `<p class="q-ask">¿Es para <b>${escapeAttr(q.target.name)}</b>?</p>
+          <div class="q-btns"><button class="btn btn-solid" onclick="answerLink('${gk}', true)">Sí</button>
+          <button class="btn" onclick="answerLink('${gk}', false)">No, es otro</button></div>`
+        : `<p class="q-ask">Está como <b>${BANK_CATS[t.category].label}</b>. ¿A qué ${label} va?</p>
+          <div class="q-btns"><button class="btn btn-solid" onclick="openLinkSheet('${t.id}', '${t.category==='debt'?'debt':'expense'}')">Elegir ${label}</button></div>`}
+        <p class="item-meta" style="margin:10px 0 4px 0;">¿No es ${label}? Ponlo donde va:</p>${catChips(gk, t.dir, t.category)}${foot(gk)}`;
+    } else if(q.kind === 'loanback'){
+      body = `${what}<p class="q-ask">¿Es <b>${escapeAttr(q.loan.person)}</b> devolviéndote el préstamo?</p>
+        <p class="q-text">Le prestaste ${fmtMoney(q.loan.amount)} el ${fmtShortDate(q.loan.date)}${loanRepaid(q.loan) ? `; ya te devolvió ${fmtMoney(loanRepaid(q.loan))}` : ''}.</p>
+        <div class="q-btns" style="margin-top:10px;"><button class="btn btn-solid" onclick="answerLoanBack('${t.id}','${q.loan.id}', true)">Sí</button>
+        <button class="btn" onclick="answerLoanBack('${t.id}','${q.loan.id}', false)">No</button></div>${otherCats}${foot(gk, otherBtn)}`;
+    } else if(q.kind === 'loanpick'){
+      body = `${what}<p class="q-ask">¿Quién te devolvió el préstamo?</p>
+        <div class="q-btns"><button class="btn btn-solid" onclick="sheet={type:'loanPick', txId:'${t.id}'};render()">Elegir préstamo</button></div>${foot(gk)}`;
+    } else if(q.kind === 'conflict'){
+      body = `${what}<p class="q-ask">Este lo pusiste en ${q.options.length} lugares distintos. ¿Cuál es?</p>
+        <p class="q-text">Si son lo mismo, elige uno para que no se cuente doble.</p>
+        <div style="margin-top:8px;">${q.options.map(o => `<button class="pick" onclick="resolveConflict('${gk}','${o.id}')"><span>Todo es ${escapeAttr(o.label)}</span><span class="item-meta" style="margin:0;">${o.n} mov.</span></button>`).join('')}</div>
+        <button class="btn btn-block" onclick="keepConflict('${gk}')">Son cosas distintas, déjalo así</button>${foot(gk)}`;
+    } else {
+      const sure = q.last ? `<p class="q-ask">La vez pasada lo pusiste como <b>${BANK_CATS[q.last] ? BANK_CATS[q.last].label : q.last}</b>. ¿Es lo mismo?</p>
+          <div class="q-btns"><button class="btn btn-solid" onclick="setGroupCategory('${gk}','${q.last}')">Sí</button>
+          <button class="btn" onclick="toggleQuestionCats('${gk}')">No</button></div>${questionCats === gk ? catChips(gk, t.dir, null) : ''}`
+        : `<p class="q-ask">¿Qué es? <span class="item-meta" style="display:inline;">La app cree que es ${BANK_CATS[t.category] ? BANK_CATS[t.category].label : t.category}</span></p>
+          ${catChips(gk, t.dir, t.category)}
+          <div class="q-btns" style="margin-top:6px;"><button class="btn btn-solid" onclick="setGroupCategory('${gk}','${t.category}')">Sí, eso es</button></div>`;
+      body = `${what}${sure}${foot(gk)}`;
+    }
   }
   return `<div class="card q-card">
     <div class="card-head" style="margin-bottom:8px;"><p class="card-title" style="font-size:15px;">Revisar movimientos</p><span class="section-count">${qs.length} pendiente${qs.length===1?'':'s'}</span></div>
@@ -3408,6 +3779,37 @@ function renderSheet(c){
       <p class="sub-head" ${me.members.length?'':'style="margin-top:0;"'}>¿"${escapeAttr(name)}" es la misma que…?</p>
       ${others.length ? others.map(o => `<button class="pick" onclick="mergeSource(${escapeAttr(JSON.stringify(name))}, ${escapeAttr(JSON.stringify(o.name))})"><span>${escapeAttr(o.name)}</span><span class="item-meta" style="margin:0;">unir</span></button>`).join('') : '<p class="item-meta">No hay otras fuentes para unir.</p>'}
       ${(data.merges||{})[name.toLowerCase()] ? '' : ''}`;
+  } else if(sheet.type === 'markpaid'){
+    const u = sheet.u;
+    title = `¿Con cuál movimiento pagaste ${escapeAttr(u.name)}?`;
+    const cands = markPaidCandidates(u.date, u.amount, sheet.wide);
+    body = `<p class="item-meta" style="margin:0 0 10px 0;">${fmtMoney(u.amount)} · ${fmtShortDate(u.date)}. Primero salen los que más se parecen en monto y fecha.</p>
+      ${cands.length ? cands.map(t => `<button class="pick" onclick="chooseMarkPaid('${t.id}')"><span style="min-width:0;"><span style="display:block;">${escapeAttr(displayName(t))}</span><span class="item-meta" style="margin:0;">${fmtShortDate(t.date)} · ${escapeAttr(t.desc.slice(0,48))}</span></span><b style="font-family:var(--mono);font-weight:normal;">${fmtMoney(t.amount)}</b></button>`).join('')
+        : '<p class="item-meta">No encontré pagos del banco cerca de esa fecha. ¿Ya subiste el extracto de esos días?</p>'}
+      ${sheet.wide ? '' : `<button class="card-link" onclick="sheet.wide=true;render()">Ver más movimientos</button>`}
+      <p class="item-meta" style="margin-top:10px;">La app recuerda ese comercio: cuando me lo confirmes 2 veces, los próximos se conectan solos.</p>`;
+  } else if(sheet.type === 'loanDue'){
+    const l = data.loans.find(x => x.id === sheet.loanId);
+    if(!l){ sheet = null; return ''; }
+    title = `¿Hasta cuándo te paga ${escapeAttr(l.person)}?`;
+    const quick = [7, 14, 30].map(n => dayISO(addDays(isoToDate(todayISO()), n)));
+    body = `<p class="item-meta" style="margin:0 0 12px 0;">Le prestaste ${fmtMoney(l.amount)} el ${fmtShortDate(l.date)}. Te aviso 2 días antes y ese mismo día.</p>
+      <div class="btn-row">${quick.map((d,i) => `<button class="btn" style="flex:1;" onclick="setLoanDue('${l.id}','${d}')">${['1 semana','2 semanas','1 mes'][i]}</button>`).join('')}</div>
+      <p class="sub-head">O elige la fecha</p>
+      <div class="field-row"><input type="date" id="loan-due-pick" value="${l.due || ''}"><button class="btn btn-primary" onclick="setLoanDue('${l.id}', document.getElementById('loan-due-pick').value)">Guardar</button></div>
+      <button class="card-link" style="margin-top:10px;" onclick="setLoanDue('${l.id}','')">Sin fecha por ahora</button>`;
+  } else if(sheet.type === 'loanPick'){
+    const t = bankList().find(x => x.id === sheet.txId);
+    if(!t){ sheet = null; return ''; }
+    const pend = data.loans.filter(l => !l.returned);
+    title = '¿Quién te devolvió el préstamo?';
+    body = `<p class="item-meta" style="margin:0 0 10px 0;">${escapeAttr(displayName(t))} · ${fmtShortDate(t.date)} · <b style="color:var(--ink);">${fmtMoney(t.amount)}</b></p>
+      ${pend.length ? pend.map(l => `<button class="pick" onclick="pickLoanForRepayment('${t.id}','${l.id}')"><span>${escapeAttr(l.person)}</span><span class="item-meta" style="margin:0;">te debe ${fmtMoney(l.amount - loanRepaid(l))}</span></button>`).join('')
+        : '<p class="item-meta">No tienes préstamos pendientes registrados.</p>'}`;
+  } else if(sheet.type === 'merchant'){
+    const t0 = bankList().find(x => groupKeyOf(x) === sheet.gk);
+    title = t0 ? escapeAttr(displayName(t0)) : '';
+    body = renderMerchantSheet();
   } else if(sheet.type === 'alloc'){
     const e = data.expenses.find(x => x.id === sheet.expenseId);
     title = `Agregar ${fmtMoney(sheet.amount)} a una deuda`;
@@ -3421,6 +3823,34 @@ function renderSheet(c){
       <div class="card-head"><p class="card-title" style="font-size:17px;">${title}</p><button class="item-del" onclick="closeSheet()">×</button></div>
       ${body}
     </div>`;
+}
+
+function renderLoansDueCard(){
+  const today = isoToDate(todayISO());
+  const list = data.loans.filter(l => !l.returned && l.due)
+    .map(l => ({ l, days: Math.round((isoToDate(l.due) - today) / 86400000) }))
+    .filter(x => x.days <= 3).sort((a,b) => a.days - b.days);
+  if(!list.length) return '';
+  return `<div class="card" style="border-color:var(--s3);">
+    <div class="card-head" style="margin-bottom:6px;"><p class="card-title" style="font-size:15px;">Te tienen que pagar</p></div>
+    ${list.map(x => `<div class="upcoming-row" style="cursor:pointer;" onclick="setTab('mov');setMovSeg('loans')">
+      <span>${escapeAttr(x.l.person)} <span class="days">${x.days<0?`vencido hace ${-x.days} día${x.days===-1?'':'s'}`:x.days===0?'hoy':x.days===1?'mañana':'en '+x.days+' días'}</span></span>
+      <span class="amt" style="color:var(--good);">${fmtMoney(x.l.amount - loanRepaid(x.l))}</span></div>`).join('')}
+  </div>`;
+}
+
+function openMerchantSheet(dir, key){ sheet = { type:'merchant', gk: dir + '|' + key }; render(); }
+function renderMerchantSheet(){
+  const gk = sheet.gk;
+  const txs = bankList().filter(x => groupKeyOf(x) === gk).sort((a,b) => b.date.localeCompare(a.date));
+  if(!txs.length){ sheet = null; return ''; }
+  const t = txs[0];
+  return `<p class="item-meta" style="margin:0 0 6px 0;">${txs.length} movimiento${txs.length===1?'':'s'} · último ${fmtShortDate(t.date)} · ${fmtMoney(t.amount)}</p>
+    <p class="item-meta" style="margin:0 0 10px 0;">${escapeAttr(t.desc)}</p>
+    ${t.link ? `<p class="note-good" style="font-size:13px;margin:0 0 10px 0;">${escapeAttr(assignmentOf(t).label)}</p>` : ''}
+    <p class="sub-head" style="margin-top:0;">¿Qué es?</p>
+    ${catChips(gk, t.dir, t.category)}
+    <button class="btn btn-block" style="margin-top:8px;" onclick="sheet=null;startSourceEdit('${t.id}');setTab('mov');setMovSeg('bank');startSourceEdit('${t.id}')">✎ Ponerle nombre</button>`;
 }
 
 loadData();
