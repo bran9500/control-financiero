@@ -66,3 +66,5 @@ Versión 2.5: "Unir con…" en cada gasto fijo y deuda (los pagos conectados pas
 detección de gastos fijos repetidos entre sí (mismo nombre o casi el mismo monto).
 
 Versión 2.6: el teclado ya no tapa las casillas (la pantalla se encoge y la casilla se acomoda a la vista) y detección de deudas repetidas con el mismo nombre.
+
+Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla de saldos diarios; los movimientos falsos que ya se habían guardado se borran solos al abrir.

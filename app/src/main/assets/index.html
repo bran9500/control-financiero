@@ -486,10 +486,26 @@ function loadData(){
     loadState = 'unavailable';
   }
   loaded = true;
+  const ghosts = cleanGhostTransactions();
   render();
   if(loadState === 'ok') scheduleNativeReminders();
+  if(ghosts) setTimeout(() => showToast(`Quité ${ghosts} movimiento${ghosts===1?'':'s'} falso${ghosts===1?'':'s'} que salían de la tabla de saldos del PDF (no eran pagos de verdad).`), 400);
 }
 
+// Limpieza: movimientos leídos por error de la tabla de saldos diarios del PDF (sin letras en la descripción).
+function cleanGhostTransactions(){
+  const list = (data.bank && data.bank.transactions) || [];
+  const bad = list.filter(t => !/[A-Za-z]{2,}/.test(t.desc || ''));
+  if(!bad.length) return 0;
+  bad.forEach(t => {
+    if(typeof unlinkTx === 'function') unlinkTx(t);
+    if(t.category === 'loan' && typeof removeLoanFromTx === 'function') removeLoanFromTx(t);
+    if(t.category === 'loanback' && typeof removeRepayment === 'function') removeRepayment(t);
+  });
+  data.bank.transactions = list.filter(t => /[A-Za-z]{2,}/.test(t.desc || ''));
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
+  return bad.length;
+}
 function downloadBackup(){
   saveTextFile(`control-semanal-respaldo-${todayISO()}.json`, 'application/json', JSON.stringify(data, null, 2));
 }
@@ -1697,7 +1713,7 @@ function statementPeriod(lines){
 
 const PDF_IN_HEAD  = /^(electronic deposits|deposits|other credits|credits|deposits (and|&) (other )?(additions|credits)|interest (paid|earned)|incoming)/i;
 const PDF_OUT_HEAD = /^(electronic payments|other withdrawals|withdrawals|checks paid|checks|service charges|fees|atm|point of sale|debit card|card purchases|purchases|withdrawals (and|&) (other )?(subtractions|debits))/i;
-const PDF_STOP     = /^(daily balance summary|daily balance|balance summary|how to balance|call 1-|for consumer accounts|in case of errors)/i;
+const PDF_STOP     = /^(daily balance summary|daily balance|balance summary|date\s+balance|how to balance|call 1-|for consumer accounts|in case of errors|your account balance)/i;
 const PDF_SKIP     = /^(subtotal|total|beginning balance|ending balance|posting date|date description|description amount|page \d|continued)/i;
 
 // Lee un extracto en PDF y devuelve los movimientos en el mismo formato que los CSV.
@@ -1731,7 +1747,8 @@ function parsePdfStatementLines(lines){
       const date = toDate(m[1], m[2], m[3]);
       const a = parseBankAmount(m[5]);
       const desc = m[4].replace(/\s+/g, ' ').trim();
-      if(!date || a === null || a === 0 || !desc){ skipped++; last = null; return; }
+      // Una fila sin letras (solo números y fechas) es de la tabla de saldos diarios, no un movimiento.
+      if(!date || a === null || a === 0 || !desc || !/[A-Za-z]{2,}/.test(desc)){ skipped++; last = null; return; }
       let dir = section;
       if(a < 0) dir = 'out';
       if(!dir) dir = /deposit|credit|refund|payroll|zelle.*from|transfer from|interest|reversal/i.test(desc) ? 'in' : 'out';
