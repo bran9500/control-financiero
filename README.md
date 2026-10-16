@@ -39,3 +39,15 @@ Cada push a `main` compila automáticamente y publica el APK en
 
 Para actualizar el contenido, reemplaza `app/src/main/assets/index.html` con
 la versión nueva y vuelve a hacer push a `main`.
+
+Versión 2.3 — todo conectado:
+- Los pagos del banco marcados como "Pago de deuda" o "Gasto fijo" se conectan a una deuda o
+  gasto fijo (o crean uno). A las deudas se les resta el monto; se deshace si cambias la
+  categoría o deshaces el extracto. Pagos programados por deuda (ej. los de una orden).
+- Gastos fijos mensuales o semanales, con lo pagado contra lo que toca en el periodo; si pagas
+  de más, el sobrante se puede abonar a una deuda.
+- Mover un pago unos días (solo esa vez); resumen de lo que conviene ganar las próximas semanas.
+- Nombres por comercio/fuente que la app aprende, con preguntas Sí/No al abrir la app;
+  fusionar fuentes de ingreso; Zelle separado por persona.
+- Categorías "Trading" (resultado neto aparte) y "Movimiento propio" (cajero, transferencias).
+- Widget con barra de avance, próximos pagos, próximas semanas, hormiga, deuda y pendientes.
