@@ -61,3 +61,6 @@ Versión 2.4 — revisar movimientos:
 - "Ya lo pagué" en cada pago pendiente para elegir el movimiento del banco que lo pagó.
 - Préstamos desde el banco (Zelle a alguien) con fecha de pago, aviso, y detección cuando te devuelven.
 - Los pagos anteriores a cuando registraste una deuda se conectan sin volver a restarse del saldo.
+
+Versión 2.5: "Unir con…" en cada gasto fijo y deuda (los pagos conectados pasan al que queda) y
+detección de gastos fijos repetidos entre sí (mismo nombre o casi el mismo monto).

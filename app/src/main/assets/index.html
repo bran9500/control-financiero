@@ -272,6 +272,7 @@
   .debt-detail{background:var(--surface-raised);border-radius:12px;padding:12px;margin:0 0 12px 0;}
   .debt-detail .mini-row:first-of-type{border-top:none;}
 
+  .link-inline{color:var(--good);cursor:pointer;}
   .q-cats{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px 0;}
   .q-foot{display:flex;gap:16px;align-items:center;margin-top:10px;border-top:1px solid var(--line);padding-top:8px;flex-wrap:wrap;}
   .up-btns{display:flex;gap:6px;width:100%;justify-content:flex-end;margin-top:6px;}
@@ -1882,7 +1883,7 @@ function pendingQuestions(){
   });
   const qs = [];
   // Pagos repetidos: una deuda y un gasto fijo con casi el mismo monto
-  detectDupes().forEach(d => qs.push({ kind:'dupe', gk:'dupe|'+d.debt.id+'|'+d.exp.id, dupe:d, date:'9999' }));
+  detectDupes().forEach(d => qs.push({ kind:'dupe', gk: d.gk, dupe:d, date:'9999' }));
   Object.keys(groups).forEach(gk => {
     const txs = groups[gk].sort((a,b) => b.date.localeCompare(a.date));
     const t = txs[0];
@@ -1944,7 +1945,7 @@ function setGroupCategory(gk, cat){
   showToast(`"${displayName(t)}" → ${BANK_CATS[cat].label}` + (txs.length > 1 ? ` (${txs.length} movimientos)` : '') + '. Lo recordaré.');
 }
 function dismissGroup(gk){
-  if(gk.startsWith('dupe|')){ const [, d, e] = gk.split('|'); ignoreDupe(d, e); return; }
+  if(gk.startsWith('dupe|')){ const [, a, b] = gk.split('|'); ignoreDupe(a, b); return; }
   groupTxs(gk).forEach(x => { x.qDismissed = true; x.reviewed = true; });
   questionRename = null; questionCats = null;
   saveData(); render();
@@ -2059,38 +2060,72 @@ function keepConflict(gk){
 
 // ---- Pagos repetidos: deuda y gasto fijo que son el mismo pago (ej. el carro) ----
 let skippedDupes = new Set();
+// Referencias: "d:<id>" para deudas, "e:<id>" para gastos fijos.
+function refItem(ref){
+  const [k, id] = [ref.slice(0,1), ref.slice(2)];
+  if(k === 'd'){ const d = data.debts.find(x => x.id === id); return d ? { type:'debt', id, name:d.name, amount:d.monthlyPayment||0, item:d } : null; }
+  const e = data.expenses.find(x => x.id === id);
+  return e ? { type:'expense', id, name:e.name, amount:e.amount||0, item:e, freq: expenseFreq(e) } : null;
+}
+function itemDesc(r){
+  if(r.type === 'debt') return `deuda con pago de ${fmtMoney(r.amount)} al mes`;
+  return `gasto fijo de ${fmtMoney(r.amount)} ${expenseWhen(r.item).toLowerCase()}`;
+}
+const normName = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
 function detectDupes(){
   const ign = data.dupIgnored || [];
   const out = [];
+  const close = (a, b) => a > 0 && b > 0 && Math.abs(a - b) <= Math.max(5, Math.max(a,b) * 0.03);
+  const add = (a, b) => {
+    const gk = 'dupe|'+a+'|'+b;
+    if(ign.includes(a+'|'+b) || ign.includes(b+'|'+a) || skippedDupes.has(gk)) return;
+    out.push({ a: refItem(a), b: refItem(b), aRef:a, bRef:b, gk });
+  };
+  // deuda + gasto fijo con casi el mismo pago mensual (ej. Tel Toyota y Carro)
   data.debts.forEach(d => {
     if(!(d.monthlyPayment > 0)) return;
-    data.expenses.forEach(e => {
-      if(expenseFreq(e) !== 'month') return;
-      const gk = 'dupe|'+d.id+'|'+e.id;
-      if(ign.includes(d.id+'|'+e.id) || skippedDupes.has(gk)) return;
-      if(Math.abs((e.amount||0) - d.monthlyPayment) <= Math.max(5, d.monthlyPayment * 0.03)) out.push({ debt:d, exp:e });
-    });
+    data.expenses.forEach(e => { if(expenseFreq(e) === 'month' && close(e.amount, d.monthlyPayment)) add('e:'+e.id, 'd:'+d.id); });
   });
+  // dos gastos fijos iguales (mismo nombre, o mismo monto y misma frecuencia)
+  for(let i = 0; i < data.expenses.length; i++) for(let k = i+1; k < data.expenses.length; k++){
+    const a = data.expenses[i], b = data.expenses[k];
+    if(expenseFreq(a) !== expenseFreq(b)) continue;
+    if(normName(a.name) === normName(b.name) || close(a.amount, b.amount)) add('e:'+b.id, 'e:'+a.id); // se queda el más viejo
+  }
   return out;
 }
-function ignoreDupe(did, eid){
+function ignoreDupe(a, b){
   if(!data.dupIgnored) data.dupIgnored = [];
-  data.dupIgnored.push(did+'|'+eid);
+  data.dupIgnored.push(a+'|'+b);
   saveData(); render();
 }
-// "Sí, es el mismo": se queda la deuda (lleva el saldo) y se quita el gasto fijo; sus pagos pasan a la deuda.
-function mergeDupe(did, eid){
-  const d = data.debts.find(x => x.id === did), e = data.expenses.find(x => x.id === eid);
-  if(!d || !e) return;
+// Une "from" dentro de "to": los pagos conectados pasan a "to" y "from" se borra.
+function mergeItems(fromRef, toRef){
+  const from = refItem(fromRef), to = refItem(toRef);
+  if(!from || !to || fromRef === toRef) return;
   let moved = 0;
-  bankList().forEach(t => { if(t.link && t.link.type === 'expense' && t.link.id === eid){ unlinkTx(t); linkTx(t, 'debt', did); moved++; } });
-  data.allocations = (data.allocations || []).filter(a => a.expenseId !== eid);
-  Object.keys(data.bank.linkMemory || {}).forEach(k => { const m = data.bank.linkMemory[k]; if(m.type === 'expense' && m.id === eid) data.bank.linkMemory[k] = { type:'debt', id:did, count: m.count || 1 }; });
-  if(!d.dueDate){ const day = String(Math.min(28, e.dueDay||1)).padStart(2,'0'); d.dueDate = todayISO().slice(0,8) + day; }
-  data.expenses = data.expenses.filter(x => x.id !== eid);
+  bankList().forEach(t => {
+    if(t.link && t.link.type === from.type && t.link.id === from.id){ unlinkTx(t); linkTx(t, to.type, to.id); moved++; }
+  });
+  if(from.type === 'expense'){
+    data.allocations = (data.allocations || []).map(a => a.expenseId === from.id ? (to.type === 'expense' ? { ...a, expenseId: to.id } : null) : a).filter(Boolean);
+  } else {
+    data.allocations = (data.allocations || []).map(a => a.debtId === from.id ? (to.type === 'debt' ? { ...a, debtId: to.id } : null) : a).filter(Boolean);
+  }
+  Object.keys(data.bank.linkMemory || {}).forEach(k => {
+    const m = data.bank.linkMemory[k];
+    if(m.type === from.type && m.id === from.id) data.bank.linkMemory[k] = { type: to.type, id: to.id, count: m.count || 1 };
+  });
+  if(to.type === 'debt' && from.type === 'expense' && !to.item.dueDate){
+    to.item.dueDate = todayISO().slice(0,8) + String(Math.min(28, from.item.dueDay||1)).padStart(2,'0');
+  }
+  if(from.type === 'expense') data.expenses = data.expenses.filter(x => x.id !== from.id);
+  else data.debts = data.debts.filter(x => x.id !== from.id);
+  sheet = null;
   saveData(); render();
-  showToast(`Listo: "${e.name}" y "${d.name}" ahora son un solo pago` + (moved ? ` (${moved} pagos pasaron a la deuda)` : ''));
+  showToast(`Listo: "${from.name}" quedó unido a "${to.name}"` + (moved ? ` (${moved} pago${moved===1?'':'s'} pasaron)` : '') + '. Ya no se cuenta dos veces.');
 }
+function mergeDupe(did, eid){ mergeItems('e:'+eid, 'd:'+did); }
 
 // =====================================================================
 //  COBROS QUE SE REPITEN (suscripciones, pagos mensuales)
@@ -3315,7 +3350,10 @@ function debtsBody(){
         ${deleteControl('debts', d.id)}
       </div>
       ${done ? `<div class="done-box">¡Esta deuda llegó a cero! <button class="btn btn-solid" style="padding:7px 12px;" onclick="confirmPaidDebt('${d.id}')">Marcar saldada ✓</button></div>` : ''}
-      <button class="card-link" style="font-size:12.5px;padding:0 0 10px 0;" onclick="toggleDebtOpen('${d.id}')">${open?'Ocultar detalle':'Pagos y pagos programados ›'}</button>
+      <div style="display:flex;gap:16px;padding:0 0 10px 0;">
+        <button class="card-link" style="font-size:12.5px;padding:0;" onclick="toggleDebtOpen('${d.id}')">${open?'Ocultar detalle':'Pagos y pagos programados ›'}</button>
+        <button class="card-link" style="font-size:12.5px;padding:0;color:var(--ink-dim);" onclick="sheet={type:'mergeInto', ref:'d:${d.id}'};render()">Unir con…</button>
+      </div>
       ${open ? `<div class="debt-detail">
         <p class="sub-head" style="margin-top:0;">Pagos registrados</p>
         ${pays.length ? pays.map(p => `<div class="mini-row"><span>${fmtShortDate(p.date)} · ${escapeAttr(p.label)}</span><span style="display:flex;gap:8px;align-items:center;"><b>${fmtMoney(p.amount)}</b>${p.kind==='alloc'?`<button class="item-del" style="font-size:16px;" onclick="removeAllocation('${p.id}')">×</button>`:''}</span></div>`).join('')
@@ -3362,7 +3400,7 @@ function expensesBody(){
     return `<div class="item-row ${i===0?'list-first':''}" style="align-items:flex-start;">
         <div class="item-main clickable" onclick="startEdit('expenses','${e.id}')">
           <div class="item-name">${escapeAttr(e.name)}</div>
-          <div class="item-meta">${expenseWhen(e)}</div>
+          <div class="item-meta">${expenseWhen(e)} · <span class="link-inline" onclick="event.stopPropagation(); sheet={type:'mergeInto', ref:'e:${e.id}'};render()">Unir con…</span></div>
           <div class="item-meta" style="color:${left<=0.004?'var(--good)':'var(--ink-dim)'};">${perName}: pagado ${fmtMoney(paid)} de ${fmtMoney(e.amount||0)}${left>0.004?` · faltan ${fmtMoney(left)}`:' ✓'}</div>
           ${over > 0.004 ? `<button class="card-link" style="font-size:12.5px;padding:4px 0 0 0;" onclick="event.stopPropagation(); sheet={type:'alloc', expenseId:'${e.id}', periodDate:'${dayISO(occ.baseDate)}', amount:${over}};render()">Pagaste ${fmtMoney(over)} de más → Agregar a deuda</button>` : ''}
         </div>
@@ -3656,12 +3694,13 @@ function renderQuestionsCard(){
   let body;
   if(q.kind === 'dupe'){
     const d = q.dupe;
-    body = `<p class="q-ask" style="margin-top:0;">¿"${escapeAttr(d.exp.name)}" y "${escapeAttr(d.debt.name)}" son el mismo pago?</p>
-      <p class="q-text">Tienes un gasto fijo de ${fmtMoney(d.exp.amount)} (día ${d.exp.dueDay}) y una deuda con pago de ${fmtMoney(d.debt.monthlyPayment)} al mes. Si son lo mismo, se está contando dos veces.</p>
+    body = `<p class="q-ask" style="margin-top:0;">¿"${escapeAttr(d.a.name)}" y "${escapeAttr(d.b.name)}" son el mismo pago?</p>
+      <p class="q-text">Tienes un ${itemDesc(d.a)} y un${d.b.type==='debt'?'a':''} ${itemDesc(d.b)}. Si son lo mismo, se está contando dos veces y te pide más plata de la que es.</p>
       <div class="q-btns" style="margin-top:10px;">
-        <button class="btn btn-solid" onclick="mergeDupe('${d.debt.id}','${d.exp.id}')">Sí, es el mismo</button>
-        <button class="btn" onclick="ignoreDupe('${d.debt.id}','${d.exp.id}')">No, son distintos</button>
-      </div>${foot(q.gk)}`;
+        <button class="btn btn-solid" onclick="mergeItems('${d.aRef}','${d.bRef}')">Sí, es el mismo</button>
+        <button class="btn" onclick="ignoreDupe('${d.aRef}','${d.bRef}')">No, son distintos</button>
+      </div>
+      <p class="item-meta" style="margin-top:8px;">Con "Sí" se queda "${escapeAttr(d.b.name)}" y los pagos de "${escapeAttr(d.a.name)}" pasan ahí.</p>${foot(q.gk)}`;
   } else {
     const t = q.t, gk = q.gk;
     const more = q.txs && q.txs.length > 1 ? ` <span class="item-meta" style="display:inline;">· y ${q.txs.length-1} más igual${q.txs.length>2?'es':''}</span>` : '';
@@ -3734,12 +3773,13 @@ function renderSheet(c){
     if(!t){ sheet = null; return ''; }
     const isDebt = sheet.kind === 'debt';
     title = isDebt ? '¿A qué deuda va este pago?' : '¿Qué gasto fijo es?';
-    const list = isDebt ? data.debts : data.expenses;
+    const list = (isDebt ? data.debts : data.expenses).slice().sort((a,b) => Math.abs((isDebt?a.monthlyPayment:a.amount) - t.amount) - Math.abs((isDebt?b.monthlyPayment:b.amount) - t.amount));
     body = `<p class="item-meta" style="margin:0 0 10px 0;">${escapeAttr(displayName(t))} · ${fmtShortDate(t.date)} · <b style="color:var(--ink);">${fmtMoney(t.amount)}</b></p>
       ${list.length ? list.map(x => `<button class="pick" onclick="chooseLink('${t.id}','${isDebt?'debt':'expense'}','${x.id}')">
           <span>${escapeAttr(x.name)}</span><span class="item-meta" style="margin:0;">${isDebt ? 'debes '+fmtMoney(Math.max(0,x.balance||0)) : fmtMoney(x.amount)+' · '+expenseWhen(x).toLowerCase()}</span></button>`).join('')
         : `<p class="item-meta">No tienes ${isDebt?'deudas':'gastos fijos'} registrados todavía. Crea uno aquí abajo.</p>`}
-      <p class="sub-head">O crea ${isDebt?'una deuda nueva':'un gasto fijo nuevo'}</p>
+      <p class="sub-head">¿No está en la lista? Crea ${isDebt?'una deuda nueva':'un gasto fijo nuevo'}</p>
+      <p class="item-meta" style="margin:-2px 0 8px 0;">Revisa bien la lista de arriba antes de crear uno nuevo, para que no quede repetido.</p>
       <div class="field"><input type="text" id="nl-name" placeholder="${isDebt?'Ej: Carlos Mendez, Child Support':'Ej: Ethan, Renta'}"></div>
       <div class="field-row" style="margin-top:8px;">
         <input type="text" inputmode="decimal" id="nl-amount" placeholder="${isDebt?'Cuánto debes (antes de este pago)':'Monto'}">
@@ -3779,6 +3819,14 @@ function renderSheet(c){
       <p class="sub-head" ${me.members.length?'':'style="margin-top:0;"'}>¿"${escapeAttr(name)}" es la misma que…?</p>
       ${others.length ? others.map(o => `<button class="pick" onclick="mergeSource(${escapeAttr(JSON.stringify(name))}, ${escapeAttr(JSON.stringify(o.name))})"><span>${escapeAttr(o.name)}</span><span class="item-meta" style="margin:0;">unir</span></button>`).join('') : '<p class="item-meta">No hay otras fuentes para unir.</p>'}
       ${(data.merges||{})[name.toLowerCase()] ? '' : ''}`;
+  } else if(sheet.type === 'mergeInto'){
+    const me = refItem(sheet.ref);
+    if(!me){ sheet = null; return ''; }
+    title = `Unir "${escapeAttr(me.name)}" con…`;
+    const others = data.debts.map(d => 'd:'+d.id).concat(data.expenses.map(e => 'e:'+e.id)).filter(r => r !== sheet.ref).map(refItem).filter(Boolean)
+      .sort((a,b) => Math.abs(a.amount - me.amount) - Math.abs(b.amount - me.amount));
+    body = `<p class="item-meta" style="margin:0 0 10px 0;">Elige con cuál es el mismo pago. "${escapeAttr(me.name)}" se borra y sus pagos conectados pasan al que elijas.</p>
+      ${others.map(o => `<button class="pick" onclick="mergeItems('${sheet.ref}','${o.type==='debt'?'d':'e'}:${o.id}')"><span>${escapeAttr(o.name)}</span><span class="item-meta" style="margin:0;">${o.type==='debt'?'deuda':'gasto fijo'} · ${fmtMoney(o.amount)}</span></button>`).join('') || '<p class="item-meta">No hay otros para unir.</p>'}`;
   } else if(sheet.type === 'markpaid'){
     const u = sheet.u;
     title = `¿Con cuál movimiento pagaste ${escapeAttr(u.name)}?`;
