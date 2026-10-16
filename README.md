@@ -64,3 +64,5 @@ Versión 2.4 — revisar movimientos:
 
 Versión 2.5: "Unir con…" en cada gasto fijo y deuda (los pagos conectados pasan al que queda) y
 detección de gastos fijos repetidos entre sí (mismo nombre o casi el mismo monto).
+
+Versión 2.6: el teclado ya no tapa las casillas (la pantalla se encoge y la casilla se acomoda a la vista) y detección de deudas repetidas con el mismo nombre.

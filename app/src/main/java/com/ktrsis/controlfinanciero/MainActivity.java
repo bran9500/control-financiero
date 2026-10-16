@@ -83,8 +83,10 @@ public class MainActivity extends Activity {
         root.setPadding(0, top, 0, bottom);
         if (Build.VERSION.SDK_INT >= 30) {
             root.setOnApplyWindowInsetsListener((v, insets) -> {
+                // Incluye el teclado: así la página se encoge y la casilla donde escribes queda a la vista.
                 android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars()
-                        | android.view.WindowInsets.Type.displayCutout());
+                        | android.view.WindowInsets.Type.displayCutout()
+                        | android.view.WindowInsets.Type.ime());
                 v.setPadding(bars.left, Math.max(bars.top, top), bars.right, bars.bottom);
                 return android.view.WindowInsets.CONSUMED;
             });

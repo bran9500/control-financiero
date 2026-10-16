@@ -250,7 +250,7 @@
 
   /* ---------- Ventana de abajo (hoja) ---------- */
   .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;}
-  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--surface);border-top:1px solid var(--line);
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;overscroll-behavior:contain;background:var(--surface);border-top:1px solid var(--line);
     border-radius:20px 20px 0 0;padding:10px 16px 26px 16px;max-height:82vh;overflow-y:auto;max-width:560px;margin:0 auto;}
   .sheet-grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px auto;}
   .pick{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;background:var(--surface-raised);
@@ -2086,6 +2086,11 @@ function detectDupes(){
     if(!(d.monthlyPayment > 0)) return;
     data.expenses.forEach(e => { if(expenseFreq(e) === 'month' && close(e.amount, d.monthlyPayment)) add('e:'+e.id, 'd:'+d.id); });
   });
+  // dos deudas con el mismo nombre (ej. "Child support" repetida)
+  for(let i = 0; i < data.debts.length; i++) for(let k = i+1; k < data.debts.length; k++){
+    const a = data.debts[i], b = data.debts[k];
+    if(normName(a.name) === normName(b.name)) add('d:'+b.id, 'd:'+a.id);
+  }
   // dos gastos fijos iguales (mismo nombre, o mismo monto y misma frecuencia)
   for(let i = 0; i < data.expenses.length; i++) for(let k = i+1; k < data.expenses.length; k++){
     const a = data.expenses[i], b = data.expenses[k];
@@ -3900,6 +3905,15 @@ function renderMerchantSheet(){
     ${catChips(gk, t.dir, t.category)}
     <button class="btn btn-block" style="margin-top:8px;" onclick="sheet=null;startSourceEdit('${t.id}');setTab('mov');setMovSeg('bank');startSourceEdit('${t.id}')">✎ Ponerle nombre</button>`;
 }
+
+// Cuando sale el teclado, la casilla donde escribes se acomoda a la vista (también dentro de la ventana de abajo).
+function keepFocusVisible(){
+  const el = document.activeElement;
+  if(!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+  setTimeout(() => { try{ el.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(e){} }, 60);
+}
+document.addEventListener('focusin', () => setTimeout(keepFocusVisible, 250));
+window.addEventListener('resize', keepFocusVisible);
 
 loadData();
 </script>
