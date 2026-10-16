@@ -47,17 +47,27 @@
   label.f{display:block;font-size:12px;color:var(--ink-faint);margin-bottom:5px;}
   input[type=number], input[type=text], input[type=date]{width:100%;background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:11px 12px;font-size:15px;font-family:var(--sans);}
   .fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
-  table{width:100%;border-collapse:collapse;font-size:11.5px;}
-  th{font-weight:500;color:var(--ink-faint);text-align:right;padding:6px 3px;border-bottom:1px solid var(--line);font-size:11px;position:sticky;top:0;background:var(--surface);}
+  table{width:100%;border-collapse:separate;border-spacing:0 4px;font-size:13px;}
+  th{font-weight:500;color:var(--ink-faint);text-align:right;padding:4px 6px 6px 6px;font-size:11px;position:sticky;top:0;background:var(--surface);z-index:1;}
   th:first-child, td:first-child{text-align:left;}
-  td{padding:7px 3px;text-align:right;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;}
-  tr.done td{color:var(--ink);}
-  tr.todo td{color:var(--ink-faint);}
-  tr.cur td{background:rgba(111,169,138,.10);color:var(--ink);}
-  tr.loss td{color:var(--warn);}
-  td.w{color:var(--good);font-weight:600;text-align:center;}
-  td.lo{color:var(--warn);font-weight:600;text-align:center;}
-  .tbl-wrap{max-height:460px;overflow:auto;margin:0 -6px;}
+  td{padding:9px 6px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;background:var(--surface-raised);vertical-align:middle;}
+  td:first-child{border-radius:10px 0 0 10px;}
+  td:last-child{border-radius:0 10px 10px 0;}
+  td.n{color:var(--ink-faint);font-size:12px;width:26px;}
+  td.fin{font-weight:600;}
+  td .pc{font-size:10.5px;color:var(--ink-faint);margin-top:2px;}
+  td .pc.cust{color:var(--blue);}
+  td .g{color:var(--good);} td .rd{color:var(--warn);}
+  td.dt{text-align:center;font-size:11px;color:var(--ink-faint);width:44px;}
+  .bdg{display:inline-block;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;margin-bottom:2px;}
+  .bdg.w{background:rgba(111,169,138,.18);color:var(--good);}
+  .bdg.l{background:rgba(196,105,59,.18);color:var(--warn);}
+  .bdg.a{background:rgba(57,135,229,.18);color:var(--blue);}
+  tr.todo td{background:transparent;color:var(--ink-faint);}
+  tr.todo td.fin{font-weight:400;}
+  tr.cur td{background:rgba(111,169,138,.12);color:var(--ink);}
+  tr.loss td.fin{color:var(--warn);}
+  .tbl-wrap{max-height:520px;overflow:auto;}
   .miles{display:flex;flex-wrap:wrap;gap:6px;}
   .mile{background:var(--surface-raised);border-radius:10px;padding:7px 10px;font-size:12px;color:var(--ink-dim);}
   .mile b{color:var(--ink);font-family:var(--mono);font-weight:500;}
@@ -67,7 +77,7 @@
   .seg button.active{background:var(--surface);color:var(--ink);}
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;z-index:10;}
   .sheet{background:var(--surface);border-top-left-radius:20px;border-top-right-radius:20px;padding:20px 16px 26px 16px;width:100%;max-width:560px;border:1px solid var(--line);}
-  #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#2C3440;color:var(--ink);font-size:13px;padding:10px 15px;border-radius:12px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:88%;text-align:center;z-index:20;}
+  #toast{position:fixed;left:50%;top:24px;transform:translateX(-50%);background:#2C3440;color:var(--ink);font-size:13px;padding:10px 15px;border-radius:12px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:88%;text-align:center;z-index:20;}
   #toast.show{opacity:1;}
   svg.chart text{font-family:var(--sans);font-size:10px;fill:var(--ink-faint);}
 </style>
@@ -94,6 +104,8 @@ function short(n){ const a=Math.abs(n); if(a>=1e6) return '$'+(n/1e6).toFixed(a>
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2600); }
 function native(fn){ return window.Android && typeof Android[fn] === 'function'; }
+function cm(n){ const a = Math.abs(n); if(a >= 1e6) return '$' + (a/1e6).toFixed(a >= 1e8 ? 0 : 2) + 'M'; if(a >= 1e5) return '$' + (a/1e3).toFixed(1) + 'k'; if(a >= 1e3) return '$' + Math.round(a).toLocaleString('en-US'); return '$' + a.toFixed(2); }
+function fmtPct(v){ return (Math.round(v * 100) / 100).toString() + '%'; }
 function r2(n){ return Math.round(n * 100) / 100; }
 
 function defaultPlan(){ return { id: 'p' + Date.now(), name: 'A por 100 victorias', start: 50, pct: 9, goal: 100, events: [] }; }
@@ -111,13 +123,15 @@ function compute(p){
   const rows = [];               // filas reales (victorias y pérdidas)
   let bal = p.start, wins = 0;
   for(const e of p.events){
-    if(e.t === 'W'){
-      const usd = bal, int = usd * rate, fin = usd + int;
-      wins++; rows.push({ kind:'W', n:wins, usd, pct:p.pct, int, fin, d:e.d }); bal = fin;
-    } else {
-      const usd = bal, fin = Math.max(0, usd - e.amt);
-      rows.push({ kind:'L', n:null, usd, pct:null, int:-e.amt, fin, d:e.d }); bal = fin;
-    }
+    const usd = bal;
+    let fin, pc;
+    if(e.amt != null){ fin = Math.max(0, usd - e.amt); pc = usd ? (fin / usd - 1) * 100 : 0; }   // pérdida en $ (versión anterior)
+    else { pc = e.pct != null ? e.pct : p.pct; fin = Math.max(0, usd * (1 + pc / 100)); }
+    const int = fin - usd;
+    const counts = e.t === 'W';
+    if(counts) wins++;
+    rows.push({ kind: counts ? 'W' : (int < 0 ? 'L' : 'A'), n: counts ? wins : null, usd, pct: pc, int, fin, d:e.d, custom: e.pct != null && e.pct !== p.pct });
+    bal = fin;
   }
   // filas que faltan, proyectadas desde el saldo real
   const proj = []; let b = bal;
@@ -125,28 +139,70 @@ function compute(p){
   // plan original sin pérdidas (la meta del Excel)
   let ideal = p.start; const idealCurve = [p.start];
   for(let n = 1; n <= p.goal; n++){ ideal = ideal * (1 + rate); idealCurve.push(ideal); }
-  const losses = rows.filter(r => r.kind === 'L');
-  return { rows, proj, bal, wins, finalProj: proj.length ? proj[proj.length-1].fin : bal, ideal, idealCurve, lossTotal: losses.reduce((s,r) => s - r.int, 0), lossCount: losses.length };
+  const losses = rows.filter(r => r.int < 0);
+  return { rows, proj, bal, wins, finalProj: proj.length ? proj[proj.length-1].fin : bal, ideal, idealCurve, lossTotal: losses.reduce((s,r) => s - r.int, 0), lossCount: losses.length, offPlan: rows.some(r => r.kind !== 'W' || r.custom) };
 }
 
 // ---- acciones ----
-function win(){ const p = plan(); const c = compute(p); if(c.wins >= p.goal){ toast('¡Ya llegaste a la meta! Crea un plan nuevo o súbele la meta.'); return; } p.events.push({ t:'W', d: today() }); save(); render(); toast(`Victoria #${c.wins + 1} ✓  →  ${money(compute(p).bal)}`); }
-function undo(){ const p = plan(); if(!p.events.length) return; const e = p.events.pop(); save(); render(); toast(e.t === 'W' ? 'Victoria deshecha' : 'Pérdida deshecha'); }
-function openLoss(){
+function win(){ const p = plan(); const c = compute(p); if(c.wins >= p.goal){ toast('¡Ya llegaste a la meta! Crea un plan nuevo o súbele la meta.'); return; } p.events.push({ t:'W', d: today(), pct: p.pct }); save(); render(); toast(`Victoria #${c.wins + 1} ✓  →  ${money(compute(p).bal)}`); }
+function undo(){ const p = plan(); if(!p.events.length) return; const e = p.events.pop(); save(); render(); toast(e.t === 'W' ? 'Victoria deshecha' : 'Resultado deshecho'); }
+let rs = { dir:'win', counts:true };
+function openResult(){
   const c = compute(plan());
+  rs = { dir:'win', counts:true, base:c.bal };
   document.getElementById('sheet-root').innerHTML = `<div class="overlay" onclick="if(event.target===this)closeSheet()"><div class="sheet">
-    <p class="card-title">Registrar pérdida</p>
-    <p class="muted" style="margin-bottom:12px;">¿Cuánto perdiste? Se resta de tu saldo (${money(c.bal)}) y las victorias que faltan se recalculan desde ahí. No cuenta como victoria.</p>
-    <label class="f">Monto perdido (USD)</label>
-    <input type="number" id="loss-amt" inputmode="decimal" step="0.01" min="0" placeholder="0.00">
-    <div class="row" style="margin-top:14px;"><button class="btn" onclick="closeSheet()">Cancelar</button><button class="btn btn-warn" onclick="saveLoss()">Registrar</button></div>
+    <p class="card-title">Otro resultado</p>
+    <p class="muted" style="margin-bottom:12px;">Para cuando paras antes o el mercado está difícil. Entraste con <b style="color:var(--ink);">${money(c.bal)}</b>. Llena <b style="color:var(--ink);">uno</b> de los tres y yo calculo los otros.</p>
+    <div class="seg" style="margin-bottom:12px;padding:4px;">
+      <button id="rs-win" class="active" onclick="setDir('win')" style="padding:9px;font-size:14px;">Gané</button>
+      <button id="rs-loss" onclick="setDir('loss')" style="padding:9px;font-size:14px;">Perdí</button>
+    </div>
+    <div class="fields">
+      <div><label class="f">%</label><input type="number" id="rs-pct" inputmode="decimal" step="0.01" min="0" placeholder="0" oninput="rsFrom('pct')"></div>
+      <div><label class="f" id="rs-amt-l">Gané $</label><input type="number" id="rs-amt" inputmode="decimal" step="0.01" min="0" placeholder="0.00" oninput="rsFrom('amt')"></div>
+      <div><label class="f">Quedé en $</label><input type="number" id="rs-fin" inputmode="decimal" step="0.01" min="0" placeholder="${c.bal.toFixed(2)}" oninput="rsFrom('fin')"></div>
+    </div>
+    <label id="rs-count-wrap" style="display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px;color:var(--ink-dim);">
+      <input type="checkbox" id="rs-count" checked style="width:20px;height:20px;accent-color:#6FA98A;"> Contarla como victoria (avanza el #)
+    </label>
+    <p id="rs-prev" class="num" style="margin:12px 0 0 0;font-size:15px;min-height:20px;"></p>
+    <div class="row" style="margin-top:14px;"><button class="btn" onclick="closeSheet()">Cancelar</button><button class="btn btn-solid" id="rs-save" onclick="saveResult()">Guardar</button></div>
   </div></div>`;
-  setTimeout(() => { const el = document.getElementById('loss-amt'); if(el) el.focus(); }, 50);
 }
-function saveLoss(){
-  const v = parseFloat(document.getElementById('loss-amt').value);
-  if(!(v > 0)){ toast('Escribe cuánto perdiste'); return; }
-  plan().events.push({ t:'L', d: today(), amt: r2(v) }); save(); closeSheet(); render();
+function setDir(d){
+  rs.dir = d;
+  document.getElementById('rs-win').classList.toggle('active', d === 'win');
+  document.getElementById('rs-loss').classList.toggle('active', d === 'loss');
+  document.getElementById('rs-amt-l').textContent = d === 'win' ? 'Gané $' : 'Perdí $';
+  document.getElementById('rs-count-wrap').style.display = d === 'win' ? 'flex' : 'none';
+  const save = document.getElementById('rs-save'); save.className = 'btn ' + (d === 'win' ? 'btn-solid' : 'btn-warn');
+  rsFrom(rs.last || 'pct');
+}
+function rsFrom(src){
+  rs.last = src;
+  const base = rs.base, sign = rs.dir === 'win' ? 1 : -1;
+  const P = document.getElementById('rs-pct'), A = document.getElementById('rs-amt'), F = document.getElementById('rs-fin');
+  let fin = null;
+  if(src === 'pct'){ const v = parseFloat(P.value); if(v >= 0){ fin = base * (1 + sign * v / 100); A.value = (Math.abs(fin - base)).toFixed(2); F.value = fin.toFixed(2); } }
+  if(src === 'amt'){ const v = parseFloat(A.value); if(v >= 0){ fin = base + sign * v; P.value = base ? +(v / base * 100).toFixed(2) : 0; F.value = fin.toFixed(2); } }
+  if(src === 'fin'){ const v = parseFloat(F.value); if(v >= 0){ fin = v; const d = fin >= base ? 'win' : 'loss'; if(d !== rs.dir){ rs.dir = d; setDir(d); return; } P.value = base ? +(Math.abs(fin / base - 1) * 100).toFixed(2) : 0; A.value = Math.abs(fin - base).toFixed(2); } }
+  rs.fin = fin;
+  const prev = document.getElementById('rs-prev');
+  if(fin == null || isNaN(fin)){ prev.textContent = ''; return; }
+  if(fin < 0){ prev.innerHTML = '<span style="color:var(--warn);">No puedes perder más de lo que tienes</span>'; rs.fin = null; return; }
+  const d = fin - base, pc = base ? d / base * 100 : 0;
+  prev.innerHTML = `${money(base)} → <b>${money(fin)}</b> <span style="color:${d >= 0 ? 'var(--good)' : 'var(--warn)'};">(${d >= 0 ? '+' : '−'}${money(Math.abs(d)).replace('-','')}, ${d >= 0 ? '+' : '−'}${Math.abs(pc).toFixed(2)}%)</span>`;
+}
+function saveResult(){
+  if(rs.fin == null || isNaN(rs.fin)){ toast('Pon el %, el monto o en cuánto quedaste'); return; }
+  const p = plan(), c = compute(p);
+  if(Math.abs(rs.fin - rs.base) < 0.005){ toast('Quedaste igual: no hay nada que registrar'); return; }
+  const pct = rs.base ? (rs.fin / rs.base - 1) * 100 : 0;
+  const counts = rs.dir === 'win' && document.getElementById('rs-count').checked;
+  if(counts && c.wins >= p.goal){ toast('Ya llegaste a la meta. Súbele la meta para contar más victorias.'); return; }
+  p.events.push({ t: counts ? 'W' : 'R', d: today(), pct });
+  save(); closeSheet(); render();
+  toast(counts ? `Victoria #${c.wins + 1} (${pct.toFixed(2)}%) → ${money(rs.fin)}` : `Guardado: quedaste en ${money(rs.fin)}`);
 }
 function closeSheet(){ document.getElementById('sheet-root').innerHTML = ''; }
 function openSettings(isNew){
@@ -215,7 +271,7 @@ function chart(p, c){
   <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;" class="faint">
     <span><span style="display:inline-block;width:14px;border-top:2.5px solid var(--good);vertical-align:middle;"></span> Real</span>
     <span><span style="display:inline-block;width:14px;border-top:2px solid var(--good);opacity:.45;vertical-align:middle;"></span> Lo que falta</span>
-    ${c.lossCount ? `<span><span style="display:inline-block;width:14px;border-top:1.5px dashed var(--ink-faint);vertical-align:middle;"></span> Plan sin pérdidas</span>` : ''}
+    ${c.offPlan ? `<span><span style="display:inline-block;width:14px;border-top:1.5px dashed var(--ink-faint);vertical-align:middle;"></span> Plan original</span>` : ''}
   </div>`;
 }
 
@@ -251,11 +307,11 @@ function render(){
           <div><div class="v" style="color:var(--good);">${money(nxt.int)}</div><div class="l">${p.pct}%</div></div><div class="arrow">=</div>
           <div><div class="v">${money(nxt.fin)}</div><div class="l">quedas en</div></div>
         </div>
-        <div class="row"><button class="btn btn-warn" onclick="openLoss()">✗ Perdí</button><button class="btn btn-solid" style="flex:2;" onclick="win()">✓ Gané (W)</button></div>`
+        <div class="row"><button class="btn" onclick="openResult()">Otro resultado</button><button class="btn btn-solid" style="flex:1.4;" onclick="win()">✓ Gané ${p.pct}%</button></div>`
       : `<p class="card-title">¡Meta cumplida! 🎉</p><p class="muted">Llegaste a ${p.goal} victorias con ${money(c.bal)}. Crea un plan nuevo o súbele la meta.</p>`}
       <div class="progress" style="margin-top:14px;"><span style="width:${pct.toFixed(1)}%"></span></div>
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span class="faint">${pct.toFixed(0)}% del camino${c.lossCount ? ` · ${c.lossCount} pérdida${c.lossCount===1?'':'s'} (−${money(c.lossTotal)})` : ''}</span>
+        <span class="faint">${pct.toFixed(0)}% del camino${c.lossCount ? ` · ${c.lossCount} pérdida${c.lossCount===1?'':'s'} (−${short(c.lossTotal)})` : ''}</span>
         ${p.events.length ? `<button class="chip" style="padding:5px 10px;font-size:12px;" onclick="undo()">Deshacer</button>` : ''}
       </div>
     </div>
@@ -267,19 +323,26 @@ function render(){
       </div>
       ${chart(p, c)}
       ${marks.length ? `<div class="miles" style="margin-top:12px;">${marks.map(v => { const m = mileFor(v); return m ? `<div class="mile ${m.done?'ok':''}">${m.done?'✓ ':''}<b>${short(v).replace('.00','')}</b> en la #${m.n}</div>` : ''; }).join('')}</div>` : ''}
-      ${c.lossCount ? `<p class="faint" style="margin:10px 0 0 0;">Sin pérdidas llegarías a ${money(c.ideal)}; con las pérdidas, a ${money(c.finalProj)}.</p>` : ''}
+      ${c.offPlan ? `<p class="faint" style="margin:10px 0 0 0;">Con el plan original llegarías a ${money(c.ideal)}; con tus resultados reales vas para ${money(c.finalProj)}.</p>` : ''}
     </div>
 
     <div class="card" style="padding:12px 12px 6px 12px;">
       <p class="card-title" style="margin:4px 4px 8px 4px;">Tabla</p>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>#</th><th>USD</th><th>%</th><th>INT.</th><th>USD F.</th><th style="text-align:center;">W</th><th>FECHA</th></tr></thead>
-        <tbody>${allRows.map((r,k) => r.kind === 'L'
-          ? `<tr class="loss"><td>–</td><td>${money(r.usd)}</td><td></td><td>${money(r.int)}</td><td>${money(r.fin)}</td><td class="lo">L</td><td>${fmtDate(r.d)}</td></tr>`
-          : `<tr class="${r.done ? 'done' : (r === nxt ? 'cur' : 'todo')}" ${r === nxt ? 'id="cur-row"' : ''}><td>${r.n}</td><td>${money(r.usd)}</td><td>${r.pct}%</td><td>${money(r.int)}</td><td>${money(r.fin)}</td><td class="w">${r.done ? 'W' : ''}</td><td>${r.done ? fmtDate(r.d) : ''}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>#</th><th>Entra</th><th>Resultado</th><th>Queda</th><th style="text-align:center;">Fecha</th></tr></thead>
+        <tbody>${allRows.map(r => {
+          const cls = r.done ? (r.kind === 'L' ? 'loss' : 'done') : (r === nxt ? 'cur' : 'todo');
+          const pos = r.int >= 0;
+          const badge = !r.done ? '' : r.kind === 'W' ? '<span class="bdg w">W</span>' : r.kind === 'L' ? '<span class="bdg l">L</span>' : '<span class="bdg a">+</span>';
+          return `<tr class="${cls}" ${r === nxt ? 'id="cur-row"' : ''}>
+            <td class="n">${r.n != null ? r.n : '·'}</td>
+            <td>${cm(r.usd)}</td>
+            <td><div class="${r.done ? (pos ? 'g' : 'rd') : ''}">${pos ? '+' : '−'}${cm(Math.abs(r.int))}</div><div class="pc ${r.custom || !pos ? 'cust' : ''}">${pos ? '+' : '−'}${fmtPct(Math.abs(r.pct))}</div></td>
+            <td class="fin">${cm(r.fin)}</td>
+            <td class="dt">${badge}${r.done ? `<div>${fmtDate(r.d)}</div>` : ''}</td></tr>`; }).join('')}</tbody>
       </table></div>
     </div>
-    <p class="faint" style="margin:4px 4px 0 4px;line-height:1.6;">Como tu Excel: cada fila arranca con el USD final de la anterior. Las pérdidas se restan del saldo y no cuentan como victoria.</p>`;
+    <p class="faint" style="margin:4px 4px 0 4px;line-height:1.6;">Como tu Excel: cada fila arranca con el USD final de la anterior. Lo que registras con "Otro resultado" usa tu % real; las pérdidas no cuentan como victoria.</p>`;
   const cur = document.getElementById('cur-row');
   if(cur){ const w = cur.closest('.tbl-wrap'); w.scrollTop = Math.max(0, cur.offsetTop - 80); }
 }

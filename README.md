@@ -79,3 +79,7 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 
 ### 3.0
 - Nueva subapp **Interés compuesto** (igual que el Excel "A por 100 victorias"): capital inicial, % por victoria y meta editables; botón "Gané (W)" que marca la fecha, registro de pérdidas que recalcula lo que falta, deshacer, varios planes, gráfica, metas ($1,000, $10k…) y la tabla # / USD / % / INT. / USD F. / W / FECHA.
+
+### 3.1
+- Interés compuesto: tabla nueva más clara (Entra / Resultado / Queda / Fecha, cada fila separada, cifras grandes abreviadas).
+- "Otro resultado": registrar cualquier ganancia o pérdida poniendo el %, el monto o en cuánto quedó el capital; puedes decidir si cuenta como victoria.
