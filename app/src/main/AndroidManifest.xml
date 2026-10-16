@@ -87,5 +87,13 @@
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Subapp: Inglés (6,000 palabras) -->
+        <activity
+            android:name="com.ktrsis.ingles.EnglishActivity"
+            android:label="Inglés"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize" />
+
     </application>
 </manifest>

@@ -68,3 +68,6 @@ detección de gastos fijos repetidos entre sí (mismo nombre o casi el mismo mon
 Versión 2.6: el teclado ya no tapa las casillas (la pantalla se encoge y la casilla se acomoda a la vista) y detección de deudas repetidas con el mismo nombre.
 
 Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla de saldos diarios; los movimientos falsos que ya se habían guardado se borran solos al abrir.
+
+### 2.8
+- Nueva subapp **Inglés**: 6,000 palabras ordenadas por las que más usas (sacadas de tus conversaciones) y luego las más comunes del inglés. 10 nuevas por día (configurable), repaso espaciado, voz en inglés, práctica de pronunciación con el micrófono, quiz, frases y lista con buscador. Traducciones de Wiktionary (CC BY-SA), frases de Tatoeba (CC BY 2.0 FR).

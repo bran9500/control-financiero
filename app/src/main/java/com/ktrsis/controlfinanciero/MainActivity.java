@@ -139,7 +139,7 @@ public class MainActivity extends Activity {
 
     /** Funciones que la página puede llamar como Android.saveFile(...) y Android.scheduleReminders(...). */
     private class Bridge {
-        /** Abre una de las subaplicaciones: "rotador", "bot" o "notas". */
+        /** Abre una de las subaplicaciones: "rotador", "bot", "notas" o "ingles". */
         @JavascriptInterface
         public void openApp(String name) {
             runOnUiThread(() -> {
@@ -147,6 +147,7 @@ public class MainActivity extends Activity {
                 if ("rotador".equals(name)) c = com.ktrsis.rotador.MainActivity.class;
                 else if ("bot".equals(name)) c = com.ktrsis.bot.MainActivity.class;
                 else if ("notas".equals(name)) c = com.ktrsis.notas.NotesActivity.class;
+                else if ("ingles".equals(name)) c = com.ktrsis.ingles.EnglishActivity.class;
                 if (c != null) startActivity(new Intent(MainActivity.this, c));
             });
         }

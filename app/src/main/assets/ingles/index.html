@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inglés</title>
+<style>
+  :root{
+    --bg:#12161C; --surface:#1B2129; --surface-raised:#232A35; --line:#2A313B;
+    --ink:#E8E6E0; --ink-dim:#8B93A0; --ink-faint:#5B6472; --good:#6FA98A; --warn:#C4693B; --blue:#3987e5;
+    --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+    --mono: ui-monospace, 'SF Mono', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{background:var(--bg);margin:0;color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:560px;margin:0 auto;padding:18px 14px 110px 14px;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 16px 2px;gap:10px;}
+  .page-title{font-family:var(--serif);font-size:26px;margin:0;}
+  .sub{font-size:12.5px;color:var(--ink-faint);margin:2px 0 0 0;}
+  .icon-btn{background:var(--surface);border:1px solid var(--line);color:var(--ink-dim);width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  .icon-btn svg{width:20px;height:20px;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;}
+  .card-title{font-family:var(--serif);font-size:17px;margin:0 0 10px 0;}
+  .muted{font-size:13px;color:var(--ink-dim);line-height:1.55;margin:0;}
+  .faint{font-size:12px;color:var(--ink-faint);}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center;}
+  .stat .n{font-family:var(--mono);font-size:22px;}
+  .stat .t{font-size:11px;color:var(--ink-faint);margin-top:3px;}
+  .progress{height:8px;border-radius:4px;background:var(--surface-raised);overflow:hidden;margin:10px 0 6px 0;}
+  .progress span{display:block;height:100%;background:var(--good);border-radius:4px;}
+  .btn{background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);padding:12px 16px;border-radius:12px;font-size:15px;cursor:pointer;font-family:var(--sans);}
+  .btn-solid{background:var(--good);border-color:var(--good);color:#0E1A14;font-weight:600;}
+  .btn-block{width:100%;display:block;text-align:center;}
+  .row{display:flex;gap:8px;}
+  .row .btn{flex:1;}
+  .menu{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .menu button{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 12px;color:var(--ink);text-align:left;cursor:pointer;font-family:var(--sans);}
+  .menu b{display:block;font-size:15px;margin-bottom:4px;font-weight:600;}
+  .menu span{font-size:12px;color:var(--ink-faint);line-height:1.4;}
+
+  /* tarjeta de estudio */
+  .flash{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:26px 18px;text-align:center;min-height:300px;display:flex;flex-direction:column;justify-content:center;gap:10px;margin-bottom:12px;}
+  .flash .tag{font-size:11.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em;}
+  .flash .word{font-size:34px;font-weight:600;line-height:1.2;}
+  .flash .meaning{font-size:22px;color:var(--good);}
+  .flash .ex{background:var(--surface-raised);border-radius:12px;padding:12px;text-align:left;margin-top:8px;}
+  .flash .ex .e{font-size:16px;}
+  .flash .ex .s{font-size:13.5px;color:var(--ink-dim);margin-top:4px;}
+  .say{display:inline-flex;align-items:center;gap:6px;background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:var(--sans);}
+  .say svg{width:16px;height:16px;}
+  .say.mini{padding:4px 9px;font-size:11.5px;}
+  .grade{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .grade button{border:1px solid var(--line);background:var(--surface-raised);color:var(--ink);border-radius:12px;padding:12px 4px;font-size:13.5px;cursor:pointer;font-family:var(--sans);}
+  .grade button small{display:block;font-size:10.5px;color:var(--ink-faint);margin-top:2px;}
+  .grade .again{border-color:var(--warn);color:var(--warn);}
+  .grade .good{border-color:var(--good);color:var(--good);}
+  .heard{font-size:13.5px;margin-top:6px;}
+  .ok{color:var(--good);} .bad{color:var(--warn);}
+  .choice{display:block;width:100%;text-align:left;background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:13px 14px;margin-bottom:8px;font-size:15px;cursor:pointer;font-family:var(--sans);}
+  .choice.right{border-color:var(--good);color:var(--good);}
+  .choice.wrong{border-color:var(--warn);color:var(--warn);}
+  input[type=text], textarea{width:100%;background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:12px;font-size:15px;font-family:var(--sans);}
+  textarea{min-height:80px;resize:vertical;}
+  .list-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);}
+  .list-row:first-child{border-top:none;}
+  .list-row .w{font-size:15px;}
+  .list-row .m{font-size:12.5px;color:var(--ink-dim);}
+  .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--line);color:var(--ink-faint);white-space:nowrap;}
+  .pill.g{border-color:var(--good);color:var(--good);}
+  .pill.b{border-color:var(--blue);color:var(--blue);}
+  .seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;margin-bottom:12px;}
+  .seg button{flex:1;padding:9px 6px;border-radius:9px;border:none;background:none;color:var(--ink-dim);font-size:13px;cursor:pointer;}
+  .seg button.active{background:var(--surface-raised);color:var(--ink);}
+  .steps{margin:0;padding-left:20px;font-size:13.5px;color:var(--ink-dim);line-height:1.7;}
+  .steps b{color:var(--ink);}
+  #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#2C3440;color:var(--ink);font-size:13px;padding:10px 15px;border-radius:12px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:88%;text-align:center;z-index:20;}
+  #toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="toast"></div>
+<script src="words.js"></script>
+<script>
+// ============================================================
+//  INGLÉS — 6,000 palabras: primero las que tú más usas
+//  Repaso espaciado: cada palabra vuelve justo antes de que se te olvide.
+// ============================================================
+const KEY = 'ingles-data';
+const W = window.WORDS || [];
+const byId = {}; W.forEach(w => byId[w.i] = w);
+const ICON = {
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg>',
+  sound:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>',
+  mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>'
+};
+
+let st = load();
+function blank(){ return { cards:{}, perDay:10, newToday:{date:'', n:0}, streak:0, lastDay:'', known:[], flagged:[], log:{} }; }
+function load(){ try{ return Object.assign(blank(), JSON.parse(localStorage.getItem(KEY) || '{}')); }catch(e){ return blank(); } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(st)); }catch(e){ toast('No se pudo guardar'); } }
+function today(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function addDays(iso, n){ const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2600); }
+function native(fn){ return window.Android && typeof Android[fn] === 'function'; }
+
+// ---- voz ----
+function speak(text, lang){
+  if(native('speak')){ Android.speak(String(text), lang || 'en'); return; }
+  if(window.speechSynthesis){ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang = lang==='es' ? 'es-US' : 'en-US'; u.rate = .9; speechSynthesis.speak(u); }
+}
+let listeningFor = null;
+function listen(target){
+  if(!native('listen')){ toast('El micrófono funciona dentro de la app del teléfono'); return; }
+  listeningFor = target; heard = null; render();
+  Android.listen('en-US');
+}
+let heard = null;
+window.onHeard = function(text){ heard = { text: String(text||''), ok: matches(text, listeningFor) }; listeningFor = null; render(); };
+function norm(s){ return String(s||'').toLowerCase().replace(/\(.*?\)/g,'').replace(/[^a-z' ]/g,' ').replace(/\s+/g,' ').trim(); }
+function matches(said, target){
+  const a = norm(said), b = norm(String(target).split('/')[0]).replace(/^to /,'');
+  if(!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a) && a.length > 2;
+}
+
+// ---- repaso espaciado (tipo Anki, sencillo) ----
+function card(i){ return st.cards[i]; }
+function isLearned(c){ return c && c.iv >= 21; }
+function dueReviews(){ const t=today(); return Object.keys(st.cards).map(Number).filter(i => st.cards[i].due <= t && !st.known.includes(i)).sort((a,b) => st.cards[a].due.localeCompare(st.cards[b].due)); }
+function nextNew(n){
+  const out=[];
+  for(const w of W){
+    if(out.length >= n) break;
+    if(st.cards[w.i] || st.known.includes(w.i) || st.flagged.includes(w.i)) continue;
+    out.push(w.i);
+  }
+  return out;
+}
+function newLeftToday(){ if(st.newToday.date !== today()) return st.perDay; return Math.max(0, st.perDay - st.newToday.n); }
+function grade(i, g){ // g: 0 otra vez, 1 difícil, 2 bien, 3 fácil
+  const t = today();
+  let c = st.cards[i];
+  const isNew = !c;
+  if(!c){ c = st.cards[i] = { iv:0, ease:2.5, reps:0, lapses:0, first:t }; }
+  if(g === 0){ c.iv = 0; c.ease = Math.max(1.3, c.ease - .2); c.lapses++; c.due = t; }
+  else {
+    if(c.iv === 0) c.iv = g === 1 ? 1 : g === 2 ? 1 : 3;
+    else if(g === 1){ c.iv = Math.max(1, Math.round(c.iv * 1.2)); c.ease = Math.max(1.3, c.ease - .15); }
+    else if(g === 2) c.iv = Math.max(c.iv + 1, Math.round(c.iv * c.ease));
+    else { c.iv = Math.round(c.iv * c.ease * 1.3) + 1; c.ease += .15; }
+    c.due = addDays(t, c.iv);
+  }
+  c.reps++;
+  if(isNew){ if(st.newToday.date !== t) st.newToday = { date:t, n:0 }; st.newToday.n++; }
+  // racha de días estudiando
+  if(st.lastDay !== t){ st.streak = st.lastDay === addDays(t, -1) ? st.streak + 1 : 1; st.lastDay = t; }
+  st.log[t] = (st.log[t] || 0) + 1;
+  save();
+}
+
+// ---- sesión ----
+let view = 'home';     // home | study | quiz | phrases | list | guide | settings
+let sess = null;       // { queue:[ids], shown:false, done:0, total }
+function startStudy(){
+  const rev = dueReviews().slice(0, 150);
+  const fresh = nextNew(newLeftToday());
+  const queue = fresh.concat(rev);
+  if(!queue.length){ toast('¡Al día! No hay palabras para hoy. Vuelve mañana o haz el quiz.'); return; }
+  sess = { queue, shown:false, done:0, total: queue.length, newIds: new Set(fresh) };
+  heard = null; view = 'study'; render(); speakCurrent();
+}
+function speakCurrent(){ if(!sess || !sess.queue.length) return; const w = byId[sess.queue[0]]; if(w) setTimeout(() => { if(view === 'study') speak(w.en.replace(/\(.*?\)/g,''), 'en'); }, 250); }
+function reveal(){ sess.shown = true; render(); }
+function answer(g){
+  const i = sess.queue.shift();
+  grade(i, g);
+  if(g === 0) sess.queue.splice(Math.min(sess.queue.length, 3), 0, i); // vuelve en un ratito
+  else sess.done++;
+  sess.shown = false; heard = null;
+  if(!sess.queue.length){ view = 'done'; render(); return; }
+  render(); speakCurrent();
+}
+function alreadyKnow(){
+  const i = sess.queue.shift();
+  if(!st.known.includes(i)) st.known.push(i);
+  save(); sess.done++; sess.shown = false; heard = null;
+  // reemplazarla por la siguiente nueva para no perder las del día
+  if(sess.newIds.has(i)){ const nx = nextNew(1)[0]; if(nx){ sess.queue.unshift(nx); sess.newIds.add(nx); } }
+  toast('Marcada como que ya la sabes');
+  if(!sess.queue.length){ view = 'done'; render(); return; }
+  render(); speakCurrent();
+}
+function flagWord(){
+  const i = sess.queue.shift();
+  if(!st.flagged.includes(i)) st.flagged.push(i);
+  delete st.cards[i];
+  save(); sess.shown = false; heard = null;
+  if(sess.newIds.has(i)){ const nx = nextNew(1)[0]; if(nx){ sess.queue.unshift(nx); sess.newIds.add(nx); } }
+  toast('Quitada de tu lista (traducción rara)');
+  if(!sess.queue.length){ view = 'done'; render(); return; }
+  render();
+}
+
+// ---- quiz (elige el significado) ----
+let quiz = null;
+function startQuiz(){
+  const pool = Object.keys(st.cards).map(Number);
+  if(pool.length < 4){ toast('Primero estudia algunas palabras'); return; }
+  const qs = pool.sort(() => Math.random() - .5).slice(0, 10);
+  quiz = { qs, k:0, right:0, picked:null, mode: Math.random() < .5 ? 'en' : 'es', opts: null };
+  makeOpts(); view = 'quiz'; render();
+}
+function makeOpts(){
+  const i = quiz.qs[quiz.k];
+  const others = Object.keys(st.cards).map(Number).filter(x => x !== i).sort(() => Math.random() - .5).slice(0, 3);
+  quiz.opts = [i].concat(others).sort(() => Math.random() - .5);
+  quiz.mode = Math.random() < .5 ? 'en' : 'es';
+  quiz.picked = null;
+  if(quiz.mode === 'en') setTimeout(() => speak(byId[i].en.replace(/\(.*?\)/g,''), 'en'), 200);
+}
+function pickQuiz(o){
+  if(quiz.picked !== null) return;
+  quiz.picked = o;
+  const i = quiz.qs[quiz.k];
+  if(o === i){ quiz.right++; } else { grade(i, 0); }
+  render();
+}
+function nextQuiz(){
+  quiz.k++;
+  if(quiz.k >= quiz.qs.length){ view = 'quizdone'; render(); return; }
+  makeOpts(); render();
+}
+
+// ---- frases (paso 2) ----
+let ph = null;
+function startPhrases(){
+  const pool = Object.keys(st.cards).map(Number).filter(i => byId[i] && byId[i].xe);
+  if(pool.length < 3){ toast('Estudia unas cuantas palabras primero: las frases salen de las que ya viste'); return; }
+  ph = { list: pool.sort(() => Math.random() - .5).slice(0, 8), k:0, shown:false, typed:'' };
+  heard = null; view = 'phrases'; render();
+}
+function phraseReveal(){ const el = document.getElementById('ph-typed'); ph.typed = el ? el.value : ''; ph.shown = true; render(); speak(byId[ph.list[ph.k]].xe, 'en'); }
+function phraseNext(){ ph.k++; ph.shown = false; heard = null; if(ph.k >= ph.list.length){ view = 'home'; toast('¡Bien! Repite las frases en voz alta durante el día.'); } render(); }
+
+// ---- lista ----
+let listQ = '', listFilter = 'all';
+function setPerDay(n){ st.perDay = n; save(); render(); toast(`Listo: ${n} palabras nuevas por día`); }
+function unknow(i){ st.known = st.known.filter(x => x !== i); st.flagged = st.flagged.filter(x => x !== i); save(); render(); }
+
+window.inglesBack = function(){ if(view !== 'home'){ view = 'home'; sess = null; quiz = null; ph = null; render(); return true; } return false; };
+
+// ============================================================
+//  PANTALLAS
+// ============================================================
+function topbar(title, sub, back){
+  return `<div class="topbar">
+    ${back ? `<button class="icon-btn" onclick="inglesBack()">${ICON.back}</button>` : ''}
+    <div style="flex:1;min-width:0;"><p class="page-title">${title}</p>${sub?`<p class="sub">${sub}</p>`:''}</div>
+    ${!back && native('goHome') ? `<button class="icon-btn" onclick="Android.goHome()">${ICON.home}</button>` : ''}
+  </div>`;
+}
+function sayBtn(text, lang, mini){ return `<button class="say ${mini?'mini':''}" onclick='event.stopPropagation();speak(${JSON.stringify(text)}, "${lang}")'>${ICON.sound}${mini?'':(lang==='en'?'Escuchar':'Español')}</button>`; }
+
+function render(){
+  const app = document.getElementById('app');
+  if(view === 'study') return app.innerHTML = renderStudy();
+  if(view === 'done') return app.innerHTML = renderDone();
+  if(view === 'quiz') return app.innerHTML = renderQuiz();
+  if(view === 'quizdone') return app.innerHTML = renderQuizDone();
+  if(view === 'phrases') return app.innerHTML = renderPhrases();
+  if(view === 'list') return app.innerHTML = renderList();
+  if(view === 'guide') return app.innerHTML = renderGuide();
+  app.innerHTML = renderHome();
+}
+
+function renderHome(){
+  const seen = Object.keys(st.cards).length;
+  const learned = Object.values(st.cards).filter(isLearned).length + st.known.length;
+  const due = dueReviews().length;
+  const nl = newLeftToday();
+  const pct = Math.min(100, learned / W.length * 100);
+  const daysLeft = Math.ceil((W.length - seen - st.known.length) / Math.max(1, st.perDay));
+  return topbar('Inglés', '6,000 palabras: primero las que tú más usas') + `
+    <div class="grid3">
+      <div class="stat"><div class="n">${seen}</div><div class="t">vistas</div></div>
+      <div class="stat"><div class="n" style="color:var(--good);">${learned}</div><div class="t">aprendidas</div></div>
+      <div class="stat"><div class="n">${st.streak || 0}🔥</div><div class="t">días seguidos</div></div>
+    </div>
+    <div class="card">
+      <p class="card-title">Hoy</p>
+      <p class="muted">${nl ? `<b style="color:var(--ink);">${nl}</b> palabras nuevas` : 'Ya hiciste tus palabras nuevas de hoy'}${due ? ` · <b style="color:var(--ink);">${due}</b> para repasar` : ''}</p>
+      <div class="progress"><span style="width:${pct.toFixed(2)}%"></span></div>
+      <p class="faint">${learned} de ${W.length.toLocaleString('es')} aprendidas · a ${st.perDay} por día te faltan unos ${Math.round(daysLeft/30)} meses</p>
+      <button class="btn btn-solid btn-block" style="margin-top:14px;" onclick="startStudy()">${nl || due ? 'Estudiar ahora' : 'Repasar de nuevo'}</button>
+    </div>
+    <div class="menu">
+      <button onclick="startQuiz()"><b>Quiz</b><span>10 preguntas con las palabras que ya viste</span></button>
+      <button onclick="startPhrases()"><b>Frases</b><span>Paso 2: arma frases con tus palabras</span></button>
+      <button onclick="view='list';render()"><b>Lista</b><span>Las 6,000, busca y marca las que ya sabes</span></button>
+      <button onclick="view='guide';render()"><b>Cómo avanzar</b><span>Qué hacer después de las palabras</span></button>
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <p class="card-title" style="font-size:15px;">Palabras nuevas por día</p>
+      <div class="seg" style="margin:0;">${[5,10,15,20].map(n => `<button class="${st.perDay===n?'active':''}" onclick="setPerDay(${n})">${n}</button>`).join('')}</div>
+    </div>
+    <p class="faint" style="margin:14px 4px;line-height:1.6;">Las primeras ~1,700 palabras salen de tus conversaciones conmigo, de la que más usas a la que menos; el resto son las más comunes del inglés. Traducciones: Wiktionary (CC BY-SA). Frases de ejemplo: Tatoeba (CC BY 2.0 FR).</p>`;
+}
+
+function renderStudy(){
+  const i = sess.queue[0], w = byId[i];
+  const isNew = sess.newIds.has(i) && !st.cards[i];
+  const c = st.cards[i];
+  const fmt = iv => iv <= 0 ? 'hoy' : iv === 1 ? '1 día' : iv < 30 ? iv + ' días' : Math.round(iv/30) + ' mes' + (Math.round(iv/30) > 1 ? 'es' : '');
+  const nextIv = g => { const cv = c ? c.iv : 0, e = c ? c.ease : 2.5; if(g===0) return 0; if(cv===0) return g===3?3:1; if(g===1) return Math.max(1,Math.round(cv*1.2)); if(g===2) return Math.max(cv+1,Math.round(cv*e)); return Math.round(cv*e*1.3)+1; };
+  const word = w.en;
+  const target = word.replace(/\(.*?\)/g,'').trim();
+  return topbar(`${sess.done} / ${sess.total}`, isNew ? 'Palabra nueva' : 'Repaso', true) + `
+    <div class="flash">
+      <span class="tag">${esc(w.t || '')}${w.m ? ' · la usas mucho' : ''}</span>
+      <div class="word">${esc(word)}</div>
+      <div>${sayBtn(target, 'en')}</div>
+      ${sess.shown || isNew ? `
+        <div class="meaning">${esc(w.es)}</div>
+        ${w.alt && w.alt.length ? `<div class="faint">también: ${esc(w.alt.join(', '))}</div>` : ''}
+        ${w.xe ? `<div class="ex"><div class="e">${esc(w.xe)} ${sayBtn(w.xe,'en',true)}</div><div class="s">${esc(w.xs)}</div></div>` : ''}
+        <div style="margin-top:6px;"><button class="say" onclick='listen(${JSON.stringify(target)})'>${ICON.mic}${listeningFor ? 'Escuchando…' : 'Dila tú'}</button></div>
+        ${heard ? `<div class="heard ${heard.ok?'ok':'bad'}">${heard.ok ? '✓ ¡Bien dicha!' : '✗ Escuché: "' + esc(heard.text || '…') + '". Inténtalo otra vez.'}</div>` : ''}
+      ` : `<p class="faint" style="margin-top:14px;">¿Qué significa? Piénsalo y toca "Mostrar".</p>`}
+    </div>
+    ${isNew ? `
+      <button class="btn btn-solid btn-block" onclick="answer(2)">La tengo, siguiente</button>
+      <div class="row" style="margin-top:8px;"><button class="btn" onclick="alreadyKnow()">Ya me la sé</button><button class="btn" onclick="flagWord()">Traducción rara</button></div>
+    ` : sess.shown ? `
+      <div class="grade">
+        <button class="again" onclick="answer(0)">Otra vez<small>${fmt(nextIv(0))}</small></button>
+        <button onclick="answer(1)">Difícil<small>${fmt(nextIv(1))}</small></button>
+        <button class="good" onclick="answer(2)">Bien<small>${fmt(nextIv(2))}</small></button>
+        <button onclick="answer(3)">Fácil<small>${fmt(nextIv(3))}</small></button>
+      </div>` : `<button class="btn btn-solid btn-block" onclick="reveal()">Mostrar</button>`}`;
+}
+function renderDone(){
+  return topbar('¡Listo por hoy!', '', true) + `
+    <div class="card" style="text-align:center;padding:26px 16px;">
+      <div style="font-size:44px;">🎉</div>
+      <p class="card-title" style="margin-top:8px;">Terminaste tu sesión</p>
+      <p class="muted">Llevas ${st.streak} día${st.streak===1?'':'s'} seguido${st.streak===1?'':'s'}. Mañana te vuelven a salir algunas para repasar, justo antes de que se te olviden.</p>
+    </div>
+    <button class="btn btn-solid btn-block" onclick="startPhrases()">Practicar frases con estas palabras</button>
+    <button class="btn btn-block" style="margin-top:8px;" onclick="view='home';render()">Volver</button>`;
+}
+function renderQuiz(){
+  const i = quiz.qs[quiz.k], w = byId[i];
+  const q = quiz.mode === 'en' ? w.en : w.es;
+  return topbar(`Quiz ${quiz.k+1} / ${quiz.qs.length}`, quiz.mode === 'en' ? '¿Qué significa en español?' : '¿Cómo se dice en inglés?', true) + `
+    <div class="flash" style="min-height:160px;">
+      <div class="word" style="font-size:28px;">${esc(q)}</div>
+      ${quiz.mode === 'en' ? `<div>${sayBtn(w.en.replace(/\(.*?\)/g,''),'en')}</div>` : ''}
+    </div>
+    ${quiz.opts.map(o => {
+      const ow = byId[o];
+      const label = quiz.mode === 'en' ? ow.es : ow.en;
+      let cls = '';
+      if(quiz.picked !== null){ if(o === i) cls = 'right'; else if(o === quiz.picked) cls = 'wrong'; }
+      return `<button class="choice ${cls}" onclick="pickQuiz(${o})">${esc(label)}</button>`;
+    }).join('')}
+    ${quiz.picked !== null ? `<button class="btn btn-solid btn-block" onclick="nextQuiz()">Siguiente</button>` : ''}`;
+}
+function renderQuizDone(){
+  return topbar('Resultado', '', true) + `
+    <div class="card" style="text-align:center;padding:26px 16px;">
+      <div style="font-family:var(--mono);font-size:42px;">${quiz.right} / ${quiz.qs.length}</div>
+      <p class="muted" style="margin-top:8px;">${quiz.right >= 8 ? '¡Muy bien!' : 'Las que fallaste te van a salir otra vez en el repaso.'}</p>
+    </div>
+    <button class="btn btn-solid btn-block" onclick="startQuiz()">Otro quiz</button>
+    <button class="btn btn-block" style="margin-top:8px;" onclick="view='home';render()">Volver</button>`;
+}
+function renderPhrases(){
+  const w = byId[ph.list[ph.k]];
+  return topbar(`Frase ${ph.k+1} / ${ph.list.length}`, 'Dila o escríbela en inglés', true) + `
+    <div class="card">
+      <p class="faint">Palabra: <b style="color:var(--ink);">${esc(w.en)}</b> = ${esc(w.es)}</p>
+      <p style="font-size:19px;margin:12px 0;">${esc(w.xs)}</p>
+      ${!ph.shown ? `<textarea id="ph-typed" placeholder="Escríbela en inglés (o dila con el micrófono)…">${esc(ph.typed)}</textarea>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn" onclick='listen(${JSON.stringify(w.xe)})'>${ICON.mic} ${listeningFor ? 'Escuchando…' : 'Decirla'}</button>
+          <button class="btn btn-solid" onclick="phraseReveal()">Ver respuesta</button>
+        </div>
+        ${heard ? `<p class="heard ${heard.ok?'ok':'bad'}">${heard.ok ? '✓ ¡Bien dicha!' : 'Escuché: "' + esc(heard.text) + '"'}</p>` : ''}`
+      : `<div class="flash" style="min-height:0;padding:16px;margin:0;">
+          <div style="font-size:19px;">${esc(w.xe)}</div>
+          <div>${sayBtn(w.xe,'en')}</div>
+          ${ph.typed ? `<p class="faint">Tú: ${esc(ph.typed)}</p>` : ''}
+        </div>
+        <p class="faint" style="margin:10px 0;">Repítela en voz alta 3 veces, imitando el audio. No importa si la tuya no es igual: si se entiende, va bien.</p>
+        <button class="btn btn-solid btn-block" onclick="phraseNext()">Siguiente</button>`}
+    </div>`;
+}
+function renderList(){
+  const q = listQ.trim().toLowerCase();
+  let rows = W;
+  if(listFilter === 'seen') rows = W.filter(w => st.cards[w.i]);
+  if(listFilter === 'known') rows = W.filter(w => st.known.includes(w.i) || isLearned(st.cards[w.i]));
+  if(q) rows = rows.filter(w => w.en.toLowerCase().includes(q) || w.es.toLowerCase().includes(q));
+  const shown = rows.slice(0, 150);
+  return topbar('Lista', `${rows.length.toLocaleString('es')} palabras`, true) + `
+    <input type="text" placeholder="Buscar en inglés o español" value="${esc(listQ)}" oninput="listQ=this.value;clearTimeout(window._lt);window._lt=setTimeout(render,250)" style="margin-bottom:10px;">
+    <div class="seg">${[['all','Todas'],['seen','Vistas'],['known','Aprendidas']].map(([k,l]) => `<button class="${listFilter===k?'active':''}" onclick="listFilter='${k}';render()">${l}</button>`).join('')}</div>
+    <div class="card">${shown.map(w => {
+      const c = st.cards[w.i];
+      const pill = st.known.includes(w.i) ? '<span class="pill g">la sabías</span>' : st.flagged.includes(w.i) ? '<span class="pill">quitada</span>' : isLearned(c) ? '<span class="pill g">aprendida</span>' : c ? '<span class="pill b">estudiando</span>' : '';
+      return `<div class="list-row"><div style="min-width:0;"><div class="w">${w.i}. ${esc(w.en)} ${sayBtn(w.en.replace(/\(.*?\)/g,''),'en',true)}</div><div class="m">${esc(w.es)}${w.m ? ' · la usas' : ''}</div></div>
+        <div style="display:flex;gap:6px;align-items:center;">${pill}${(st.known.includes(w.i)||st.flagged.includes(w.i)) ? `<button class="say mini" onclick="unknow(${w.i})">deshacer</button>` : ''}</div></div>`;
+    }).join('')}
+    ${rows.length > 150 ? `<p class="faint" style="padding-top:10px;">Mostrando 150. Usa el buscador para encontrar otras.</p>` : ''}</div>`;
+}
+function renderGuide(){
+  return topbar('Cómo avanzar', 'De palabras a hablar', true) + `
+    <div class="card">
+      <p class="card-title">1. Palabras (todos los días)</p>
+      <p class="muted">Haz tu sesión diaria, aunque sea en 10 minutos. Lo más importante es no saltarte días: el repaso trae cada palabra justo antes de que se te olvide.</p>
+    </div>
+    <div class="card">
+      <p class="card-title">2. Frases (desde la primera semana)</p>
+      <ol class="steps">
+        <li>Usa <b>Frases</b>: ves una frase en español y la armas en inglés con las palabras que ya viste.</li>
+        <li><b>Repite en voz alta</b> imitando el audio (shadowing). Eso entrena el oído y la boca a la vez.</li>
+        <li>Arma <b>3 frases tuyas</b> al día sobre tu vida: tu trabajo, los tatuajes, tu hijo. Ejemplo: <i>"Today I worked six hours."</i></li>
+      </ol>
+    </div>
+    <div class="card">
+      <p class="card-title">3. Hablar (desde el primer mes)</p>
+      <ol class="steps">
+        <li>Practica 5 minutos al día hablando con Claude en inglés, por voz, y pídele que te corrija.</li>
+        <li>En el trabajo, usa una frase nueva cada día con alguien.</li>
+        <li>Mira videos o series en inglés con subtítulos en inglés, no en español.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <p class="card-title">Metas</p>
+      <p class="muted">• ~1,000 palabras (3 meses a 10 por día): te defiendes en lo básico.<br>• ~3,000 palabras (unos 10 meses): conversación del día a día.<br>• 6,000: entiendes casi todo lo que se habla normal.</p>
+    </div>`;
+}
+
+render();
+</script>
+</body>
+</html>
