@@ -76,3 +76,6 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 - Inglés → **Mis frases**: 190 frases con tu forma de hablar (tus muletillas, trabajo, tatuajes, trading, dinero, llamadas…) en inglés natural. Cada una se abre cuando ya estudiaste sus palabras, con repaso propio y micrófono. En la tarjeta de cada palabra aparece "Tu frase".
 - Inglés → **Practicar con Claude**: exporta tu progreso (palabras, las que te cuestan, tus frases y reglas de práctica) para practicar por voz con Claude. Las frases que Claude te da al final se pegan en "Mis frases → Agregar".
 - Se agregaron palabras básicas que faltaban (I, me, it, why, again, números, hola…); la lista queda en 6,040 sin perder tu progreso.
+
+### 3.0
+- Nueva subapp **Interés compuesto** (igual que el Excel "A por 100 victorias"): capital inicial, % por victoria y meta editables; botón "Gané (W)" que marca la fecha, registro de pérdidas que recalcula lo que falta, deshacer, varios planes, gráfica, metas ($1,000, $10k…) y la tabla # / USD / % / INT. / USD F. / W / FECHA.

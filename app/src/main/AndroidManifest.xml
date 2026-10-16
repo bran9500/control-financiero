@@ -95,5 +95,13 @@
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Subapp: Interés compuesto -->
+        <activity
+            android:name="com.ktrsis.interes.InterestActivity"
+            android:label="Interés compuesto"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize" />
+
     </application>
 </manifest>

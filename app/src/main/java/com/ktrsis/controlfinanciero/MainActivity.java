@@ -148,6 +148,7 @@ public class MainActivity extends Activity {
                 else if ("bot".equals(name)) c = com.ktrsis.bot.MainActivity.class;
                 else if ("notas".equals(name)) c = com.ktrsis.notas.NotesActivity.class;
                 else if ("ingles".equals(name)) c = com.ktrsis.ingles.EnglishActivity.class;
+                else if ("interes".equals(name)) c = com.ktrsis.interes.InterestActivity.class;
                 if (c != null) startActivity(new Intent(MainActivity.this, c));
             });
         }
