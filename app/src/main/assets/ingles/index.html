@@ -83,6 +83,7 @@
 <div class="wrap" id="app"></div>
 <div id="toast"></div>
 <script src="words.js"></script>
+<script src="phrases.js"></script>
 <script>
 // ============================================================
 //  INGLÉS — 6,000 palabras: primero las que tú más usas
@@ -99,7 +100,7 @@ const ICON = {
 };
 
 let st = load();
-function blank(){ return { cards:{}, perDay:10, newToday:{date:'', n:0}, streak:0, lastDay:'', known:[], flagged:[], log:{} }; }
+function blank(){ return { cards:{}, perDay:10, newToday:{date:'', n:0}, streak:0, lastDay:'', known:[], flagged:[], log:{}, pcards:{}, custom:[], plog:{}, exports:0 }; }
 function load(){ try{ return Object.assign(blank(), JSON.parse(localStorage.getItem(KEY) || '{}')); }catch(e){ return blank(); } }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(st)); }catch(e){ toast('No se pudo guardar'); } }
 function today(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -122,7 +123,16 @@ function listen(target){
 let heard = null;
 window.onHeard = function(text){ heard = { text: String(text||''), ok: matches(text, listeningFor) }; listeningFor = null; render(); };
 function norm(s){ return String(s||'').toLowerCase().replace(/\(.*?\)/g,'').replace(/[^a-z' ]/g,' ').replace(/\s+/g,' ').trim(); }
+const CONTR = {"i'm":"i am","it's":"it is","that's":"that is","don't":"do not","didn't":"did not","doesn't":"does not","won't":"will not","i'll":"i will","i'd":"i would","can't":"cannot","isn't":"is not","wasn't":"was not","let's":"let us","you're":"you are","what's":"what is","there's":"there is","i've":"i have","it'll":"it will","hasn't":"has not","where's":"where is","how's":"how is","money's":"money is","everything's":"everything is"};
+function toks(s){ return norm(s).split(' ').map(t => CONTR[t] || t).join(' ').replace(/'/g,'').split(' ').filter(Boolean); }
 function matches(said, target){
+  const tt = toks(String(target).split(' / ')[0]);
+  if(tt.length > 2){
+    const sa = toks(said); if(!sa.length) return false;
+    const pool = sa.slice(); let hit = 0;
+    tt.forEach(t => { const k = pool.indexOf(t); if(k >= 0){ hit++; pool.splice(k,1); } });
+    return hit / tt.length >= .75;
+  }
   const a = norm(said), b = norm(String(target).split('/')[0]).replace(/^to /,'');
   if(!a || !b) return false;
   return a === b || a.includes(b) || b.includes(a) && a.length > 2;
@@ -252,7 +262,141 @@ let listQ = '', listFilter = 'all';
 function setPerDay(n){ st.perDay = n; save(); render(); toast(`Listo: ${n} palabras nuevas por día`); }
 function unknow(i){ st.known = st.known.filter(x => x !== i); st.flagged = st.flagged.filter(x => x !== i); save(); render(); }
 
-window.inglesBack = function(){ if(view !== 'home'){ view = 'home'; sess = null; quiz = null; ph = null; render(); return true; } return false; };
+
+// ============================================================
+//  MIS FRASES — tu forma de hablar, en inglés
+//  Cada frase se abre cuando ya viste todas sus palabras.
+// ============================================================
+const PH = (window.PHRASES || []).slice().sort((a,b) => a.r - b.r);
+const POS = {}; W.forEach((w,k) => POS[w.i] = k);
+function seenWord(i){ return !!st.cards[i] || st.known.includes(i); }
+function allPhrases(){
+  return PH.concat((st.custom || []).map((c,k) => ({ k:'c'+k, t:c.t || 'De la práctica', es:c.es, en:c.en, w:[], r:0, custom:true })));
+}
+function phraseReady(p){ return p.w.every(seenWord); }
+function phraseMissing(p){ return p.w.filter(i => !seenWord(i)); }
+function phrasesForWord(i){ return PH.filter(p => p.w.includes(i)); }
+function myPhraseDue(){
+  const t = today();
+  return allPhrases().filter(p => phraseReady(p) && (!st.pcards[p.k] || st.pcards[p.k].due <= t));
+}
+let mp = null;   // { list, k, shown, typed }
+let mpTab = 'ready';
+function startMyPhrases(only){
+  let list = only ? [only] : myPhraseDue();
+  if(!list.length){
+    const ready = allPhrases().filter(phraseReady);
+    if(!ready.length){ toast('Todavía no: sigue estudiando palabras y se van abriendo tus frases'); return; }
+    toast('Ya repasaste tus frases de hoy. Te pongo unas al azar.');
+    list = ready.sort(() => Math.random() - .5).slice(0, 8);
+  }
+  // primero las nuevas (nunca practicadas), luego las de repaso; máximo 12
+  list = list.sort((a,b) => (st.pcards[a.k] ? 1 : 0) - (st.pcards[b.k] ? 1 : 0)).slice(0, 12);
+  mp = { list, k:0, shown:false, typed:'' };
+  heard = null; view = 'myphr'; render();
+}
+function mpReveal(){ const el = document.getElementById('mp-typed'); mp.typed = el ? el.value : ''; mp.shown = true; render(); speak(cleanEn(mp.list[mp.k].en), 'en'); }
+function cleanEn(s){ return String(s).split(' / ')[0].replace(/\.\.\.$/,''); }
+function mpGrade(ok){
+  const p = mp.list[mp.k], t = today();
+  const c = st.pcards[p.k] || { iv:0, reps:0, miss:0 };
+  if(ok){ c.iv = c.iv ? Math.round(c.iv * 2.5) : 2; } else { c.iv = 1; c.miss++; }
+  c.reps++; c.due = addDays(t, c.iv); c.last = t;
+  st.pcards[p.k] = c;
+  st.plog[t] = (st.plog[t] || 0) + 1;
+  if(st.lastDay !== t){ st.streak = st.lastDay === addDays(t, -1) ? st.streak + 1 : 1; st.lastDay = t; }
+  save();
+  mp.k++; mp.shown = false; mp.typed = ''; heard = null;
+  if(mp.k >= mp.list.length){ view = 'myphrhome'; toast('¡Listo! Dilas en voz alta durante el día.'); }
+  render();
+}
+
+// ---- agregar frases (tuyas o las que te dé Claude) ----
+function parsePasted(txt){
+  const out = [];
+  String(txt||'').split(/\n+/).forEach(line => {
+    let l = line.replace(/^[\s\-\*•\d.)]+/, '').trim();
+    if(!l) return;
+    let m = l.match(/^EN:\s*(.+?)\s*\|\s*ES:\s*(.+)$/i);
+    if(m) return out.push({ en:m[1].trim(), es:m[2].trim() });
+    m = l.match(/^ES:\s*(.+?)\s*\|\s*EN:\s*(.+)$/i);
+    if(m) return out.push({ en:m[2].trim(), es:m[1].trim() });
+    m = l.split(/\s+(?:=|\||->|→)\s+/);
+    if(m.length === 2){
+      // adivinar cuál lado es inglés
+      const esLike = /[áéíóúñ¿¡]|\b(que|el|la|los|las|de|yo|es|un|una|por|para|con|no sé|mi)\b/i;
+      const a = m[0].trim(), b = m[1].trim();
+      if(esLike.test(a) && !esLike.test(b)) out.push({ en:b, es:a }); else out.push({ en:a, es:b });
+    }
+  });
+  return out;
+}
+function addPasted(){
+  const el = document.getElementById('paste-box');
+  const items = parsePasted(el ? el.value : '');
+  if(!items.length){ toast('No encontré frases. Usa una por línea: inglés = español'); return; }
+  const have = new Set((st.custom||[]).map(c => c.en.toLowerCase()));
+  let n = 0;
+  items.forEach(it => { if(!have.has(it.en.toLowerCase())){ st.custom.push({ en:it.en, es:it.es, t:'De la práctica', added:today() }); n++; } });
+  save(); view = 'myphrhome'; mpTab = 'mine'; render();
+  toast(n ? `Agregué ${n} frase${n===1?'':'s'} a Mis frases` : 'Esas frases ya las tenías');
+}
+function delCustom(k){ st.custom.splice(k,1); delete st.pcards['c'+k]; save(); render(); }
+
+// ---- resumen para practicar con Claude ----
+const TEMAS = ['mi trabajo en Star Snacks','los tatuajes y mis clientes','mi día de hoy','dinero y pagos','llamar a servicio al cliente','mi hijo y el fin de semana','el trading','Colombia y mi familia','hacer compras','el carro'];
+function buildExport(){
+  const t = today();
+  const ids = Object.keys(st.cards).map(Number);
+  const learned = ids.filter(i => isLearned(st.cards[i]));
+  const hard = ids.filter(i => st.cards[i].lapses > 0 || st.cards[i].ease < 2.2).sort((a,b) => st.cards[b].lapses - st.cards[a].lapses).slice(0, 30);
+  const recent = ids.filter(i => st.cards[i].first && st.cards[i].first >= addDays(t, -7)).sort((a,b) => POS[b] - POS[a]);
+  const seenAll = ids.concat(st.known).sort((a,b) => POS[a] - POS[b]);
+  const ready = allPhrases().filter(phraseReady);
+  const tough = ready.filter(p => st.pcards[p.k] && st.pcards[p.k].miss > 0);
+  const tema = TEMAS[Math.floor(Math.random() * TEMAS.length)];
+  const wl = i => { const w = byId[i]; return w ? `${w.en} = ${w.es}` : ''; };
+  const L = [];
+  L.push(`# Práctica de inglés de Bran — ${t}`);
+  L.push('');
+  L.push('Claude: esto lo exporté de mi app de inglés. Quiero practicar inglés hablado contigo, por voz.');
+  L.push('Reglas para la práctica:');
+  L.push('- Háblame en inglés sencillo y usa sobre todo las palabras y frases de abajo, que son las que ya estoy estudiando.');
+  L.push('- Haz una sola pregunta a la vez, con frases cortas, como una conversación normal.');
+  L.push('- Si me equivoco, dime en una línea cómo se dice bien, haz que lo repita y seguimos.');
+  L.push('- Si no entiendo algo, explícamelo corto en español y vuelve al inglés.');
+  L.push('- Haz que use mis frases (abajo). Me gusta hablar en inglés como hablo en español.');
+  L.push(`- Tema de hoy: ${tema}. Si te digo otro tema, cambiamos.`);
+  L.push('- Cuando te diga "terminamos", dame: mis errores principales y entre 5 y 10 frases para repasar, una por línea con este formato exacto: EN: frase en inglés | ES: frase en español');
+  L.push('  (Esas líneas las pego en la app en "Mis frases → Agregar".)');
+  L.push('');
+  L.push('## Mi progreso');
+  L.push(`- Palabras vistas: ${ids.length + st.known.length} de ${W.length} (aprendidas a largo plazo: ${learned.length + st.known.length})`);
+  L.push(`- Días seguidos estudiando: ${st.streak || 0}`);
+  L.push(`- Mis frases que ya puedo decir: ${ready.length}`);
+  if(hard.length){ L.push(''); L.push('## Palabras que me cuestan (úsalas más)'); hard.forEach(i => L.push('- ' + wl(i))); }
+  if(recent.length){ L.push(''); L.push('## Palabras nuevas de esta semana'); recent.slice(0, 80).forEach(i => L.push('- ' + wl(i))); }
+  if(tough.length){ L.push(''); L.push('## Frases que me cuestan'); tough.slice(0, 20).forEach(p => L.push(`- ${cleanEn(p.en)} = ${p.es}`)); }
+  if(ready.length){ L.push(''); L.push('## Mis frases (mi forma de hablar)'); ready.slice(-60).forEach(p => L.push(`- ${cleanEn(p.en)} = ${p.es}`)); }
+  L.push(''); L.push(`## Todas las palabras que ya vi (${seenAll.length})`);
+  L.push(seenAll.slice(0, 1500).map(i => byId[i] ? byId[i].en : '').filter(Boolean).join(', '));
+  return L.join('\n');
+}
+let exportText = '';
+function openExport(){ exportText = buildExport(); view = 'export'; render(); }
+function shareExport(){
+  st.exports = (st.exports || 0) + 1; save();
+  if(native('share')){ Android.share(exportText); return; }
+  if(navigator.share){ navigator.share({ text: exportText }).catch(()=>{}); return; }
+  copyExport();
+}
+function copyExport(){
+  if(native('copy')){ Android.copy(exportText); toast('Copiado. Pégalo en un chat nuevo conmigo.'); return; }
+  try{ navigator.clipboard.writeText(exportText).then(() => toast('Copiado. Pégalo en un chat nuevo conmigo.')); }catch(e){ toast('No se pudo copiar'); }
+}
+
+window.inglesBack = function(){ if(view === 'myphr' || view === 'paste'){ view = 'myphrhome'; mp = null; render(); return true; }
+  if(view !== 'home'){ view = 'home'; sess = null; quiz = null; ph = null; mp = null; render(); return true; } return false; };
 
 // ============================================================
 //  PANTALLAS
@@ -275,6 +419,10 @@ function render(){
   if(view === 'phrases') return app.innerHTML = renderPhrases();
   if(view === 'list') return app.innerHTML = renderList();
   if(view === 'guide') return app.innerHTML = renderGuide();
+  if(view === 'myphrhome') return app.innerHTML = renderMyPhrHome();
+  if(view === 'myphr') return app.innerHTML = renderMyPhr();
+  if(view === 'paste') return app.innerHTML = renderPaste();
+  if(view === 'export') return app.innerHTML = renderExport();
   app.innerHTML = renderHome();
 }
 
@@ -299,8 +447,10 @@ function renderHome(){
       <button class="btn btn-solid btn-block" style="margin-top:14px;" onclick="startStudy()">${nl || due ? 'Estudiar ahora' : 'Repasar de nuevo'}</button>
     </div>
     <div class="menu">
+      <button onclick="view='myphrhome';render()" style="border-color:var(--good);"><b>Mis frases</b><span>${myPhraseDue().length ? `<b style="display:inline;color:var(--good);font-size:12px;">${myPhraseDue().length} listas</b> · ` : ''}Tu forma de hablar, en inglés</span></button>
+      <button onclick="openExport()" style="border-color:var(--blue);"><b>Practicar con Claude</b><span>Exporta tu progreso y habla conmigo en inglés</span></button>
       <button onclick="startQuiz()"><b>Quiz</b><span>10 preguntas con las palabras que ya viste</span></button>
-      <button onclick="startPhrases()"><b>Frases</b><span>Paso 2: arma frases con tus palabras</span></button>
+      <button onclick="startPhrases()"><b>Frases de ejemplo</b><span>Arma frases con tus palabras</span></button>
       <button onclick="view='list';render()"><b>Lista</b><span>Las 6,000, busca y marca las que ya sabes</span></button>
       <button onclick="view='guide';render()"><b>Cómo avanzar</b><span>Qué hacer después de las palabras</span></button>
     </div>
@@ -308,7 +458,7 @@ function renderHome(){
       <p class="card-title" style="font-size:15px;">Palabras nuevas por día</p>
       <div class="seg" style="margin:0;">${[5,10,15,20].map(n => `<button class="${st.perDay===n?'active':''}" onclick="setPerDay(${n})">${n}</button>`).join('')}</div>
     </div>
-    <p class="faint" style="margin:14px 4px;line-height:1.6;">Las primeras ~1,700 palabras salen de tus conversaciones conmigo, de la que más usas a la que menos; el resto son las más comunes del inglés. Traducciones: Wiktionary (CC BY-SA). Frases de ejemplo: Tatoeba (CC BY 2.0 FR).</p>`;
+    <p class="faint" style="margin:14px 4px;line-height:1.6;">Las primeras ~1,700 palabras y tus frases salen de tus conversaciones conmigo, de la que más usas a la que menos; el resto son las más comunes del inglés. Traducciones: Wiktionary (CC BY-SA). Frases de ejemplo: Tatoeba (CC BY 2.0 FR).</p>`;
 }
 
 function renderStudy(){
@@ -327,6 +477,7 @@ function renderStudy(){
       ${sess.shown || isNew ? `
         <div class="meaning">${esc(w.es)}</div>
         ${w.alt && w.alt.length ? `<div class="faint">también: ${esc(w.alt.join(', '))}</div>` : ''}
+        ${(() => { const mine = phrasesForWord(i)[0]; return mine ? `<div class="ex" style="border:1px solid var(--good);"><div class="faint" style="color:var(--good);margin-bottom:4px;">Tu frase</div><div class="e">${esc(cleanEn(mine.en))} ${sayBtn(cleanEn(mine.en),'en',true)}</div><div class="s">${esc(mine.es)}</div></div>` : ''; })()}
         ${w.xe ? `<div class="ex"><div class="e">${esc(w.xe)} ${sayBtn(w.xe,'en',true)}</div><div class="s">${esc(w.xs)}</div></div>` : ''}
         <div style="margin-top:6px;"><button class="say" onclick='listen(${JSON.stringify(target)})'>${ICON.mic}${listeningFor ? 'Escuchando…' : 'Dila tú'}</button></div>
         ${heard ? `<div class="heard ${heard.ok?'ok':'bad'}">${heard.ok ? '✓ ¡Bien dicha!' : '✗ Escuché: "' + esc(heard.text || '…') + '". Inténtalo otra vez.'}</div>` : ''}
@@ -413,11 +564,97 @@ function renderList(){
     <div class="card">${shown.map(w => {
       const c = st.cards[w.i];
       const pill = st.known.includes(w.i) ? '<span class="pill g">la sabías</span>' : st.flagged.includes(w.i) ? '<span class="pill">quitada</span>' : isLearned(c) ? '<span class="pill g">aprendida</span>' : c ? '<span class="pill b">estudiando</span>' : '';
-      return `<div class="list-row"><div style="min-width:0;"><div class="w">${w.i}. ${esc(w.en)} ${sayBtn(w.en.replace(/\(.*?\)/g,''),'en',true)}</div><div class="m">${esc(w.es)}${w.m ? ' · la usas' : ''}</div></div>
+      return `<div class="list-row"><div style="min-width:0;"><div class="w">${POS[w.i]+1}. ${esc(w.en)} ${sayBtn(w.en.replace(/\(.*?\)/g,''),'en',true)}</div><div class="m">${esc(w.es)}${w.m ? ' · la usas' : ''}</div></div>
         <div style="display:flex;gap:6px;align-items:center;">${pill}${(st.known.includes(w.i)||st.flagged.includes(w.i)) ? `<button class="say mini" onclick="unknow(${w.i})">deshacer</button>` : ''}</div></div>`;
     }).join('')}
     ${rows.length > 150 ? `<p class="faint" style="padding-top:10px;">Mostrando 150. Usa el buscador para encontrar otras.</p>` : ''}</div>`;
 }
+
+function renderMyPhrHome(){
+  const all = allPhrases();
+  const ready = all.filter(phraseReady);
+  const due = myPhraseDue();
+  const locked = PH.filter(p => !phraseReady(p)).slice(0, 25);
+  const custom = st.custom || [];
+  const tabs = [['ready',`Listas (${ready.length})`],['next','Próximas'],['mine',`De la práctica (${custom.length})`]];
+  let body = '';
+  if(mpTab === 'ready'){
+    body = ready.length ? ready.slice().reverse().map(p => {
+      const c = st.pcards[p.k];
+      const pill = !c ? '<span class="pill b">nueva</span>' : c.miss ? '<span class="pill">cuesta</span>' : '<span class="pill g">bien</span>';
+      return `<div class="list-row" onclick='startMyPhrases(allPhrases().find(x => x.k === ${JSON.stringify(p.k)}))' style="cursor:pointer;"><div style="min-width:0;"><div class="w">${esc(cleanEn(p.en))}</div><div class="m">${esc(p.es)} · ${esc(p.t)}</div></div>${pill}</div>`;
+    }).join('') : '<p class="muted">Aún no se abre ninguna. Cada frase se abre cuando ya estudiaste todas sus palabras. Las primeras salen en tus primeros días.</p>';
+  } else if(mpTab === 'next'){
+    body = locked.length ? locked.map(p => {
+      const miss = phraseMissing(p);
+      return `<div class="list-row"><div style="min-width:0;"><div class="w">${esc(p.es)}</div><div class="m">te falta${miss.length===1?'':'n'}: ${miss.slice(0,4).map(i => esc(byId[i].en)).join(', ')}${miss.length>4?'…':''}</div></div><span class="pill">${p.w.length - miss.length}/${p.w.length}</span></div>`;
+    }).join('') : '<p class="muted">¡Ya abriste todas tus frases!</p>';
+  } else {
+    body = (custom.length ? custom.map((c,k) => `<div class="list-row"><div style="min-width:0;"><div class="w">${esc(c.en)} ${sayBtn(c.en,'en',true)}</div><div class="m">${esc(c.es)}</div></div><button class="say mini" onclick="delCustom(${k})">quitar</button></div>`).join('')
+      : '<p class="muted">Aquí van las frases que te doy cuando practicamos, o las que tú quieras agregar.</p>')
+      + `<button class="btn btn-block" style="margin-top:12px;" onclick="view='paste';render()">Agregar frases</button>`;
+  }
+  return topbar('Mis frases', 'Hablar en inglés como hablas en español', true) + `
+    <div class="card">
+      <p class="muted">${due.length ? `<b style="color:var(--ink);">${due.length}</b> frases para practicar hoy.` : 'Al día con tus frases.'} Ves la frase en español, la dices en inglés y comparas.</p>
+      <button class="btn btn-solid btn-block" style="margin-top:12px;" onclick="startMyPhrases()">Practicar mis frases</button>
+    </div>
+    <div class="seg">${tabs.map(([k,l]) => `<button class="${mpTab===k?'active':''}" onclick="mpTab='${k}';render()">${l}</button>`).join('')}</div>
+    <div class="card">${body}</div>`;
+}
+function renderMyPhr(){
+  const p = mp.list[mp.k];
+  const en = cleanEn(p.en);
+  return topbar(`Frase ${mp.k+1} / ${mp.list.length}`, esc(p.t), true) + `
+    <div class="card">
+      <p class="faint">¿Cómo lo dirías en inglés?</p>
+      <p style="font-size:22px;margin:10px 0 14px 0;line-height:1.35;">${esc(p.es)}</p>
+      ${!mp.shown ? `<textarea id="mp-typed" placeholder="Escríbela o dila con el micrófono…">${esc(mp.typed)}</textarea>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn" onclick='listen(${JSON.stringify(en)})'>${ICON.mic} ${listeningFor ? 'Escuchando…' : 'Decirla'}</button>
+          <button class="btn btn-solid" onclick="mpReveal()">Ver en inglés</button>
+        </div>
+        ${heard ? `<p class="heard ${heard.ok?'ok':'bad'}">${heard.ok ? '✓ ¡Bien dicha! Toca "Ver en inglés".' : 'Escuché: "' + esc(heard.text) + '"'}</p>` : ''}`
+      : `<div class="flash" style="min-height:0;padding:16px;margin:0;">
+          <div style="font-size:21px;">${esc(p.en)}</div>
+          <div>${sayBtn(en,'en')}</div>
+          ${mp.typed ? `<p class="faint">Tú: ${esc(mp.typed)}</p>` : ''}
+          ${heard ? `<p class="heard ${heard.ok?'ok':'bad'}">${heard.ok ? '✓ La dijiste bien' : 'Dijiste: "' + esc(heard.text) + '"'}</p>` : ''}
+          ${p.w && p.w.length ? `<p class="faint" style="text-align:left;">Palabras: ${p.w.map(i => `${esc(byId[i].en)} = ${esc(byId[i].es)}`).join(' · ')}</p>` : ''}
+        </div>
+        <div style="margin:10px 0;"><button class="say" onclick='listen(${JSON.stringify(en)})'>${ICON.mic}${listeningFor ? 'Escuchando…' : 'Repetirla'}</button></div>
+        <p class="faint" style="margin:6px 0 12px 0;">Repítela en voz alta 3 veces imitando el audio.</p>
+        <div class="row"><button class="btn" style="border-color:var(--warn);color:var(--warn);" onclick="mpGrade(false)">Me costó</button><button class="btn btn-solid" onclick="mpGrade(true)">La dije bien</button></div>`}
+    </div>`;
+}
+function renderPaste(){
+  return topbar('Agregar frases', 'De la práctica conmigo o tuyas', true) + `
+    <div class="card">
+      <p class="muted">Pega aquí las frases que te doy al final de la práctica, o escribe las tuyas. Una por línea, así:</p>
+      <p class="faint" style="font-family:var(--mono);margin:10px 0;line-height:1.7;">EN: I'm on my way | ES: Ya voy en camino<br>I'm on my way = Ya voy en camino</p>
+      <textarea id="paste-box" style="min-height:180px;" placeholder="Pega o escribe aquí…"></textarea>
+      <button class="btn btn-solid btn-block" style="margin-top:12px;" onclick="addPasted()">Agregar</button>
+    </div>`;
+}
+function renderExport(){
+  const lines = exportText.split('\n').length;
+  return topbar('Practicar con Claude', 'Así sé exactamente qué llevas', true) + `
+    <div class="card">
+      <ol class="steps">
+        <li>Toca <b>Enviar a Claude</b> y elige la app de Claude (o copia el texto y pégalo en un chat nuevo).</li>
+        <li>Activa el <b>modo voz</b> y habla conmigo en inglés. Uso tus palabras y tus frases.</li>
+        <li>Al terminar dime <b>"terminamos"</b>: te doy tus errores y unas frases para repasar.</li>
+        <li>Copia esas frases y pégalas en <b>Mis frases → De la práctica → Agregar</b>.</li>
+      </ol>
+      <div class="row" style="margin-top:14px;">
+        <button class="btn" onclick="copyExport()">Copiar</button>
+        <button class="btn btn-solid" onclick="shareExport()">Enviar a Claude</button>
+      </div>
+    </div>
+    <div class="card"><p class="faint" style="margin-bottom:8px;">Lo que se envía (${lines} líneas):</p>
+      <pre style="white-space:pre-wrap;font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);margin:0;max-height:340px;overflow:auto;">${esc(exportText)}</pre></div>`;
+}
+
 function renderGuide(){
   return topbar('Cómo avanzar', 'De palabras a hablar', true) + `
     <div class="card">
@@ -427,7 +664,8 @@ function renderGuide(){
     <div class="card">
       <p class="card-title">2. Frases (desde la primera semana)</p>
       <ol class="steps">
-        <li>Usa <b>Frases</b>: ves una frase en español y la armas en inglés con las palabras que ya viste.</li>
+        <li>Usa <b>Mis frases</b>: son frases tuyas, con tu forma de hablar. Se van abriendo a medida que aprendes sus palabras.</li>
+        <li>Usa <b>Frases de ejemplo</b>: ves una frase en español y la armas en inglés con las palabras que ya viste.</li>
         <li><b>Repite en voz alta</b> imitando el audio (shadowing). Eso entrena el oído y la boca a la vez.</li>
         <li>Arma <b>3 frases tuyas</b> al día sobre tu vida: tu trabajo, los tatuajes, tu hijo. Ejemplo: <i>"Today I worked six hours."</i></li>
       </ol>
@@ -435,7 +673,7 @@ function renderGuide(){
     <div class="card">
       <p class="card-title">3. Hablar (desde el primer mes)</p>
       <ol class="steps">
-        <li>Practica 5 minutos al día hablando con Claude en inglés, por voz, y pídele que te corrija.</li>
+        <li>Toca <b>Practicar con Claude</b>: me envías tu progreso y hablamos 5–10 minutos en inglés por voz, con tus palabras. Te corrijo y al final te doy frases para agregar a la app.</li>
         <li>En el trabajo, usa una frase nueva cada día con alguien.</li>
         <li>Mira videos o series en inglés con subtítulos en inglés, no en español.</li>
       </ol>

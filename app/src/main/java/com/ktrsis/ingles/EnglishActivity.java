@@ -118,6 +118,11 @@ public class EnglishActivity extends Activity {
         super.onDestroy();
     }
 
+    private void copyText(String text) {
+        android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("Práctica de inglés", text));
+    }
+
     private class Bridge {
         @JavascriptInterface public void speak(String text, String lang) {
             runOnUiThread(() -> {
@@ -130,6 +135,17 @@ public class EnglishActivity extends Activity {
             });
         }
         @JavascriptInterface public void listen(String lang) { runOnUiThread(() -> startListening(lang)); }
+        @JavascriptInterface public void share(String text) {
+            runOnUiThread(() -> {
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("text/plain");
+                send.putExtra(Intent.EXTRA_SUBJECT, "Práctica de inglés");
+                send.putExtra(Intent.EXTRA_TEXT, text);
+                try { startActivity(Intent.createChooser(send, "Enviar a Claude")); }
+                catch (Exception e) { copyText(text); }
+            });
+        }
+        @JavascriptInterface public void copy(String text) { runOnUiThread(() -> copyText(text)); }
         @JavascriptInterface public void goHome() { runOnUiThread(EnglishActivity.this::finish); }
     }
 }

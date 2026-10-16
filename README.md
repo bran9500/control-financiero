@@ -71,3 +71,8 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 
 ### 2.8
 - Nueva subapp **Inglés**: 6,000 palabras ordenadas por las que más usas (sacadas de tus conversaciones) y luego las más comunes del inglés. 10 nuevas por día (configurable), repaso espaciado, voz en inglés, práctica de pronunciación con el micrófono, quiz, frases y lista con buscador. Traducciones de Wiktionary (CC BY-SA), frases de Tatoeba (CC BY 2.0 FR).
+
+### 2.9
+- Inglés → **Mis frases**: 190 frases con tu forma de hablar (tus muletillas, trabajo, tatuajes, trading, dinero, llamadas…) en inglés natural. Cada una se abre cuando ya estudiaste sus palabras, con repaso propio y micrófono. En la tarjeta de cada palabra aparece "Tu frase".
+- Inglés → **Practicar con Claude**: exporta tu progreso (palabras, las que te cuestan, tus frases y reglas de práctica) para practicar por voz con Claude. Las frases que Claude te da al final se pegan en "Mis frases → Agregar".
+- Se agregaron palabras básicas que faltaban (I, me, it, why, again, números, hola…); la lista queda en 6,040 sin perder tu progreso.
