@@ -108,3 +108,6 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 - **Ver la app como alguien nuevo**: vista previa vacía con bienvenida y recorrido, sin tocar tus datos.
 - **Apps plegables** en Inicio: una barra delgada con íconos; la flecha las muestra en grande.
 - Arreglo: los gastos fijos semanales y los pagos marcados ya no se corren si cambias el día de inicio de la semana.
+
+### 3.6
+- Video tutorial en MP4 (se veía cortado con fondo gris en algunos teléfonos).
