@@ -94,3 +94,7 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 - **Personalizar** (Más → Personalizar): color, fondo, letra de los títulos, tamaño de letra, saludo y día de inicio de la semana. Las subapps (Inglés, Interés, Notas) usan los mismos colores.
 - **Respaldo completo**: "Guardar archivo" ahora guarda finanzas + Inglés + Interés compuesto + Notas + tus preferencias, y "Restaurar" lo recupera todo.
 - **Acerca de**: Creada por Brandon Poveda, hecha con la ayuda de Claude.
+
+### 3.4
+- **Recorrido guiado**: después de la bienvenida, la app oscurece la pantalla e ilumina cada parte (saludo, apps, preguntas, tu semana, próximos pagos, movimientos, deudas, subir extracto/captura, más, respaldo) con una explicación corta. Se repite desde Más → Ayuda.
+- **Video tutorial** (1:37) dentro de la app: Más → Ayuda → Ver video.

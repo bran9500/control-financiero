@@ -76,6 +76,22 @@
   .opt.on{border-color:var(--accent);color:var(--ink);}
   .bgdot{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);}
   .about-by{font-size:15px;margin:8px 0 4px 0;}
+  /* ---------- Recorrido guiado ---------- */
+  body.touring .tabbar{z-index:5;}
+  .tour-hole{position:fixed;z-index:60;border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.72);border:2px solid var(--accent);pointer-events:none;transition:all .25s ease;}
+  .tour-dim{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.72);}
+  .tour-tip{position:fixed;left:14px;right:14px;max-width:520px;margin:0 auto;z-index:61;background:var(--surface);border:1px solid var(--accent-line);border-radius:18px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.5);animation:tourIn .25s ease;}
+  @keyframes tourIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  .tour-count{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+  .tour-title{font-family:var(--serif);font-size:20px;margin:0 0 6px 0;}
+  .tour-text{font-size:14px;color:var(--ink-dim);line-height:1.55;margin:0 0 14px 0;}
+  .tour-text b{color:var(--ink);}
+  .tour-btns{display:flex;align-items:center;gap:8px;}
+  .tour-btns .btn{padding:10px 16px;}
+  #tour-root::before{content:'';position:fixed;inset:0;z-index:59;display:none;}
+  body.touring #tour-root::before{display:block;}
+  .video-wrap{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px;}
+  .video-box{width:100%;max-width:420px;}
   .page-title{font-family:var(--serif);font-size:26px;margin:0;font-weight:normal;}
   .today{font-size:12.5px;color:var(--ink-faint);margin:2px 0 0 0;}
   .save-status{font-size:12px;min-height:16px;margin:0;color:var(--ink-faint);text-align:right;}
@@ -396,6 +412,7 @@ function normalizeData(parsed){
 }
 
 let data = emptyData();
+let confirmingDeleteId = null;
 let sectionsOpen = { personalize:false, income:true, debts:false, expenses:false, hormiga:false, loans:false, savings:false, stats:false, range:false, history:false };
 let savingsTab = 'emergency';
 let editingItem = null; // {kind, id}
@@ -1089,6 +1106,8 @@ function selectChartWeek(i){ chartWeekSel = i; render(); }
 
 // Botón "atrás" del teléfono: primero cierra lo abierto, luego vuelve a Inicio, y solo entonces sale.
 function appBack(){
+  if(typeof tourActive === 'function' && tourActive()){ tourEnd(); return true; }
+  if(document.querySelector('.video-wrap')){ closeVideo(); return true; }
   if(sheet){ closeSheet(); return true; }
   if(importPreview){ cancelImport(); return true; }
   if(editingItem || Object.keys(formOpen).some(k=>formOpen[k])){ editingItem = null; formOpen = {}; render(); return true; }
@@ -2850,7 +2869,7 @@ function renderSavingsTab(which){
 function renderSection(key, title, count, bodyHtml){
   const open = sectionsOpen[key];
   const countHtml = (count === '' ) ? '' : ` <span class="section-count">(${count})</span>`;
-  return `<section class="fold">
+  return `<section class="fold" data-tour="sec-${key}">
     <div class="section-head" onclick="toggleSection('${key}')">
       <p class="section-title">${title}${countHtml}</p>
       <span class="chevron ${open?'open':''}">›</span>
@@ -2976,7 +2995,7 @@ function render(){
 
 function renderTopbar(){
   const todayStr = capFirst(new Date().toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'}));
-  return `<div class="topbar">
+  return `<div class="topbar" data-tour="topbar">
     <div>
       <p class="greeting">${greetingLine()}</p>
       <p class="page-title">${TAB_TITLES[activeTab]}</p>
@@ -2989,7 +3008,7 @@ function renderTopbar(){
 function renderTabbar(){
   const tabs = [['home','Inicio'],['mov','Movimientos'],['debts','Deudas'],['import','Subir extracto'],['more','Más']];
   return `<nav class="tabbar">${tabs.map(([k,l]) => `
-    <button class="${activeTab===k?'active':''}" onclick="setTab('${k}')"><span class="pill">${ICONS[k]}</span>${l}</button>`).join('')}
+    <button class="${activeTab===k?'active':''}" data-tour="tab-${k}" onclick="setTab('${k}')"><span class="pill">${ICONS[k]}</span>${l}</button>`).join('')}
   </nav>`;
 }
 
@@ -3002,7 +3021,7 @@ const SUB_APPS = [
   ['interes','Interés','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M5 16l4-4 3 2 7-8"/><path d="M15 6h4v4"/></svg>']
 ];
 function renderAppsRow(){
-  return `<div class="apps-row">${SUB_APPS.map(([k,l,ic]) => `
+  return `<div class="apps-row" data-tour="apps">${SUB_APPS.map(([k,l,ic]) => `
     <button class="app-tile" onclick="openSubApp('${k}')"><span class="app-ico">${ic}</span><span>${l}</span></button>`).join('')}</div>`;
 }
 
@@ -3024,7 +3043,7 @@ function renderHome(c){
   const pct = c.need > 0 ? Math.max(0, Math.min(1, c.availableThisWeek / c.need)) : 1;
   const covered = c.shortfall <= 0;
   const next = c.weeksAhead.slice(1, 4);
-  html += `<div class="card hero-card">
+  html += `<div class="card hero-card" data-tour="hero">
     <p class="hero-label">${covered ? 'Vas cubierto esta semana' : 'Te falta ganar esta semana'}</p>
     <p class="hero-number ${covered?'good':'warn'}">${fmtMoney(Math.max(c.shortfall,0))}</p>
     <div class="progress ${covered?'':'warn'}"><span style="width:${(pct*100).toFixed(1)}%"></span></div>
@@ -3034,7 +3053,7 @@ function renderHome(c){
       <span class="val" style="color:${c.realGap>0?'var(--warn)':'var(--good)'};">${fmtMoney(Math.abs(c.realGap))}</span>
     </div>
     <p class="sub-head" style="margin:16px 0 8px 0;">Lo que conviene ganar las próximas semanas</p>
-    <div class="week-chips">${next.map((w,i) => `
+    <div class="week-chips" data-tour="weeks">${next.map((w,i) => `
       <button class="week-chip" onclick="sheet={type:'week', idx:${i+1}};render()">
         <span class="wc-range">${fmtShortDate(dayISO(w.weekStart))} – ${fmtShortDate(dayISO(w.weekEnd))}</span>
         <span class="wc-amt">${fmtMoney(w.need)}</span>
@@ -3075,7 +3094,7 @@ function renderHome(c){
   html += renderWeeklyChartCard();
 
   // Próximos 30 días
-  html += `<div class="card">
+  html += `<div class="card" data-tour="upcoming">
     <div class="card-head"><p class="card-title">Próximos 30 días</p></div>
     ${c.upcoming.length ? c.upcoming.map(renderUpcomingRow).join('') : '<div class="empty-note" style="padding:0;">Nada pendiente en los próximos 30 días.</div>'}
     <p class="item-meta" style="margin-top:10px;">Toca "Mover" para correr un pago unos días. Solo cambia esa vez; el resto se recalcula solo.</p>
@@ -3089,7 +3108,7 @@ function renderSpendingCard(){
   const spend = spendingByCategory(b.s, b.e);
   const total = SPEND_CATS.reduce((a,k) => a + spend[k], 0);
   const max = Math.max(...SPEND_CATS.map(k => spend[k]), 0);
-  let html = `<div class="card">
+  let html = `<div class="card" data-tour="spend">
     <div class="card-head">
       <div><p class="card-title">En qué se te va la plata</p><p class="card-sub">${b.label}</p></div>
       <button class="card-link" onclick="openHistory()">Meses anteriores ›</button>
@@ -3219,7 +3238,7 @@ function toggleOlder(k){ showOlder[k] = !showOlder[k]; render(); }
 // ---------------------------------------------------------- MOVIMIENTOS
 function renderMovTab(c){
   const segs = [['incomes','Ingresos'],['hormiga','Hormiga'],['bank','Banco'],['loans','Préstamos']];
-  let html = `<div class="seg">${segs.map(([k,l]) => `<button class="${movSeg===k?'active':''}" onclick="setMovSeg('${k}')">${l}</button>`).join('')}</div>`;
+  let html = `<div class="seg" data-tour="movseg">${segs.map(([k,l]) => `<button class="${movSeg===k?'active':''}" onclick="setMovSeg('${k}')">${l}</button>`).join('')}</div>`;
   html += `<div class="card">`;
   if(movSeg === 'incomes') html += incomesBody();
   else if(movSeg === 'hormiga') html += hormigaBody(c);
@@ -3396,12 +3415,12 @@ function loansBody(){
 function renderDebtsTab(c){
   const rec = detectRecurring();
   const newRec = rec.filter(r => !r.tracked).length;
-  let html = `<div class="mini-grid">
+  let html = `<div class="mini-grid" data-tour="debtsum">
     <div class="mini"><p class="mini-label">Deuda total</p><p class="mini-value" style="color:var(--warn);">${fmtMoney(c.totalDebt)}</p><p class="mini-foot">${data.debts.length} deuda${data.debts.length===1?'':'s'}</p></div>
     <div class="mini"><p class="mini-label">Pagos al mes</p><p class="mini-value">${fmtMoney(c.monthlyTotal)}</p><p class="mini-foot">${fmtMoney(c.weeklyTarget)} por semana</p></div>
   </div>`;
   const segs = [['debts','Deudas'],['expenses','Gastos fijos'],['recurring','Cobros repetidos' + (newRec ? ` (${newRec})` : '')]];
-  html += `<div class="seg">${segs.map(([k,l]) => `<button class="${debtSeg===k?'active':''}" onclick="setDebtSeg('${k}')">${l}</button>`).join('')}</div>`;
+  html += `<div class="seg" data-tour="debtseg">${segs.map(([k,l]) => `<button class="${debtSeg===k?'active':''}" onclick="setDebtSeg('${k}')">${l}</button>`).join('')}</div>`;
   html += `<div class="card">`;
   if(debtSeg === 'debts') html += debtsBody();
   else if(debtSeg === 'expenses') html += expensesBody();
@@ -3543,7 +3562,7 @@ function renderImportTab(){
       <span class="ico">${ICONS.import}</span>
       <span class="big">Leyendo extractos…</span>
       <span class="small">Esto tarda unos segundos con los PDF</span>
-    </div>` : `<label class="upload-zone" for="statement-input">
+    </div>` : `<label class="upload-zone" for="statement-input" data-tour="upload">
       <span class="ico">${ICONS.import}</span>
       <span class="big">Elegir extractos (PDF o CSV)</span>
       <span class="small">Puedes elegir varios a la vez, por ejemplo los últimos 3 meses</span>
@@ -3551,7 +3570,7 @@ function renderImportTab(){
     <input type="file" id="statement-input" accept=".pdf,application/pdf,.csv,text/csv,text/comma-separated-values,text/plain,application/vnd.ms-excel" multiple style="display:none" onchange="handleStatementFiles(this)">
     ${shotBusy ? `<div class="upload-zone" style="cursor:default;margin-top:10px;">
       <span class="ico">${ICONS.camera}</span><span class="big">Leyendo la captura…</span><span class="small">Unos segundos</span></div>`
-    : `<label class="upload-zone shot-zone" for="shot-input" style="margin-top:10px;">
+    : `<label class="upload-zone shot-zone" for="shot-input" style="margin-top:10px;" data-tour="shot">
       <span class="ico">${ICONS.camera}</span>
       <span style="display:flex;flex-direction:column;gap:3px;"><span class="big">Subir captura de pantalla</span>
       <span class="small">De los movimientos recientes en la app del banco. Puedes elegir varias.</span></span>
@@ -3742,7 +3761,7 @@ function renderMoreTab(c){
   </div>`;
 
   // Exportar resumen
-  html += `<div class="card">
+  html += `<div class="card" data-tour="export">
     <div class="card-head"><div><p class="card-title">Exportar resumen para Claude</p><p class="card-sub">Últimos 3 meses + todos los movimientos</p></div></div>
     <p class="item-meta" style="margin:0 0 12px 0;line-height:1.6;">Genera un archivo con tu situación, ingresos por fuente, gastos por categoría, cobros repetidos y movimientos. Súbeselo a Claude en el chat para que lo analice y te diga cómo mejorar.</p>
     <button class="btn btn-solid btn-block" onclick="exportSummary()">Exportar resumen</button>
@@ -3757,7 +3776,7 @@ function renderMoreTab(c){
     <button class="card-link" style="margin-top:12px;" onclick="reopenOnboarding()">Ver otra vez la bienvenida</button>`);
 
   // Respaldo
-  html += `<div class="card">
+  html += `<div class="card" data-tour="backup">
     <div class="card-head"><p class="card-title">Respaldo de tus datos</p></div>
     <div class="backup-row">
       <button class="btn backup-btn" onclick="toggleBackupBox()">📋 Copiar respaldo</button>
@@ -3768,6 +3787,13 @@ function renderMoreTab(c){
     ${renderRestoreDialogs()}
   </div>`;
 
+  html += `<div class="card" data-tour="help">
+    <div class="card-head"><div><p class="card-title">Ayuda</p><p class="card-sub">Cómo se usa la app</p></div></div>
+    <div class="btn-row">
+      <button class="btn btn-solid" style="flex:1;" onclick="startTour()">▶ Recorrido guiado</button>
+      <button class="btn" style="flex:1;" onclick="openVideo()">🎬 Ver video</button>
+    </div>
+  </div>`;
   html += `<div class="card about">
     <p class="card-title">Acerca de</p>
     <p class="about-by">Creada por <b>Brandon Poveda</b></p>
@@ -3858,7 +3884,7 @@ function renderQuestionsCard(){
       body = `${what}${sure}${foot(gk)}`;
     }
   }
-  return `<div class="card q-card">
+  return `<div class="card q-card" data-tour="questions">
     <div class="card-head" style="margin-bottom:8px;"><p class="card-title" style="font-size:15px;">Revisar movimientos</p><span class="section-count">${qs.length} pendiente${qs.length===1?'':'s'}</span></div>
     ${body}
   </div>`;
@@ -4278,7 +4304,7 @@ function addShotRow(){
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION = '3.3';
+const APP_VERSION = '3.4';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
@@ -4355,7 +4381,7 @@ function obSaveBalance(){
   if(el && el.value.trim() !== ''){ data.settings.currentBalance = parseMoney(el.value); saveData(); }
   obGo(4);
 }
-function obFinish(){ prefs.onboarded = true; savePrefs(); obStep = 0; activeTab = 'home'; render(); window.scrollTo(0,0); showToast(firstName() ? `¡Listo, ${firstName()}! Todo quedó guardado` : '¡Listo! Todo quedó guardado'); }
+function obFinish(){ prefs.onboarded = true; savePrefs(); obStep = 0; activeTab = 'home'; render(); window.scrollTo(0,0); if(!prefs.toured) setTimeout(() => startTour(), 350); else showToast(firstName() ? `¡Listo, ${firstName()}! Todo quedó guardado` : '¡Listo! Todo quedó guardado'); }
 function reopenOnboarding(){ prefs.onboarded = false; savePrefs(); obGo(1); }
 function obRestoreFile(input){
   const f = input.files && input.files[0]; input.value = '';
@@ -4447,6 +4473,114 @@ function fullBackupObject(){
   try{ for(let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if(k && k !== STORAGE_KEY && k !== PREFS_KEY && !(k in extra)) extra[k] = localStorage.getItem(k); } }catch(e){}
   return { app:'control-financiero', version:2, date: todayISO(), ledger: data, prefs, extra };
 }
+
+// ================================================================ RECORRIDO GUIADO
+// Oscurece la pantalla, ilumina una parte de la app y explica para qué sirve.
+const TOUR = [
+  { tab:'home', sel:null, title:'Bienvenido a tu app 👋', text:'Te muestro en un minuto dónde está cada cosa. Toca <b>Siguiente</b> para avanzar o <b>Saltar</b> si ya la conoces.' },
+  { tab:'home', sel:'topbar', title:'Tu saludo', text:'Aquí arriba te saludo con tu nombre y ves en qué pantalla estás. El estilo del saludo se cambia en <b>Más → Personalizar</b>.' },
+  { tab:'home', sel:'apps', title:'Tus apps', text:'Rotador, Bot Señales, Notas, Inglés e Interés compuesto. Toca cualquiera para abrirla; la flecha de atrás te devuelve aquí.' },
+  { tab:'home', sel:'questions', title:'Preguntas de la app', text:'Cuando la app no está segura de qué es un movimiento del banco, te pregunta aquí. Respondes una vez y aprende para la próxima.' },
+  { tab:'home', sel:'hero', title:'Tu semana', text:'Lo más importante: cuánto entró esta semana, cuánto gastaste y si vas cubierto para lo que tienes que pagar. Verde = vas bien.' },
+  { tab:'home', sel:'weeks', title:'Las próximas semanas', text:'Cuánto te conviene ganar en cada una de las próximas semanas según lo que vence. Toca una semana para ver qué pagos caen ahí.' },
+  { tab:'home', sel:'upcoming', title:'Próximos pagos', text:'Lo que vence en los próximos 30 días. Toca <b>Ya lo pagué</b> cuando pagues, o <b>Mover</b> para correr un pago unos días.' },
+  { tab:'home', sel:'spend', title:'En qué se te va la plata', text:'Tus gastos del mes por tipo: hormiga, fijos, deudas y otros. Más abajo ves de dónde entra la plata y tus semanas en gráfica.' },
+  { tab:'mov', sel:'tab-mov', title:'Movimientos', text:'Aquí está todo lo que entra y sale.' },
+  { tab:'mov', sel:'movseg', title:'Ingresos, hormiga, banco y préstamos', text:'<b>Ingresos</b>: tus pagos y tatuajes. <b>Hormiga</b>: gastos chiquitos. <b>Banco</b>: todo lo que vino del extracto. <b>Préstamos</b>: plata que prestas o te prestan.' },
+  { tab:'debts', sel:'debtsum', title:'Deudas y gastos fijos', text:'Cuánto debes en total y cuánto pagas al mes. Abajo agregas deudas, gastos fijos (renta, teléfono…) y ves los cobros que se repiten.' },
+  { tab:'debts', sel:'debtseg', title:'Si algo sale repetido', text:'Toca un gasto o deuda para editarlo. Si dos son lo mismo (como el carro), usa <b>Unir con…</b> para que no se cuente dos veces.' },
+  { tab:'import', sel:'upload', title:'Subir extracto', text:'Descarga el PDF de TD Bank y súbelo aquí. La app saca todos los movimientos sola y no repite los que ya tenías.' },
+  { tab:'import', sel:'shot', title:'O una captura', text:'Si el extracto no trae lo de esta semana, toma captura de pantalla en la app del banco y súbela aquí.' },
+  { tab:'more', sel:'sec-savings', title:'Más', text:'Ahorro, estadísticas, resumen por fechas, historial y tus apps.' },
+  { tab:'more', sel:'export', title:'Pásamelo a mí', text:'Exporta un resumen y pégamelo en un chat para que te ayude a analizar tus finanzas.' },
+  { tab:'more', sel:'sec-personalize', title:'Ponla a tu gusto', text:'Tu nombre, color, fondo, letra, tamaño y saludo.' },
+  { tab:'more', sel:'backup', title:'Respaldo', text:'Guarda un archivo con todo (finanzas y apps) de vez en cuando. Si cambias de teléfono, lo restauras y queda todo igual.' },
+  { tab:'home', sel:null, title:'¡Listo! 🎉', text:'Eso es todo. Puedes repetir este recorrido o ver el video en <b>Más → Ayuda</b>.' }
+];
+let tourIdx = -1, tourAuto = null;
+function tourActive(){ return tourIdx >= 0; }
+function startTour(auto){
+  tourIdx = 0; tourAuto = auto || null;
+  document.body.classList.add('touring');
+  tourSavedZoom = document.body.style.zoom; document.body.style.zoom = 1;
+  tourShow();
+}
+let tourSavedZoom = '';
+function tourEnd(){
+  tourIdx = -1; clearTimeout(tourAuto && tourAuto.t);
+  document.body.classList.remove('touring');
+  document.body.style.zoom = tourSavedZoom || '';
+  const r = document.getElementById('tour-root'); if(r) r.innerHTML = '';
+  prefs.toured = true; savePrefs();
+  activeTab = 'home'; render(); window.scrollTo(0,0);
+}
+function tourNext(){ if(tourIdx < TOUR.length - 1){ tourIdx++; tourShow(); } else tourEnd(); }
+function tourPrev(){ if(tourIdx > 0){ tourIdx--; tourShow(); } }
+function tourEl(st){
+  if(!st.sel) return null;
+  const els = Array.from(document.querySelectorAll(`[data-tour="${st.sel}"]`));
+  return els.find(e => e.offsetParent !== null || e.getClientRects().length) || null;
+}
+function tourShow(){
+  let st = TOUR[tourIdx];
+  if(st.tab && activeTab !== st.tab){ activeTab = st.tab; if(st.tab === 'mov') movSeg = 'incomes'; if(st.tab === 'debts') debtSeg = 'debts'; }
+  if(st.sel && st.sel.startsWith('sec-')){ /* abre la sección para que se vea */ }
+  render();
+  let root = document.getElementById('tour-root');
+  if(!root){ root = document.createElement('div'); root.id = 'tour-root'; document.body.appendChild(root); }
+  let el = tourEl(st);
+  // si esa parte no existe todavía (por ejemplo no hay preguntas), se salta
+  if(st.sel && !el){ if(tourIdx < TOUR.length - 1){ tourIdx++; return tourShow(); } }
+  if(el){
+    const fixed = getComputedStyle(el).position === 'fixed' || el.closest('.tabbar');
+    if(!fixed){ const r0 = el.getBoundingClientRect(); window.scrollTo(0, Math.max(0, window.scrollY + r0.top - Math.max(90, (window.innerHeight - Math.min(r0.height, window.innerHeight * .5)) / 2 - 60))); }
+  } else window.scrollTo(0,0);
+  setTimeout(() => tourDraw(el, st), 60);
+}
+function tourDraw(el, st){
+  const root = document.getElementById('tour-root'); if(!root || tourIdx < 0) return;
+  const vw = window.innerWidth, vh = window.innerHeight, pad = 8;
+  let hole = '', tipPos;
+  const n = TOUR.length;
+  if(el){
+    const r = el.getBoundingClientRect();
+    const top = Math.max(6, r.top - pad), left = Math.max(6, r.left - pad);
+    const w = Math.min(vw - 12, r.width + pad*2), h = Math.min(vh - 12, r.height + pad*2);
+    hole = `<div class="tour-hole" style="top:${top}px;left:${left}px;width:${w}px;height:${h}px;"></div>`;
+    const below = vh - (top + h), above = top;
+    tipPos = below >= 210 || below > above ? `top:${Math.min(vh - 200, top + h + 12)}px;` : `bottom:${Math.min(vh - 200, vh - top + 12)}px;`;
+  } else {
+    hole = `<div class="tour-dim"></div>`;
+    tipPos = `top:${Math.round(vh * .32)}px;`;
+  }
+  root.innerHTML = `${hole}
+    <div class="tour-tip" style="${tipPos}">
+      <div class="tour-count">${tourIdx + 1} de ${n}</div>
+      <p class="tour-title">${st.title}</p>
+      <p class="tour-text">${st.text}</p>
+      <div class="tour-btns">
+        <button class="card-link" onclick="tourEnd()" style="color:var(--ink-faint);">Saltar</button>
+        <span style="flex:1;"></span>
+        ${tourIdx > 0 ? `<button class="btn" onclick="tourPrev()">Atrás</button>` : ''}
+        <button class="btn btn-solid" onclick="tourNext()">${tourIdx === n - 1 ? 'Terminar' : 'Siguiente'}</button>
+      </div>
+    </div>`;
+  if(tourAuto){ clearTimeout(tourAuto.t); tourAuto.t = setTimeout(tourNext, tourAuto.ms || 4200); }
+}
+window.addEventListener('resize', () => { if(tourActive()) tourDraw(tourEl(TOUR[tourIdx]), TOUR[tourIdx]); });
+
+// ---- video tutorial ----
+let showVideo = false;
+function openVideo(){
+  let root = document.getElementById('tour-root');
+  if(!root){ root = document.createElement('div'); root.id = 'tour-root'; document.body.appendChild(root); }
+  root.innerHTML = `<div class="video-wrap" onclick="if(event.target===this)closeVideo()">
+    <div class="video-box">
+      <video src="tutorial.webm" controls autoplay playsinline style="width:100%;border-radius:12px;background:#000;display:block;max-height:78vh;"></video>
+      <div class="btn-row" style="margin-top:10px;"><button class="btn" style="flex:1;" onclick="closeVideo()">Cerrar</button><button class="btn btn-solid" style="flex:1;" onclick="closeVideo();startTour()">Hacer el recorrido</button></div>
+    </div></div>`;
+}
+function closeVideo(){ const r = document.getElementById('tour-root'); if(r) r.innerHTML = ''; }
 
 loadData();
 </script>
