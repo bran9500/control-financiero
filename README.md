@@ -111,3 +111,8 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 
 ### 3.6
 - Video tutorial en MP4 (se veía cortado con fondo gris en algunos teléfonos).
+
+### 3.7
+- Video tutorial **con voz en español** (acento latino) y música suave de fondo (2:30).
+- **Monedas de 20 países** (Colombia, México, Perú, Chile, Argentina, Venezuela, Centroamérica, Rep. Dominicana, Bolivia, Paraguay, Uruguay, Brasil, España, Canadá, Reino Unido…), cada una escrita como se usa allá.
+- **Cambio de moneda** (Más): convertidor con tasas incluidas en la app que se actualizan solas con internet.
