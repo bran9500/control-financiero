@@ -92,6 +92,52 @@
   body.touring #tour-root::before{display:block;}
   .video-wrap{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px;}
   .video-box{width:100%;max-width:420px;}
+  /* ---------- Botones de arriba ---------- */
+  .top-actions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;align-self:flex-start;margin-top:2px;}
+  .top-btns{display:flex;gap:6px;align-items:center;}
+  .top-pill{background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent);border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--sans);}
+  .top-ico{width:36px;height:36px;border-radius:12px;background:var(--surface);border:1px solid var(--line);color:var(--ink-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;}
+  .top-ico svg{width:18px;height:18px;}
+  /* ---------- Apps plegables ---------- */
+  .apps-fold{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:6px;margin-bottom:12px;}
+  .apps-mini{flex:1;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;}
+  .apps-mini::-webkit-scrollbar{display:none;}
+  .app-mini{flex:1;min-width:58px;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--accent);padding:6px 2px;border-radius:12px;cursor:pointer;font-family:var(--sans);}
+  .app-mini svg{width:21px;height:21px;}
+  .app-mini span{font-size:10.5px;color:var(--ink-dim);}
+  .app-mini:active{background:var(--surface-raised);}
+  .apps-more{width:34px;align-self:stretch;background:var(--surface-raised);border:none;border-radius:10px;color:var(--ink-dim);cursor:pointer;font-size:18px;}
+  .apps-more .chevron{display:inline-block;transform:rotate(90deg);}
+  .apps-fold.open{display:block;padding:10px 10px 0 10px;}
+  .apps-fold-head{width:100%;display:flex;justify-content:space-between;align-items:center;background:none;border:none;color:var(--ink-dim);font-size:13px;padding:2px 4px 10px 4px;cursor:pointer;font-family:var(--sans);}
+  .apps-fold-head .chevron.open{transform:rotate(-90deg);}
+  /* ---------- Ajustes ---------- */
+  .set-card{padding:0;}
+  .set-head{width:100%;display:flex;justify-content:space-between;align-items:center;background:none;border:none;color:var(--ink);padding:16px;cursor:pointer;text-align:left;font-family:var(--sans);}
+  .set-body{padding:0 16px 16px 16px;}
+  .set-links{display:flex;flex-direction:column;margin-top:6px;}
+  .set-links button{background:none;border:none;border-top:1px solid var(--line);color:var(--ink);text-align:left;padding:13px 2px;font-size:14.5px;cursor:pointer;font-family:var(--sans);}
+  .set-links button:first-child{border-top:none;}
+  .opt-grid.two{grid-template-columns:1fr 1fr;margin-bottom:6px;}
+  /* ---------- Ayuda ---------- */
+  .help-search{display:flex;align-items:center;gap:10px;background:var(--surface);border:1.5px solid var(--accent-line);border-radius:14px;padding:4px 14px;margin-bottom:10px;}
+  .help-ico{color:var(--ink-faint);display:flex;}
+  .help-ico svg{width:18px;height:18px;}
+  .help-search input{flex:1;background:none;border:none;color:var(--ink);font-size:16px;padding:11px 0;font-family:var(--sans);}
+  .help-search input:focus{outline:none;}
+  .help-sugg{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;scrollbar-width:none;}
+  .help-sugg::-webkit-scrollbar{display:none;}
+  .help-sugg .chip{white-space:nowrap;}
+  .faq{border-top:1px solid var(--line);}
+  .faq-q{width:100%;display:flex;justify-content:space-between;gap:10px;align-items:center;background:none;border:none;color:var(--ink);text-align:left;padding:13px 0;font-size:14.5px;cursor:pointer;font-family:var(--sans);}
+  .faq-a{font-size:13.5px;color:var(--ink-dim);line-height:1.6;padding:0 0 14px 0;}
+  .faq-a b{color:var(--ink);}
+  .help-go{display:flex;flex-direction:column;gap:6px;}
+  .help-go button{display:flex;justify-content:space-between;align-items:center;background:var(--surface-raised);border:1px solid var(--line);border-radius:12px;color:var(--ink);padding:12px 14px;font-size:14px;cursor:pointer;text-align:left;font-family:var(--sans);}
+  .help-go button span{color:var(--accent);font-size:18px;}
+  .preview-bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;background:var(--accent);color:var(--on-accent);border-radius:12px;padding:9px 12px;margin:-6px 0 12px 0;font-size:12.5px;font-weight:600;}
+  .preview-bar span{flex:1;}
+  .preview-bar button{background:var(--on-accent);color:var(--accent);border:none;border-radius:999px;padding:6px 14px;font-weight:700;cursor:pointer;}
   .page-title{font-family:var(--serif);font-size:26px;margin:0;font-weight:normal;}
   .today{font-size:12.5px;color:var(--ink-faint);margin:2px 0 0 0;}
   .save-status{font-size:12px;min-height:16px;margin:0;color:var(--ink-faint);text-align:right;}
@@ -450,6 +496,11 @@ function getGreeting(){
 
 const fmtMoney = n => {
   const sign = n < 0 ? '-' : '';
+  const cur = (typeof currencyInfo === 'function') ? currencyInfo() : null;
+  if(cur && cur.code !== 'USD'){
+    const s = Math.abs(n).toLocaleString(cur.locale, { minimumFractionDigits: cur.dec, maximumFractionDigits: cur.dec });
+    return sign + (cur.after ? s + ' ' + cur.sym : cur.sym + s);
+  }
   return sign + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
 };
 
@@ -463,7 +514,10 @@ function escapeAttr(s){
 // convierta "12,788" en 12.788. Acepta tanto "12,788.50" como "12788.50".
 function parseMoney(v){
   if(v === null || v === undefined) return 0;
-  const cleaned = String(v).trim().replace(/,/g, '');
+  let raw = String(v).trim();
+  // Pesos colombianos / euros: el punto separa miles y la coma es decimal ("1.500.000" o "12,50").
+  if(typeof currencyInfo === 'function' && currencyInfo().dotThousands) raw = raw.replace(/\./g, '').replace(',', '.');
+  const cleaned = raw.replace(/,/g, '');
   const n = parseFloat(cleaned);
   return isNaN(n) ? 0 : n;
 }
@@ -471,8 +525,7 @@ function parseMoney(v){
 function startOfWeek(d){
   const date = new Date(d);
   const day = date.getDay(); // 0 Sun .. 6 Sat
-  const ws = (typeof prefs !== 'undefined' && prefs && prefs.weekStart != null) ? prefs.weekStart : 1;
-  const diff = -((day - ws + 7) % 7); // al día en que empieza la semana (lunes por defecto)
+  const diff = (day === 0 ? -6 : 1) - day; // lunes (fijo: los pagos guardados usan esta semana como referencia)
   date.setDate(date.getDate() + diff);
   date.setHours(0,0,0,0);
   return date;
@@ -652,6 +705,7 @@ function cancelRestore(){
 }
 
 function saveData(){
+  if(typeof previewMode !== 'undefined' && previewMode){ return; }
   if(loadState === 'unavailable'){
     setSaveStatus('error');
     return;
@@ -962,11 +1016,13 @@ function renderRangeSummary(r){
 
 function computeAll(){
   const today = new Date(); today.setHours(0,0,0,0);
-  const weekStart = startOfWeek(today);
-  const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+6); weekEnd.setHours(23,59,59,999);
+  // El "periodo" es la semana, quincena o mes según cada cuánto te pagan (Más → Personalizar).
+  const per = periodBounds(today);
+  const weekStart = per.s, weekEnd = per.e;
+  const div = periodsPerMonth();
 
-  const weeklyEquivDebt = data.debts.map(d => ({...d, weekly: (d.monthlyPayment||0)/4.345}));
-  const weeklyEquivExp = data.expenses.map(e => ({...e, weekly: expenseMonthly(e)/4.345}));
+  const weeklyEquivDebt = data.debts.map(d => ({...d, weekly: (d.monthlyPayment||0)/div}));
+  const weeklyEquivExp = data.expenses.map(e => ({...e, weekly: expenseMonthly(e)/div}));
   const weeklyTarget = weeklyEquivDebt.reduce((s,d)=>s+d.weekly,0) + weeklyEquivExp.reduce((s,e)=>s+e.weekly,0);
   const monthlyTotal = data.debts.reduce((s,d)=>s+(d.monthlyPayment||0),0) + data.expenses.reduce((s,e)=>s+expenseMonthly(e),0);
 
@@ -1000,9 +1056,11 @@ function computeAll(){
 
   // Esta semana y las 4 siguientes: lo que vence (menos lo ya pagado) y lo que conviene ganar.
   const weeksAhead = [];
+  let cursor = weekStart;
   for(let w=0; w<5; w++){
-    const ws = addDays(weekStart, w*7);
-    const we = addDays(ws, 6); we.setHours(23,59,59,999);
+    const pb = periodBounds(cursor);
+    const ws = pb.s, we = pb.e;
+    cursor = new Date(we.getFullYear(), we.getMonth(), we.getDate() + 1);
     const occ = w === 0 ? occWeek : occurrencesInRange(ws, we);
     const due = occ.reduce((s,o)=>s+o.remaining,0);
     weeksAhead.push({ weekStart: ws, weekEnd: we, due, need: Math.max(weeklyTarget, due), items: occ, isCurrent: w===0 });
@@ -1013,11 +1071,12 @@ function computeAll(){
 
 function pastWeeksHistory(limit){
   const today = new Date(); today.setHours(0,0,0,0);
-  const curWeekStart = startOfWeek(today);
   const weeks = [];
+  let cur = periodBounds(today).s;
   for(let w=1; w<=limit; w++){
-    const ws = new Date(curWeekStart); ws.setDate(ws.getDate() - w*7);
-    const we = new Date(ws); we.setDate(we.getDate()+6); we.setHours(23,59,59,999);
+    const prev = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() - 1);
+    const pb = periodBounds(prev);
+    const ws = pb.s, we = pb.e; cur = ws;
     const income = sumInRange(allIncomes(), ws, we);
     const hormiga = sumInRange(allHormiga(), ws, we);
     const gasto = sumInRange(allOtherSpend(), ws, we);
@@ -1678,7 +1737,7 @@ function topMerchants(s, e, n){
 }
 function weeklySeries(nWeeks){
   const today = new Date(); today.setHours(0,0,0,0);
-  const cur = startOfWeek(today);
+  const cur = startOfUserWeek(today);
   const out = [];
   for(let w = nWeeks-1; w >= 0; w--){
     const ws = new Date(cur); ws.setDate(ws.getDate() - w*7);
@@ -1698,8 +1757,10 @@ function niceMax(v){
   return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
 }
 function shortMoney(n){
-  if(n >= 1000) return '$' + (n/1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/,'') + 'k';
-  return '$' + Math.round(n);
+  const sy = currencyInfo().sym;
+  if(n >= 1e6) return sy + (n/1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/,'') + 'M';
+  if(n >= 1000) return sy + (n/1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/,'') + 'k';
+  return sy + Math.round(n);
 }
 
 // =====================================================================
@@ -2325,10 +2386,10 @@ function buildSummaryText(){
   const c = computeAll();
   lines.push('## Situación actual');
   lines.push(`- Saldo actual (lo que tengo): ${fmtMoney(c.currentBalance)}`);
-  lines.push(`- Meta semanal promedio (deudas + gastos fijos): ${fmtMoney(c.weeklyTarget)}`);
+  lines.push(`- Meta ${PL().adj} promedio (deudas + gastos fijos): ${fmtMoney(c.weeklyTarget)}`);
   lines.push(`- Total mensual comprometido: ${fmtMoney(c.monthlyTotal)}`);
   lines.push(`- Deuda total: ${fmtMoney(c.totalDebt)}`);
-  lines.push(`- Esta semana: ingresé ${fmtMoney(c.incomeThisWeek)}, gasté ${fmtMoney(c.hormigaThisWeek + c.gastoThisWeek)} (hormiga ${fmtMoney(c.hormigaThisWeek)}), me falta ${fmtMoney(Math.max(c.shortfall,0))}`);
+  lines.push(`- ${capFirst(PL().art)}: ingresé ${fmtMoney(c.incomeThisWeek)}, gasté ${fmtMoney(c.hormigaThisWeek + c.gastoThisWeek)} (hormiga ${fmtMoney(c.hormigaThisWeek)}), me falta ${fmtMoney(Math.max(c.shortfall,0))}`);
   lines.push('');
   for(let i=0; i<3; i++){
     const b = monthBounds(-i);
@@ -2417,6 +2478,7 @@ function openSubApp(name){
 }
 
 function scheduleNativeReminders(){
+  if(typeof previewMode !== 'undefined' && previewMode) return;
   pushWidget();
   if(!(window.Android && Android.scheduleReminders)) return;
   const now = Date.now();
@@ -2957,6 +3019,8 @@ function submitLoan(){
 let showOlder = {}; // { lista: bool } — meses anteriores escondidos por defecto
 
 const ICONS = {
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   camera:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg>',
   mov:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16"/><path d="m3 8 4-4 4 4"/><path d="M17 20V4"/><path d="m21 16-4 4-4-4"/></svg>',
@@ -2964,7 +3028,7 @@ const ICONS = {
   import:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>',
   more:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>'
 };
-const TAB_TITLES = { home:'Tu semana', mov:'Movimientos', debts:'Deudas y fijos', import:'Subir extracto', more:'Más' };
+const TAB_TITLES = { home:'Tu semana', mov:'Movimientos', debts:'Deudas y fijos', import:'Subir extracto', more:'Más', settings:'Ajustes', help:'Ayuda' };
 
 function render(){
   const app = document.getElementById('app');
@@ -2980,16 +3044,18 @@ function render(){
     return;
   }
 
-  if(needsOnboarding()){ app.innerHTML = renderOnboarding(); return; }
+  if(needsOnboarding()){ app.innerHTML = previewBanner() + renderOnboarding(); return; }
   const c = computeAll();
   let body = '';
   if(activeTab === 'home') body = renderHome(c);
   else if(activeTab === 'mov') body = renderMovTab(c);
   else if(activeTab === 'debts') body = renderDebtsTab(c);
   else if(activeTab === 'import') body = renderImportTab();
+  else if(activeTab === 'settings') body = renderSettingsPage();
+  else if(activeTab === 'help') body = renderHelpPage();
   else body = renderMoreTab(c);
 
-  app.innerHTML = renderTopbar() + body + renderTabbar() + renderSheet(c);
+  app.innerHTML = previewBanner() + renderTopbar() + body + renderTabbar() + renderSheet(c);
   renderStatusOnly();
 }
 
@@ -2998,10 +3064,17 @@ function renderTopbar(){
   return `<div class="topbar" data-tour="topbar">
     <div>
       <p class="greeting">${greetingLine()}</p>
-      <p class="page-title">${TAB_TITLES[activeTab]}</p>
+      <p class="page-title">${activeTab==='home' ? 'Tu ' + PL().noun : TAB_TITLES[activeTab]}</p>
       <p class="today">${todayStr}</p>
     </div>
-    <p class="save-status" id="save-status"></p>
+    <div class="top-actions">
+      <div class="top-btns">
+        <button class="top-pill" data-tour="btn-help" onclick="openHelp()">Tutorial</button>
+        <button class="top-ico" onclick="openHelp()" aria-label="Buscar">${ICONS.search}</button>
+        <button class="top-ico" data-tour="btn-settings" onclick="openSettings()" aria-label="Ajustes">${ICONS.gear}</button>
+      </div>
+      <p class="save-status" id="save-status"></p>
+    </div>
   </div>`;
 }
 
@@ -3026,7 +3099,7 @@ function renderAppsRow(){
 }
 
 function renderHome(c){
-  let html = renderAppsRow();
+  let html = renderAppsBar();
   html += renderQuestionsCard();
   html += renderLoansDueCard();
 
@@ -3044,7 +3117,7 @@ function renderHome(c){
   const covered = c.shortfall <= 0;
   const next = c.weeksAhead.slice(1, 4);
   html += `<div class="card hero-card" data-tour="hero">
-    <p class="hero-label">${covered ? 'Vas cubierto esta semana' : 'Te falta ganar esta semana'}</p>
+    <p class="hero-label">${covered ? 'Vas cubierto ' + PL().art : 'Te falta ganar ' + PL().art}</p>
     <p class="hero-number ${covered?'good':'warn'}">${fmtMoney(Math.max(c.shortfall,0))}</p>
     <div class="progress ${covered?'':'warn'}"><span style="width:${(pct*100).toFixed(1)}%"></span></div>
     <p class="hero-sub">Entró ${fmtMoney(c.incomeThisWeek)} · gastaste ${fmtMoney(c.hormigaThisWeek + c.gastoThisWeek)} · disponible ${fmtMoney(c.availableThisWeek)} de una meta de ${fmtMoney(c.need)}</p>
@@ -3052,7 +3125,7 @@ function renderHome(c){
       <span class="lbl">${c.realGap > 0 ? 'Sumando tu saldo, aún te faltan' : 'Sumando tu saldo, te sobran'}</span>
       <span class="val" style="color:${c.realGap>0?'var(--warn)':'var(--good)'};">${fmtMoney(Math.abs(c.realGap))}</span>
     </div>
-    <p class="sub-head" style="margin:16px 0 8px 0;">Lo que conviene ganar las próximas semanas</p>
+    <p class="sub-head" style="margin:16px 0 8px 0;">Lo que conviene ganar ${PL().noun === 'mes' ? 'los próximos meses' : 'las próximas ' + PL().plural}</p>
     <div class="week-chips" data-tour="weeks">${next.map((w,i) => `
       <button class="week-chip" onclick="sheet={type:'week', idx:${i+1}};render()">
         <span class="wc-range">${fmtShortDate(dayISO(w.weekStart))} – ${fmtShortDate(dayISO(w.weekEnd))}</span>
@@ -3060,7 +3133,7 @@ function renderHome(c){
         <span class="wc-due">${w.items.filter(o=>o.remaining>0).length} pago${w.items.filter(o=>o.remaining>0).length===1?'':'s'}</span>
       </button>`).join('')}
     </div>
-    <p class="item-meta" style="margin-top:8px;">Cada semana es el mayor entre tu meta promedio (${fmtMoney(c.weeklyTarget)}) y lo que vence esa semana. Toca una para ver qué pagos caen ahí.</p>
+    <p class="item-meta" style="margin-top:8px;">${PL().noun === 'mes' ? 'Cada mes' : 'Cada ' + PL().noun} es el mayor entre tu meta promedio (${fmtMoney(c.weeklyTarget)}) y lo que vence en ${PL().noun === 'mes' ? 'ese mes' : 'esa ' + PL().noun}. Toca uno para ver qué pagos caen ahí.</p>
   </div>`;
 
   // Mini tarjetas
@@ -3077,12 +3150,12 @@ function renderHome(c){
       <p class="mini-foot">${data.debts.length} deuda${data.debts.length===1?'':'s'}</p>
     </div>
     <div class="mini">
-      <p class="mini-label">Hormiga esta semana</p>
+      <p class="mini-label">Hormiga ${PL().art}</p>
       <p class="mini-value" style="${hormigaOver?'color:var(--warn);':''}">${fmtMoney(c.hormigaThisWeek)}</p>
       <p class="mini-foot">${hormigaOver ? 'Te pasaste por '+fmtMoney(c.hormigaOver) : 'Límite '+fmtMoney(c.hormigaLimit)}</p>
     </div>
     <div class="mini">
-      <p class="mini-label">Meta semanal</p>
+      <p class="mini-label">Meta ${PL().adj}</p>
       <p class="mini-value">${fmtMoney(c.weeklyTarget)}</p>
       <p class="mini-foot">${fmtMoney(c.monthlyTotal)} al mes</p>
     </div>
@@ -3291,14 +3364,14 @@ function hormigaBody(c){
       </div>`;
   return `
     <div class="item-row list-first" style="padding-top:0;">
-      <div class="item-main"><div class="item-meta">Límite semanal</div></div>
+      <div class="item-main"><div class="item-meta">Límite ${PL().adj}</div></div>
       <div class="item-amounts"><input type="text" inputmode="decimal" id="hormiga-limit" value="${c.hormigaLimit}" style="width:96px;text-align:right;" onchange="setHormigaLimit(this.value)"></div>
     </div>
     <div class="item-row">
-      <div class="item-main"><div class="item-meta">Gastado esta semana (a mano + banco)</div></div>
+      <div class="item-main"><div class="item-meta">Gastado ${PL().art} (a mano + banco)</div></div>
       <div class="item-amounts"><span class="item-amount" style="${hormigaWarn?'color:var(--warn);':''}">${fmtMoney(c.hormigaThisWeek)}</span></div>
     </div>
-    ${hormigaWarn ? `<div class="empty-note" style="color:var(--warn);padding-top:4px;">Te pasaste del límite por ${fmtMoney(c.hormigaOver)} esta semana.</div>` : ''}
+    ${hormigaWarn ? `<div class="empty-note" style="color:var(--warn);padding-top:4px;">Te pasaste del límite por ${fmtMoney(c.hormigaOver)} ${PL().art}.</div>` : ''}
     <div style="height:10px;"></div>
     ${monthGroupedList('hormiga', data.hormiga, row, 'Sin gastos hormiga anotados a mano este mes.')}
     ${(formOpen['hormiga'] || !!editingHormiga) ? `
@@ -3417,7 +3490,7 @@ function renderDebtsTab(c){
   const newRec = rec.filter(r => !r.tracked).length;
   let html = `<div class="mini-grid" data-tour="debtsum">
     <div class="mini"><p class="mini-label">Deuda total</p><p class="mini-value" style="color:var(--warn);">${fmtMoney(c.totalDebt)}</p><p class="mini-foot">${data.debts.length} deuda${data.debts.length===1?'':'s'}</p></div>
-    <div class="mini"><p class="mini-label">Pagos al mes</p><p class="mini-value">${fmtMoney(c.monthlyTotal)}</p><p class="mini-foot">${fmtMoney(c.weeklyTarget)} por semana</p></div>
+    <div class="mini"><p class="mini-label">Pagos al mes</p><p class="mini-value">${fmtMoney(c.monthlyTotal)}</p><p class="mini-foot">${fmtMoney(c.weeklyTarget)} ${PL().por}</p></div>
   </div>`;
   const segs = [['debts','Deudas'],['expenses','Gastos fijos'],['recurring','Cobros repetidos' + (newRec ? ` (${newRec})` : '')]];
   html += `<div class="seg" data-tour="debtseg">${segs.map(([k,l]) => `<button class="${debtSeg===k?'active':''}" onclick="setDebtSeg('${k}')">${l}</button>`).join('')}</div>`;
@@ -3692,8 +3765,8 @@ function renderMoreTab(c){
   const totalSavings = savingsTotal('emergency') + savingsTotal('investments');
   const statRow = (name, val, color, meta) => `<div class="item-row"><div class="item-main"><div class="item-name">${name}</div>${meta?`<div class="item-meta">${meta}</div>`:''}</div><div class="item-amounts"><span class="item-amount" style="${color?'color:'+color+';':''}">${val}</span></div></div>`;
   html += renderSection('stats', 'Estadísticas', '', `<div class="stat-list">
-    ${statRow('Ingreso semanal promedio', fmtMoney(avgIncome), '', `Últimas ${allWeeksForAvg.length} semanas con datos`)}
-    ${statRow('Gasto hormiga semanal promedio', fmtMoney(avgHormiga))}
+    ${statRow('Ingreso ' + PL().adj + ' promedio', fmtMoney(avgIncome), '', `Últimas ${allWeeksForAvg.length} ${PL().plural} con datos`)}
+    ${statRow('Gasto hormiga ' + PL().adj + ' promedio', fmtMoney(avgHormiga))}
     ${statRow('Deuda saldada hasta ahora', fmtMoney(totalPaidDebts), 'var(--good)')}
     ${statRow('Deuda pendiente', fmtMoney(c.totalDebt), 'var(--warn)')}
     ${statRow('Prestado sin devolver', fmtMoney(totalLoansOut))}
@@ -3734,7 +3807,7 @@ function renderMoreTab(c){
           ${ms.trading && ms.trading.any ? `<p class="item-meta" style="margin:0 0 10px 0;">Trading (aparte): depositaste ${fmtMoney(ms.trading.dep)}, retiraste ${fmtMoney(ms.trading.wd)} → <b style="color:${ms.trading.net<0?'var(--warn)':'var(--good)'};">${ms.trading.net<0?'-':'+'}${fmtMoney(Math.abs(ms.trading.net))}</b></p>` : ''}
         ` : ''}`;
     }).join('') : '<div class="empty-note" style="padding-top:0;">Aquí se van guardando los meses que terminan.</div>'}
-    <p class="sub-head">Semanas anteriores</p>
+    <p class="sub-head">${capFirst(PL().plural)} anteriores</p>
     ${pastWeeks.length ? pastWeeks.map(w=>`
       <div class="item-row">
         <div class="item-main">
@@ -3742,7 +3815,7 @@ function renderMoreTab(c){
           <div class="item-meta">Entró ${fmtMoney(w.income)} · hormiga ${fmtMoney(w.hormiga)}${w.gasto?` · otros ${fmtMoney(w.gasto)}`:''}</div>
         </div>
         <div class="item-amounts"><span class="item-amount" style="${w.net<0?'color:var(--warn);':'color:var(--good);'}">${fmtMoney(w.net)}</span></div>
-      </div>`).join('') : '<div class="empty-note" style="padding-top:0;">Sin semanas anteriores registradas todavía.</div>'}
+      </div>`).join('') : `<div class="empty-note" style="padding-top:0;">Sin ${PL().plural} anteriores registrad${PL().noun === 'mes' ? 'os' : 'as'} todavía.</div>`}
     <p class="sub-head">Deudas saldadas</p>
     ${paidDebts.length ? paidDebts.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`
       <div class="item-row">
@@ -3767,13 +3840,11 @@ function renderMoreTab(c){
     <button class="btn btn-solid btn-block" onclick="exportSummary()">Exportar resumen</button>
   </div>`;
 
-  // Personalizar
-  html += renderSection('personalize', 'Personalizar', '', `
-    <div class="field" style="margin-bottom:6px;"><label>Tu nombre</label><input type="text" value="${escapeAttr(prefs.name)}" placeholder="Tu nombre" onchange="setPref('name', this.value.trim())"></div>
-    ${renderPersonalize()}
-    <p class="ob-label">La semana empieza el</p>
-    <div class="opt-grid days">${[1,2,3,4,5,6,0].map(d => `<button class="opt ${prefs.weekStart===d?'on':''}" onclick="setPref('weekStart', ${d})">${capFirst(WEEKDAYS[d])}</button>`).join('')}</div>
-    <button class="card-link" style="margin-top:12px;" onclick="reopenOnboarding()">Ver otra vez la bienvenida</button>`);
+  // Ajustes y ayuda
+  html += `<div class="card">
+    <div class="card-head"><div><p class="card-title">Ajustes y ayuda</p><p class="card-sub">Nombre, colores, letra, pagos, moneda, tutorial</p></div></div>
+    <div class="btn-row"><button class="btn btn-solid" style="flex:1;" onclick="openSettings()">⚙ Ajustes</button><button class="btn" style="flex:1;" onclick="openHelp()">❓ Ayuda</button></div>
+  </div>`;
 
   // Respaldo
   html += `<div class="card" data-tour="backup">
@@ -3787,19 +3858,7 @@ function renderMoreTab(c){
     ${renderRestoreDialogs()}
   </div>`;
 
-  html += `<div class="card" data-tour="help">
-    <div class="card-head"><div><p class="card-title">Ayuda</p><p class="card-sub">Cómo se usa la app</p></div></div>
-    <div class="btn-row">
-      <button class="btn btn-solid" style="flex:1;" onclick="startTour()">▶ Recorrido guiado</button>
-      <button class="btn" style="flex:1;" onclick="openVideo()">🎬 Ver video</button>
-    </div>
-  </div>`;
-  html += `<div class="card about">
-    <p class="card-title">Acerca de</p>
-    <p class="about-by">Creada por <b>Brandon Poveda</b></p>
-    <p class="item-meta">Hecha con la ayuda de Claude · versión ${APP_VERSION}</p>
-  </div>`;
-  html += `<p class="footnote">Tus datos se guardan solo en este teléfono (no dependen de internet). La meta semanal reparte cada pago mensual entre 4.345 semanas. "Te falta" usa el mayor entre esa meta y lo que vence en los próximos 7 días, para que nunca te agarre corto. Los gastos hormiga y los otros gastos del banco se restan de lo que entra antes de calcular lo que falta. Los pagos de gastos fijos y deudas no se restan otra vez, porque ya están en la meta.</p>`;
+  html += `<p class="footnote">Tus datos se guardan solo en este teléfono (no dependen de internet). La meta ${PL().adj} reparte cada pago mensual entre los periodos de pago del mes. "Te falta" usa el mayor entre esa meta y lo que vence en ${PL().art}, para que nunca te agarre corto. Los gastos hormiga y los otros gastos del banco se restan de lo que entra antes de calcular lo que falta. Los pagos de gastos fijos y deudas no se restan otra vez, porque ya están en la meta.</p>`;
   return html;
 }
 
@@ -3939,12 +3998,12 @@ function renderSheet(c){
   } else if(sheet.type === 'week'){
     const w = c.weeksAhead[sheet.idx];
     if(!w){ sheet = null; return ''; }
-    title = `Semana del ${fmtShortDate(dayISO(w.weekStart))} al ${fmtShortDate(dayISO(w.weekEnd))}`;
+    title = `${capFirst(PL().noun)} del ${fmtShortDate(dayISO(w.weekStart))} al ${fmtShortDate(dayISO(w.weekEnd))}`;
     const items = w.items.slice().sort((a,b)=>a.date-b.date);
     body = `${items.length ? items.map(o => `<div class="mini-row"><span>${fmtShortDate(dayISO(o.date))} · ${escapeAttr(o.name)}${o.shifted?' <span class="item-meta" style="display:inline;">(movido)</span>':''}</span><b style="${o.remaining<=0.004?'color:var(--good);':''}">${o.remaining<=0.004?'pagado ✓':fmtMoney(o.remaining)}</b></div>`).join('') : '<p class="item-meta">No vence nada esta semana.</p>'}
-      <div class="total-line"><span>Vence esa semana</span><b>${fmtMoney(w.due)}</b></div>
+      <div class="total-line"><span>Vence en ese periodo</span><b>${fmtMoney(w.due)}</b></div>
       <div class="total-line" style="border-top:none;margin-top:0;"><span>Conviene ganar</span><b style="color:var(--warn);">${fmtMoney(w.need)}</b></div>
-      <p class="item-meta" style="margin-top:8px;">"Conviene ganar" es el mayor entre lo que vence esa semana y tu meta promedio (${fmtMoney(c.weeklyTarget)}), para ir guardando para los pagos grandes del mes.</p>`;
+      <p class="item-meta" style="margin-top:8px;">"Conviene ganar" es el mayor entre lo que vence en ese periodo y tu meta promedio (${fmtMoney(c.weeklyTarget)}), para ir guardando para los pagos grandes.</p>`;
   } else if(sheet.type === 'source'){
     const name = sheet.name;
     const b = monthBounds(0);
@@ -4304,7 +4363,7 @@ function addShotRow(){
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION = '3.4';
+const APP_VERSION = '3.5';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
@@ -4334,10 +4393,57 @@ const FONTS = {
 const SIZES = { normal:{ label:'Normal', z:1 }, grande:{ label:'Grande', z:1.08 }, xl:{ label:'Muy grande', z:1.16 } };
 const GREET_STYLES = { formal:'Buenos días, Brandon', parce:'¿Qué más, Brandon?', emoji:'☀️ Buenos días, Brandon' };
 
-function defaultPrefs(){ return { name:'', onboarded:false, accent:'verde', bg:'grafito', font:'clasica', size:'normal', greet:'formal', weekStart:1 }; }
+function defaultPrefs(){ return { name:'', onboarded:false, accent:'verde', bg:'grafito', font:'clasica', size:'normal', greet:'formal', weekStart:1, payFreq:'semanal', payDay:30, payAnchor:'', currency:'USD' }; }
 let prefs = loadPrefs();
 function loadPrefs(){ try{ return Object.assign(defaultPrefs(), JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); }catch(e){ return defaultPrefs(); } }
-function savePrefs(){ try{ localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); }catch(e){} }
+function savePrefs(){ if(typeof previewMode !== 'undefined' && previewMode) return; try{ localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); }catch(e){} }
+
+// ---- cada cuánto te pagan ----
+const PAY_FREQS = {
+  semanal:  { label:'Cada semana',     noun:'semana',   art:'esta semana',   plural:'semanas',   adj:'semanal',  por:'por semana' },
+  biweekly: { label:'Cada 2 semanas',  noun:'quincena', art:'esta quincena', plural:'quincenas', adj:'quincenal', por:'por quincena' },
+  quincenal:{ label:'Quincenal (15 y fin de mes)', noun:'quincena', art:'esta quincena', plural:'quincenas', adj:'quincenal', por:'por quincena' },
+  mensual:  { label:'Cada mes',        noun:'mes',      art:'este mes',      plural:'meses',     adj:'mensual',  por:'por mes' }
+};
+function payFreq(){ return (typeof prefs !== 'undefined' && prefs && PAY_FREQS[prefs.payFreq]) ? prefs.payFreq : 'semanal'; }
+function PL(){ return PAY_FREQS[payFreq()]; }
+function periodsPerMonth(){ return { semanal:4.345, biweekly:26/12, quincenal:2, mensual:1 }[payFreq()]; }
+function startOfUserWeek(d){
+  const date = new Date(d); date.setHours(0,0,0,0);
+  const ws = (typeof prefs !== 'undefined' && prefs && prefs.weekStart != null) ? prefs.weekStart : 1;
+  date.setDate(date.getDate() - ((date.getDay() - ws + 7) % 7));
+  return date;
+}
+function periodBounds(d){
+  const x = new Date(d); x.setHours(0,0,0,0);
+  const f = payFreq();
+  let s, e;
+  if(f === 'quincenal'){
+    if(x.getDate() <= 15){ s = new Date(x.getFullYear(), x.getMonth(), 1); e = new Date(x.getFullYear(), x.getMonth(), 15); }
+    else { s = new Date(x.getFullYear(), x.getMonth(), 16); e = new Date(x.getFullYear(), x.getMonth() + 1, 0); }
+  } else if(f === 'mensual'){
+    const pd = Math.min(Math.max(1, +prefs.payDay || 1), 28);
+    s = x.getDate() >= pd ? new Date(x.getFullYear(), x.getMonth(), pd) : new Date(x.getFullYear(), x.getMonth() - 1, pd);
+    e = new Date(s.getFullYear(), s.getMonth() + 1, pd - 1);
+  } else if(f === 'biweekly'){
+    let a = prefs.payAnchor ? new Date(prefs.payAnchor + 'T00:00:00') : startOfUserWeek(new Date(2026, 0, 5));
+    const days = Math.floor((x - a) / 86400000);
+    s = new Date(a.getFullYear(), a.getMonth(), a.getDate() + Math.floor(days / 14) * 14);
+    e = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 13);
+  } else {
+    s = startOfUserWeek(x); e = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 6);
+  }
+  e.setHours(23,59,59,999);
+  return { s, e };
+}
+// ---- moneda ----
+const CURRENCIES = {
+  USD: { label:'Dólar (US$)',          sym:'$', locale:'en-US', dec:2 },
+  COP: { label:'Peso colombiano (COP)', sym:'$', locale:'es-CO', dec:0, dotThousands:true },
+  MXN: { label:'Peso mexicano (MXN)',  sym:'$', locale:'es-MX', dec:2 },
+  EUR: { label:'Euro (€)',              sym:'€', locale:'es-ES', dec:2, dotThousands:true, after:true }
+};
+function currencyInfo(){ const k = (typeof prefs !== 'undefined' && prefs && CURRENCIES[prefs.currency]) ? prefs.currency : 'USD'; return Object.assign({ code:k }, CURRENCIES[k]); }
 
 function hexA(hex, a){ const n = parseInt(hex.slice(1), 16); return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`; }
 function applyPrefs(){
@@ -4386,6 +4492,7 @@ function reopenOnboarding(){ prefs.onboarded = false; savePrefs(); obGo(1); }
 function obRestoreFile(input){
   const f = input.files && input.files[0]; input.value = '';
   if(!f) return;
+  if(previewMode){ obError = 'En la vista previa no se restaura nada. Sal de la vista previa primero.'; render(); return; }
   readFileText(f).then(txt => {
     let parsed; try{ parsed = JSON.parse(txt); }catch(e){ obError = 'Ese archivo no es un respaldo de la app.'; render(); return; }
     if(!parsed || typeof parsed !== 'object' || !(parsed.debts || parsed.bank || parsed.incomes || parsed.ledger)){ obError = 'Ese archivo no parece un respaldo de Control Financiero.'; render(); return; }
@@ -4444,16 +4551,18 @@ function renderOnboarding(){
       <input type="text" id="ob-name" class="ob-input" placeholder="Tu nombre" value="${escapeAttr(prefs.name)}" autofocus autocomplete="given-name" onkeydown="if(event.key==='Enter')obSaveName()">
       <button class="btn btn-solid ob-main" onclick="obSaveName()">Siguiente</button>`;
   } else if(obStep === 2){
-    body = `${obDots()}<p class="ob-q">¿Qué día empieza tu semana?</p>
-      <p class="ob-text">La app cuenta tus ingresos y gastos por semana. Muchos la empiezan el día que les pagan.</p>
-      <div class="opt-grid days">${[1,2,3,4,5,6,0].map(d => `<button class="opt ${prefs.weekStart===d?'on':''}" onclick="prefs.weekStart=${d};savePrefs();render()">${capFirst(WEEKDAYS[d])}</button>`).join('')}</div>
+    body = `${obDots()}<p class="ob-q">¿Cada cuánto te pagan?</p>
+      <p class="ob-text">La app te muestra cuánto entra, cuánto sale y si vas cubierto en cada periodo de pago.</p>
+      ${renderPayOptions()}
       <button class="btn btn-solid ob-main" onclick="obGo(3)">Siguiente</button>
       <button class="card-link ob-skip" onclick="obGo(1)">← Atrás</button>`;
   } else if(obStep === 3){
     const cur = (data.settings && data.settings.currentBalance) || 0;
-    body = `${obDots()}<p class="ob-q">¿Cuánto tienes hoy en el banco?</p>
+    body = `${obDots()}<p class="ob-q">¿En qué moneda?</p>
+      ${renderCurrencyOptions()}
+      <p class="ob-q" style="margin-top:24px;">¿Cuánto tienes hoy en el banco?</p>
       <p class="ob-text">Es tu punto de partida. Después se actualiza solo cuando subes extractos o capturas.</p>
-      <div class="ob-money"><span>$</span><input type="number" id="ob-bal" inputmode="decimal" step="0.01" placeholder="0.00" value="${cur ? cur.toFixed(2) : ''}" autofocus onkeydown="if(event.key==='Enter')obSaveBalance()"></div>
+      <div class="ob-money"><span>${currencyInfo().sym}</span><input type="number" id="ob-bal" inputmode="decimal" step="0.01" placeholder="0.00" value="${cur ? cur.toFixed(2) : ''}" autofocus onkeydown="if(event.key==='Enter')obSaveBalance()"></div>
       <button class="btn btn-solid ob-main" onclick="obSaveBalance()">Siguiente</button>
       <button class="card-link ob-skip" onclick="obGo(4)">Saltar por ahora</button>`;
   } else {
@@ -4474,15 +4583,221 @@ function fullBackupObject(){
   return { app:'control-financiero', version:2, date: todayISO(), ledger: data, prefs, extra };
 }
 
+// ================================================================ AJUSTES · AYUDA · VISTA PREVIA
+// ---- opciones de pago y moneda (se usan en la bienvenida y en Ajustes) ----
+function setPay(k, v){ prefs[k] = v; savePrefs(); render(); }
+function renderPayOptions(){
+  const f = payFreq();
+  let extra = '';
+  if(f === 'semanal'){
+    extra = `<p class="ob-label">¿Qué día te pagan? (ahí empieza tu semana)</p>
+      <div class="opt-grid days">${[1,2,3,4,5,6,0].map(d => `<button class="opt ${prefs.weekStart===d?'on':''}" onclick="setPay('weekStart', ${d})">${capFirst(WEEKDAYS[d])}</button>`).join('')}</div>`;
+  } else if(f === 'biweekly'){
+    extra = `<p class="ob-label">¿Cuándo fue tu último pago?</p>
+      <input type="date" class="ob-input" value="${prefs.payAnchor || todayISO()}" onchange="setPay('payAnchor', this.value)">`;
+  } else if(f === 'quincenal'){
+    extra = `<p class="item-meta" style="margin:10px 0 14px 0;">Tus quincenas van del 1 al 15 y del 16 a fin de mes.</p>`;
+  } else {
+    extra = `<p class="ob-label">¿Qué día del mes te pagan?</p>
+      <input type="number" class="ob-input" min="1" max="28" inputmode="numeric" value="${prefs.payDay || 30}" onchange="setPay('payDay', Math.min(28, Math.max(1, parseInt(this.value)||1)))">
+      <p class="item-meta" style="margin:-6px 0 14px 0;">Si te pagan el 30 o 31, pon 28: tu mes va de ese día al anterior del mes siguiente.</p>`;
+  }
+  return `<div class="opt-grid two">${Object.entries(PAY_FREQS).map(([k,p]) => `<button class="opt ${f===k?'on':''}" onclick="${k==='biweekly' && !prefs.payAnchor ? `prefs.payAnchor='${todayISO()}';` : ''}setPay('payFreq','${k}')">${p.label}</button>`).join('')}</div>${extra}`;
+}
+function renderCurrencyOptions(){
+  return `<div class="opt-grid two">${Object.entries(CURRENCIES).map(([k,c]) => `<button class="opt ${currencyInfo().code===k?'on':''}" onclick="setPay('currency','${k}')">${c.label}</button>`).join('')}</div>
+    <p class="item-meta" style="margin-top:8px;">Así se verán tus montos: <b style="color:var(--ink);">${fmtMoney(1234567.5)}</b></p>`;
+}
+
+// ---- página de Ajustes ----
+let settingsOpen = { perfil:true, apariencia:false, pagos:false, datos:false };
+function toggleSet(k){ settingsOpen[k] = !settingsOpen[k]; render(); }
+function setBlock(k, title, sub, body){
+  return `<div class="card set-card">
+    <button class="set-head" onclick="toggleSet('${k}')"><div><p class="card-title">${title}</p><p class="card-sub">${sub}</p></div><span class="chevron ${settingsOpen[k]?'open':''}">›</span></button>
+    ${settingsOpen[k] ? `<div class="set-body">${body}</div>` : ''}
+  </div>`;
+}
+function renderSettingsPage(){
+  return `
+    ${setBlock('perfil', 'Perfil', 'Tu nombre y cómo te saludo', `
+      <p class="ob-label">Tu nombre</p>
+      <input type="text" class="ob-input" value="${escapeAttr(prefs.name)}" placeholder="Tu nombre" onchange="setPref('name', this.value.trim())">
+      <p class="ob-label">Saludo</p>${swatches('greet')}`)}
+    ${setBlock('apariencia', 'Apariencia', 'Color, fondo, letra y tamaño', `
+      <p class="ob-label">Color</p>${swatches('accent')}
+      <p class="ob-label">Fondo</p>${swatches('bg')}
+      <p class="ob-label">Letra de los títulos</p>${swatches('font')}
+      <p class="ob-label">Tamaño</p>${swatches('size')}`)}
+    ${setBlock('pagos', 'Pagos y moneda', `${PL().label} · ${currencyInfo().label}`, `
+      <p class="ob-label">¿Cada cuánto te pagan?</p>${renderPayOptions()}
+      <p class="ob-label">Moneda</p>${renderCurrencyOptions()}`)}
+    ${setBlock('datos', 'Tus datos', 'Respaldo y restaurar', `
+      <p class="item-meta" style="margin-bottom:10px;">El respaldo guarda todo: finanzas, Inglés, Interés compuesto, Notas y tus ajustes. Guárdalo de vez en cuando, por si cambias o se daña el teléfono.</p>
+      <div class="backup-row">
+        <button class="btn backup-btn" onclick="downloadBackup()">⬇ Guardar archivo</button>
+        <button class="btn backup-btn" onclick="toggleBackupBox()">📋 Copiar</button>
+        <button class="btn backup-btn" onclick="toggleRestoreBox()">⬆ Restaurar</button>
+      </div>
+      ${renderBackupBox()}
+      ${renderRestoreDialogs()}`)}
+    <div class="card">
+      <p class="card-title">Ayuda</p>
+      <div class="set-links">
+        <button onclick="openHelp()">❓ Preguntas frecuentes y buscar</button>
+        <button onclick="startTour()">▶ Recorrido guiado</button>
+        <button onclick="openVideo()">🎬 Ver video tutorial</button>
+        <button onclick="startPreview()">👀 Ver la app como alguien nuevo</button>
+        <button onclick="reopenOnboarding()">↺ Repetir la bienvenida</button>
+      </div>
+    </div>
+    <div class="card about">
+      <p class="card-title">Acerca de</p>
+      <p class="about-by">Creada por <b>Brandon Poveda</b></p>
+      <p class="item-meta">Hecha con la ayuda de Claude · versión ${APP_VERSION}</p>
+    </div>`;
+}
+function openSettings(){ activeTab = 'settings'; render(); window.scrollTo(0,0); }
+
+// ---- apps plegables en Inicio ----
+function toggleApps(){ prefs.appsOpen = !prefs.appsOpen; savePrefs(); render(); }
+function renderAppsBar(){
+  if(prefs.appsOpen){
+    return `<div class="apps-fold open" data-tour="apps">
+      <button class="apps-fold-head" onclick="toggleApps()"><span>Mis apps</span><span class="chevron open">›</span></button>
+      ${renderAppsRow().replace(' data-tour="apps"', '')}
+    </div>`;
+  }
+  return `<div class="apps-fold" data-tour="apps">
+    <div class="apps-mini">${SUB_APPS.map(([k,l,ic]) => `<button class="app-mini" onclick="openSubApp('${k}')" aria-label="${l}">${ic}<span>${l.split(' ')[0]}</span></button>`).join('')}</div>
+    <button class="apps-more" onclick="toggleApps()" aria-label="Desplegar apps"><span class="chevron">›</span></button>
+  </div>`;
+}
+
+// ---- Centro de ayuda: buscar + preguntas frecuentes ----
+const HELP_GO = [
+  { t:'Ver tu semana / quincena / mes', k:'inicio resumen semana quincena mes cubierto falta meta', go:"setTab('home')" },
+  { t:'Agregar un ingreso', k:'ingreso pago sueldo tatuaje agregar plata entra', go:"setTab('mov');setMovSeg('incomes')" },
+  { t:'Gastos hormiga', k:'hormiga gasto pequeño cafe limite', go:"setTab('mov');setMovSeg('hormiga')" },
+  { t:'Movimientos del banco', k:'banco movimientos extracto categoria cambiar', go:"setTab('mov');setMovSeg('bank')" },
+  { t:'Préstamos', k:'prestamo preste me deben devolver', go:"setTab('mov');setMovSeg('loans')" },
+  { t:'Agregar una deuda', k:'deuda debo tarjeta carro credito agregar', go:"setTab('debts');setDebtSeg('debts')" },
+  { t:'Gastos fijos (renta, teléfono…)', k:'gasto fijo renta arriendo telefono luz servicios mensual semanal', go:"setTab('debts');setDebtSeg('expenses')" },
+  { t:'Cobros que se repiten', k:'cobro repetido suscripcion netflix recurrente', go:"setTab('debts');setDebtSeg('recurring')" },
+  { t:'Subir extracto del banco', k:'extracto pdf csv banco subir statement', go:"setTab('import')" },
+  { t:'Subir captura de pantalla', k:'captura screenshot foto pantalla banco', go:"setTab('import')" },
+  { t:'Ahorro y estadísticas', k:'ahorro fondo emergencia inversion estadisticas promedio', go:"setTab('more')" },
+  { t:'Exportar resumen para Claude', k:'exportar resumen claude analizar', go:"setTab('more')" },
+  { t:'Ajustes: color, letra, nombre, moneda', k:'ajustes configuracion color fondo letra fuente tamaño nombre saludo moneda pesos quincena', go:"openSettings()" },
+  { t:'Respaldo y restaurar', k:'respaldo backup restaurar otro telefono copia', go:"settingsOpen.datos=true;openSettings()" },
+  { t:'App de Inglés', k:'ingles palabras aprender frases', go:"openSubApp('ingles')" },
+  { t:'Interés compuesto', k:'interes compuesto victorias plan crecer', go:"openSubApp('interes')" },
+  { t:'Notas por voz', k:'notas voz dictar apuntar', go:"openSubApp('notas')" }
+];
+const FAQ = [
+  { c:'Empezar', q:'¿Por dónde empiezo?', a:'1) En <b>Deudas</b> agrega lo que debes y tus gastos fijos (renta, teléfono…). 2) En <b>Subir extracto</b> sube el PDF de tu banco, o anota tus ingresos a mano en <b>Movimientos</b>. 3) En <b>Inicio</b> ves si vas cubierto.' },
+  { c:'Empezar', q:'¿Qué significa "Vas cubierto" o "Te falta ganar"?', a:'Compara lo que ganaste en el periodo (semana, quincena o mes), menos lo que gastaste, contra lo que necesitas para tus deudas y gastos fijos. Si te sobra, vas cubierto; si no, te dice cuánto te falta.' },
+  { c:'Empezar', q:'¿Qué es la "meta"?', a:'Es lo que deberías apartar en cada periodo para cubrir todos tus pagos del mes, repartido parejo. Si en un periodo vence algo grande, la meta sube a lo que vence.' },
+  { c:'Empezar', q:'¿Cómo cambio si me pagan por semana, quincena o mes?', a:'En <b>⚙ Ajustes → Pagos y moneda</b>. Toda la app (Inicio, metas, estadísticas) se ajusta a ese periodo.' },
+  { c:'Movimientos', q:'¿Cómo anoto un ingreso a mano?', a:'<b>Movimientos → Ingresos → + Añadir ingreso</b>. Pon el monto, la fecha y de dónde vino (trabajo, tatuaje, venta…).' },
+  { c:'Movimientos', q:'¿Qué es un gasto hormiga?', a:'Los gastos pequeños del día a día (café, snacks, propinas) que sumados se llevan mucha plata. Ponles un límite en <b>Movimientos → Hormiga</b> y la app te avisa si te pasas.' },
+  { c:'Movimientos', q:'¿Cómo registro que le presté plata a alguien?', a:'<b>Movimientos → Préstamos</b>. Puedes ponerle fecha de devolución y la app te recuerda. Cuando te paguen, márcalo como devuelto.' },
+  { c:'Banco', q:'¿Cómo subo mi extracto?', a:'Descarga el extracto en PDF o CSV desde la página de tu banco y súbelo en <b>Subir extracto</b>. Puedes elegir varios meses a la vez; los repetidos no se cuentan dos veces.' },
+  { c:'Banco', q:'El extracto no trae lo de esta semana, ¿qué hago?', a:'Toma captura de pantalla de tus movimientos en la app del banco y súbela con <b>Subir captura de pantalla</b>. Revisa lo que leyó, corrige si hace falta y guarda. Cuando llegue el extracto, la app reconoce esos movimientos y no los duplica.' },
+  { c:'Banco', q:'Un movimiento quedó en la categoría equivocada', a:'Toca el movimiento en <b>Movimientos → Banco</b> y cámbiale la categoría. Si se lo confirmas dos veces, la app lo aprende para ese comercio.' },
+  { c:'Banco', q:'¿Qué son las preguntas que salen en Inicio?', a:'Cuando la app no está segura de qué es un movimiento (por ejemplo una transferencia), te pregunta. Respondes una vez y aprende. Puedes tocar <b>Después</b> o <b>Descartar</b>.' },
+  { c:'Banco', q:'¿Funciona con bancos de Colombia?', a:'Las capturas de pantalla sirven con casi cualquier app de banco. El extracto en PDF está hecho para TD Bank; con otros bancos lo más seguro es usar capturas o anotar a mano.' },
+  { c:'Deudas y pagos', q:'¿Cómo agrego una deuda?', a:'<b>Deudas → Deudas → + Añadir deuda</b>. Pon cuánto debes, cuánto pagas al mes y la fecha de pago. Los pagos del banco se pueden conectar a la deuda para que el saldo baje solo.' },
+  { c:'Deudas y pagos', q:'¿Cómo marco que ya pagué algo?', a:'En <b>Inicio → Próximos pagos</b> toca <b>Ya lo pagué</b>. Si el pago viene del banco, la app lo conecta sola.' },
+  { c:'Deudas y pagos', q:'Necesito correr un pago unos días', a:'Toca <b>Mover</b> en el pago (en Inicio). Solo cambia esa vez; el siguiente vuelve a su fecha normal.' },
+  { c:'Deudas y pagos', q:'Tengo algo repetido (como el carro dos veces)', a:'Toca la deuda o el gasto y usa <b>Unir con…</b> para juntarlos en uno solo.' },
+  { c:'Apps', q:'¿Dónde están las otras apps?', a:'Arriba en <b>Inicio</b>, en la barra de apps. Toca un ícono para abrirla o la flecha ▾ para verlas en grande.' },
+  { c:'Apps', q:'¿Cómo uso la app de Inglés?', a:'Ábrela desde Inicio y toca <b>Estudiar ahora</b>: 10 palabras nuevas por día con repaso. En <b>Mis frases</b> practicas frases y con <b>Practicar con Claude</b> exportas tu progreso para hablar en inglés.' },
+  { c:'Apps', q:'¿Cómo uso Interés compuesto?', a:'Pon tu capital, el % por victoria y la meta. Cada vez que ganes toca <b>Gané</b>; si paras antes o pierdes, usa <b>Otro resultado</b> y pon en cuánto quedaste.' },
+  { c:'Ajustes y datos', q:'¿Cómo cambio el color, la letra o mi nombre?', a:'Toca <b>⚙</b> arriba a la derecha → <b>Apariencia</b> o <b>Perfil</b>.' },
+  { c:'Ajustes y datos', q:'¿Mis datos se guardan en internet?', a:'No. Todo queda solo en tu teléfono. Por eso conviene guardar un respaldo de vez en cuando (<b>⚙ Ajustes → Tus datos</b>).' },
+  { c:'Ajustes y datos', q:'Cambié de teléfono, ¿cómo paso mis datos?', a:'En el teléfono viejo: <b>⚙ Ajustes → Tus datos → Guardar archivo</b>. Pasa ese archivo al nuevo (WhatsApp, correo, Drive). En el nuevo, al abrir la app toca <b>Vengo de otro teléfono</b> y elige el archivo.' },
+  { c:'Ajustes y datos', q:'¿Puedo poner la app en pesos colombianos?', a:'Sí: <b>⚙ Ajustes → Pagos y moneda → Peso colombiano</b>. Los montos se ven como $1.500.000.' },
+  { c:'Ajustes y datos', q:'¿Puedo ver otra vez el tutorial?', a:'Sí: botón <b>Tutorial</b> arriba, o <b>⚙ Ajustes → Ayuda</b>. Ahí está el recorrido, el video y la opción de ver la app como alguien nuevo.' }
+];
+const HELP_SUGGEST = ['subir extracto', 'captura', 'agregar deuda', 'ya lo pagué', 'gasto hormiga', 'quincena', 'pesos', 'cambiar color', 'respaldo', 'inglés'];
+let helpQ = '', helpOpenIdx = -1;
+function openHelp(q){ helpQ = q || ''; helpOpenIdx = -1; activeTab = 'help'; render(); window.scrollTo(0,0); setTimeout(() => { const el = document.getElementById('help-q'); if(el && !q) el.focus(); }, 80); }
+function normTxt(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/<[^>]+>/g, ' '); }
+function helpScore(hay, q){
+  const words = normTxt(q).split(/\s+/).filter(w => w.length >= 2);
+  if(!words.length) return 0;
+  const h = normTxt(hay); let sc = 0;
+  for(const w of words){ const stem = w.length > 4 ? w.slice(0, w.length - 1) : w; if(h.includes(w)) sc += 3; else if(h.includes(stem)) sc += 2; else return 0; }
+  return sc;
+}
+function setHelpQ(v){ helpQ = v; helpOpenIdx = -1; const el = document.getElementById('help-results'); if(el) el.innerHTML = renderHelpResults(); }
+function pickSuggest(s){ helpQ = s; helpOpenIdx = -1; render(); }
+function toggleFaq(i){ helpOpenIdx = helpOpenIdx === i ? -1 : i; const el = document.getElementById('help-results'); if(el) el.innerHTML = renderHelpResults(); }
+function faqItem(f, i){
+  const open = helpOpenIdx === i;
+  return `<div class="faq ${open?'open':''}"><button class="faq-q" onclick="toggleFaq(${i})"><span>${f.q}</span><span class="chevron ${open?'open':''}">›</span></button>${open ? `<div class="faq-a">${f.a}</div>` : ''}</div>`;
+}
+function renderHelpResults(){
+  const q = helpQ.trim();
+  if(!q){
+    const cats = [...new Set(FAQ.map(f => f.c))];
+    return cats.map(c => `<p class="ob-label">${c}</p>` + FAQ.map((f,i) => [f,i]).filter(([f]) => f.c === c).map(([f,i]) => faqItem(f, i)).join('')).join('');
+  }
+  const goes = HELP_GO.map(g => ({ g, s: helpScore(g.t + ' ' + g.k, q) })).filter(x => x.s).sort((a,b) => b.s - a.s).slice(0, 4);
+  const faqs = FAQ.map((f,i) => ({ f, i, s: helpScore(f.q + ' ' + f.a + ' ' + f.c, q) + helpScore(f.q, q) })).filter(x => x.s).sort((a,b) => b.s - a.s);
+  if(!goes.length && !faqs.length) return `<p class="empty-note">No encontré nada con "${escapeAttr(q)}". Prueba con otra palabra, por ejemplo: ${HELP_SUGGEST.slice(0,3).join(', ')}.</p>`;
+  return (goes.length ? `<p class="ob-label">Ir a</p><div class="help-go">${goes.map(x => `<button onclick="${x.g.go}">${x.g.t}<span>›</span></button>`).join('')}</div>` : '')
+    + (faqs.length ? `<p class="ob-label">Preguntas</p>` + faqs.map(x => faqItem(x.f, x.i)).join('') : '');
+}
+function renderHelpPage(){
+  return `<div class="help-search">
+      <span class="help-ico">${ICONS.search}</span>
+      <input type="search" id="help-q" placeholder="Buscar: extracto, deuda, color…" value="${escapeAttr(helpQ)}" oninput="setHelpQ(this.value)" autocomplete="off">
+    </div>
+    <div class="help-sugg">${HELP_SUGGEST.map(s => `<button class="chip" onclick="pickSuggest('${s}')">${s}</button>`).join('')}</div>
+    <div class="card help-tut">
+      <p class="card-title">Tutorial</p>
+      <div class="set-links">
+        <button onclick="startTour()">▶ Recorrido guiado por la app</button>
+        <button onclick="openVideo()">🎬 Ver video tutorial (1:42)</button>
+        <button onclick="startPreview()">👀 Ver la app como alguien nuevo</button>
+      </div>
+    </div>
+    <div class="card"><div id="help-results">${renderHelpResults()}</div></div>`;
+}
+
+// ---- Vista previa: la app vacía, como recién instalada, sin tocar tus datos ----
+let previewMode = false, previewSaved = null;
+function startPreview(){
+  if(previewMode) return;
+  previewSaved = { data: JSON.stringify(data), prefs: JSON.stringify(prefs), tab: activeTab };
+  previewMode = true;
+  data = normalizeData(emptyData());
+  prefs = defaultPrefs();
+  applyPrefs(); obStep = 0; activeTab = 'home';
+  render(); window.scrollTo(0,0);
+}
+function endPreview(){
+  if(!previewMode) return;
+  if(tourActive()){ tourIdx = -1; document.body.classList.remove('touring'); const r = document.getElementById('tour-root'); if(r) r.innerHTML = ''; }
+  data = normalizeData(JSON.parse(previewSaved.data));
+  prefs = Object.assign(defaultPrefs(), JSON.parse(previewSaved.prefs));
+  previewMode = false; activeTab = 'home'; previewSaved = null;
+  applyPrefs(); render(); window.scrollTo(0,0);
+  showToast('Saliste de la vista previa. Tus datos están intactos.');
+}
+function previewBanner(){ return previewMode ? `<div class="preview-bar"><span>👀 Vista previa: así la ve alguien nuevo. Nada se guarda.</span><button onclick="endPreview()">Salir</button></div>` : ''; }
+
 // ================================================================ RECORRIDO GUIADO
 // Oscurece la pantalla, ilumina una parte de la app y explica para qué sirve.
 const TOUR = [
   { tab:'home', sel:null, title:'Bienvenido a tu app 👋', text:'Te muestro en un minuto dónde está cada cosa. Toca <b>Siguiente</b> para avanzar o <b>Saltar</b> si ya la conoces.' },
-  { tab:'home', sel:'topbar', title:'Tu saludo', text:'Aquí arriba te saludo con tu nombre y ves en qué pantalla estás. El estilo del saludo se cambia en <b>Más → Personalizar</b>.' },
-  { tab:'home', sel:'apps', title:'Tus apps', text:'Rotador, Bot Señales, Notas, Inglés e Interés compuesto. Toca cualquiera para abrirla; la flecha de atrás te devuelve aquí.' },
+  { tab:'home', sel:'topbar', title:'Tu saludo', text:'Aquí arriba te saludo y ves en qué pantalla estás. A la derecha: <b>Tutorial</b> y 🔍 abren la ayuda, y ⚙ los ajustes.' },
+  { tab:'home', sel:'apps', title:'Tus apps', text:'Rotador, Bot Señales, Notas, Inglés e Interés compuesto. Toca un ícono para abrir la app, o la flecha › para verlas en grande.' },
   { tab:'home', sel:'questions', title:'Preguntas de la app', text:'Cuando la app no está segura de qué es un movimiento del banco, te pregunta aquí. Respondes una vez y aprende para la próxima.' },
-  { tab:'home', sel:'hero', title:'Tu semana', text:'Lo más importante: cuánto entró esta semana, cuánto gastaste y si vas cubierto para lo que tienes que pagar. Verde = vas bien.' },
-  { tab:'home', sel:'weeks', title:'Las próximas semanas', text:'Cuánto te conviene ganar en cada una de las próximas semanas según lo que vence. Toca una semana para ver qué pagos caen ahí.' },
+  { tab:'home', sel:'hero', title:'Tu {noun}', text:'Lo más importante: cuánto entró {art}, cuánto gastaste y si vas cubierto para lo que tienes que pagar. Verde = vas bien.' },
+  { tab:'home', sel:'weeks', title:'Lo que viene', text:'Cuánto te conviene ganar en cada uno de los próximos periodos según lo que vence. Toca uno para ver qué pagos caen ahí.' },
   { tab:'home', sel:'upcoming', title:'Próximos pagos', text:'Lo que vence en los próximos 30 días. Toca <b>Ya lo pagué</b> cuando pagues, o <b>Mover</b> para correr un pago unos días.' },
   { tab:'home', sel:'spend', title:'En qué se te va la plata', text:'Tus gastos del mes por tipo: hormiga, fijos, deudas y otros. Más abajo ves de dónde entra la plata y tus semanas en gráfica.' },
   { tab:'mov', sel:'tab-mov', title:'Movimientos', text:'Aquí está todo lo que entra y sale.' },
@@ -4493,11 +4808,13 @@ const TOUR = [
   { tab:'import', sel:'shot', title:'O una captura', text:'Si el extracto no trae lo de esta semana, toma captura de pantalla en la app del banco y súbela aquí.' },
   { tab:'more', sel:'sec-savings', title:'Más', text:'Ahorro, estadísticas, resumen por fechas, historial y tus apps.' },
   { tab:'more', sel:'export', title:'Pásamelo a mí', text:'Exporta un resumen y pégamelo en un chat para que te ayude a analizar tus finanzas.' },
-  { tab:'more', sel:'sec-personalize', title:'Ponla a tu gusto', text:'Tu nombre, color, fondo, letra, tamaño y saludo.' },
   { tab:'more', sel:'backup', title:'Respaldo', text:'Guarda un archivo con todo (finanzas y apps) de vez en cuando. Si cambias de teléfono, lo restauras y queda todo igual.' },
-  { tab:'home', sel:null, title:'¡Listo! 🎉', text:'Eso es todo. Puedes repetir este recorrido o ver el video en <b>Más → Ayuda</b>.' }
+  { tab:'home', sel:'btn-settings', title:'Ajustes ⚙', text:'Tu nombre, colores, letra, tamaño, cada cuánto te pagan y la moneda. Cámbialos cuando quieras.' },
+  { tab:'home', sel:'btn-help', title:'Ayuda', text:'Preguntas frecuentes, un buscador para encontrar cualquier parte de la app, el video y este recorrido.' },
+  { tab:'home', sel:null, title:'¡Listo! 🎉', text:'Eso es todo. Si se te olvida algo, toca <b>Tutorial</b> arriba.' }
 ];
 let tourIdx = -1, tourAuto = null;
+function tourFill(s){ return String(s).replace(/\{noun\}/g, PL().noun).replace(/\{art\}/g, PL().art); }
 function tourActive(){ return tourIdx >= 0; }
 function startTour(auto){
   tourIdx = 0; tourAuto = auto || null;
@@ -4556,8 +4873,8 @@ function tourDraw(el, st){
   root.innerHTML = `${hole}
     <div class="tour-tip" style="${tipPos}">
       <div class="tour-count">${tourIdx + 1} de ${n}</div>
-      <p class="tour-title">${st.title}</p>
-      <p class="tour-text">${st.text}</p>
+      <p class="tour-title">${tourFill(st.title)}</p>
+      <p class="tour-text">${tourFill(st.text)}</p>
       <div class="tour-btns">
         <button class="card-link" onclick="tourEnd()" style="color:var(--ink-faint);">Saltar</button>
         <span style="flex:1;"></span>

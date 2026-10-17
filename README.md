@@ -98,3 +98,13 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 ### 3.4
 - **Recorrido guiado**: después de la bienvenida, la app oscurece la pantalla e ilumina cada parte (saludo, apps, preguntas, tu semana, próximos pagos, movimientos, deudas, subir extracto/captura, más, respaldo) con una explicación corta. Se repite desde Más → Ayuda.
 - **Video tutorial** (1:37) dentro de la app: Más → Ayuda → Ver video.
+
+### 3.5
+- **Botones arriba**: "Tutorial", 🔍 buscar y ⚙ Ajustes en todas las pantallas.
+- **⚙ Ajustes**: perfil (nombre, saludo), apariencia (color, fondo, letra, tamaño), pagos y moneda, respaldo/restaurar, ayuda y acerca de.
+- **Cada cuánto te pagan**: semanal, cada 2 semanas, quincenal (1–15 y 16–fin) o mensual. Inicio, metas, estadísticas e historial se ajustan al periodo ("Tu quincena", "Tu mes").
+- **Moneda**: dólar, peso colombiano ($1.500.000), peso mexicano o euro.
+- **Centro de ayuda**: buscador con sugerencias que encuentra preguntas y te lleva directo a cada parte de la app, y 24 preguntas frecuentes por tema.
+- **Ver la app como alguien nuevo**: vista previa vacía con bienvenida y recorrido, sin tocar tus datos.
+- **Apps plegables** en Inicio: una barra delgada con íconos; la flecha las muestra en grande.
+- Arreglo: los gastos fijos semanales y los pagos marcados ya no se corren si cambias el día de inicio de la semana.
