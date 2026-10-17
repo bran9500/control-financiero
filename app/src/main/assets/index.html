@@ -16,6 +16,9 @@
     --good:#6FA98A;
     --warn:#C4693B;
     --accent:#6FA98A;
+    --on-accent:#0E1A14;
+    --accent-soft:rgba(111,169,138,.16);
+    --accent-line:rgba(111,169,138,.5);
     /* Colores de categorías para gráficas (validados para fondo oscuro, aptos para daltonismo) */
     --s1:#3987e5; /* hormiga / ingresos */
     --s2:#d95926; /* otros gastos / gastos */
@@ -38,7 +41,41 @@
 
   /* ---------- Encabezado ---------- */
   .topbar{display:flex;justify-content:space-between;align-items:flex-end;margin:4px 2px 16px 2px;gap:10px;}
-  .greeting{font-size:13px;color:var(--ink-dim);margin:0 0 2px 0;}
+  .greeting{font-size:15.5px;color:var(--ink-dim);margin:0 0 3px 0;}
+  .greet-name{color:var(--accent);font-weight:600;}
+
+  /* ---------- Bienvenida y personalizar ---------- */
+  .ob{max-width:460px;margin:0 auto;padding:30px 6px 40px 6px;min-height:88vh;display:flex;flex-direction:column;justify-content:center;}
+  .ob-hero{text-align:center;margin-bottom:28px;}
+  .ob-logo{width:74px;height:74px;border-radius:22px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 18px auto;}
+  .ob-logo svg{width:36px;height:36px;}
+  .ob-title{font-family:var(--serif);font-size:30px;line-height:1.2;margin:0 0 12px 0;}
+  .ob-q{font-family:var(--serif);font-size:26px;line-height:1.25;margin:10px 0 8px 0;}
+  .ob-text{font-size:14px;color:var(--ink-dim);line-height:1.55;margin:0 0 18px 0;}
+  .ob-main{width:100%;padding:15px;font-size:16px;margin-top:6px;}
+  .ob-skip{display:block;margin:14px auto 0 auto;color:var(--ink-faint);}
+  .ob-input{width:100%;background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);border-radius:14px;padding:15px;font-size:18px;margin-bottom:14px;font-family:var(--sans);}
+  .ob-input:focus{outline:none;border-color:var(--accent);}
+  .ob-money{display:flex;align-items:center;gap:8px;background:var(--surface-raised);border:1px solid var(--line);border-radius:14px;padding:6px 15px;margin-bottom:14px;}
+  .ob-money span{font-family:var(--mono);font-size:24px;color:var(--ink-faint);}
+  .ob-money input{flex:1;background:none;border:none;color:var(--ink);font-family:var(--mono);font-size:26px;padding:8px 0;width:100%;}
+  .ob-money input:focus{outline:none;}
+  .ob-dots{display:flex;gap:6px;margin-bottom:8px;}
+  .ob-dots span{flex:1;height:4px;border-radius:2px;background:var(--surface-raised);}
+  .ob-dots span.on{background:var(--accent);}
+  .ob-credit{text-align:center;font-size:13.5px;color:var(--ink-dim);margin-top:30px;line-height:1.6;}
+  .ob-credit span{font-size:12px;color:var(--ink-faint);}
+  .ob-label{font-size:12px;color:var(--ink-faint);margin:16px 0 8px 0;text-transform:uppercase;letter-spacing:.05em;}
+  .ob-preview{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:6px 0 4px 0;}
+  .swatches{display:flex;flex-wrap:wrap;gap:10px;}
+  .sw{width:38px;height:38px;border-radius:50%;border:3px solid transparent;cursor:pointer;outline:2px solid transparent;}
+  .sw.on{border-color:var(--bg);outline-color:var(--ink);}
+  .opt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .opt-grid.days{grid-template-columns:repeat(4,1fr);margin-bottom:16px;}
+  .opt{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--surface-raised);border:1.5px solid var(--line);color:var(--ink-dim);border-radius:12px;padding:11px 4px;font-size:12.5px;cursor:pointer;font-family:var(--sans);}
+  .opt.on{border-color:var(--accent);color:var(--ink);}
+  .bgdot{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);}
+  .about-by{font-size:15px;margin:8px 0 4px 0;}
   .page-title{font-family:var(--serif);font-size:26px;margin:0;font-weight:normal;}
   .today{font-size:12.5px;color:var(--ink-faint);margin:2px 0 0 0;}
   .save-status{font-size:12px;min-height:16px;margin:0;color:var(--ink-faint);text-align:right;}
@@ -56,7 +93,7 @@
   .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;}
   .card-title{font-family:var(--serif);font-size:17px;margin:0;}
   .card-sub{font-size:12px;color:var(--ink-faint);margin:2px 0 0 0;}
-  .card-link{background:none;border:none;color:var(--good);font-size:13px;padding:4px 0;cursor:pointer;text-align:left;font-family:var(--sans);}
+  .card-link{background:none;border:none;color:var(--accent);font-size:13px;padding:4px 0;cursor:pointer;text-align:left;font-family:var(--sans);}
 
   .hero-card{padding:20px 18px;}
   .hero-label{font-size:13px;color:var(--ink-dim);margin:0 0 6px 0;}
@@ -137,7 +174,7 @@
 
   .add-toggle-btn{
     width:100%;text-align:center;border:1px dashed var(--line);border-radius:12px;
-    padding:12px 0;margin-top:10px;background:none;color:var(--good);font-size:14px;cursor:pointer;
+    padding:12px 0;margin-top:10px;background:none;color:var(--accent);font-size:14px;cursor:pointer;
   }
 
   .seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;margin-bottom:12px;overflow-x:auto;}
@@ -149,11 +186,11 @@
 
   .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:2px;}
   .chip{flex-shrink:0;font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:none;color:var(--ink-dim);cursor:pointer;}
-  .chip.active{border-color:var(--good);color:var(--good);}
+  .chip.active{border-color:var(--accent);color:var(--accent);}
 
   .tab-row{display:flex;gap:8px;margin-bottom:16px;}
   .tab-btn{flex:1;text-align:center;padding:9px 8px;border-radius:10px;border:1px solid var(--line);background:var(--surface-raised);color:var(--ink-dim);font-size:13px;cursor:pointer;}
-  .tab-btn.active{border-color:var(--good);color:var(--good);}
+  .tab-btn.active{border-color:var(--accent);color:var(--accent);}
 
   .del-confirm{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;}
   .item-del-yes, .item-del-no{font-size:12px;padding:6px 9px;border-radius:8px;cursor:pointer;border:1px solid var(--line);background:var(--surface-raised);color:var(--ink);white-space:nowrap;}
@@ -177,8 +214,8 @@
 
   .btn{background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);padding:11px 15px;border-radius:12px;font-size:14px;cursor:pointer;align-self:flex-start;}
   .btn:active{background:var(--line);}
-  .btn-primary{border-color:var(--good);color:var(--good);}
-  .btn-solid{background:var(--good);border-color:var(--good);color:#0E1A14;font-weight:600;}
+  .btn-primary{border-color:var(--accent);color:var(--accent);}
+  .btn-solid{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600;}
   .btn-block{width:100%;text-align:center;align-self:stretch;}
   .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
 
@@ -230,7 +267,7 @@
   .upload-zone .big{font-size:15px;color:var(--ink);}
   .upload-zone .small{font-size:12.5px;color:var(--ink-faint);}
   .shot-zone{padding:16px;flex-direction:row;text-align:left;gap:14px;border-style:solid;border-color:var(--line);}
-  .shot-zone .ico{flex-shrink:0;color:var(--good);}
+  .shot-zone .ico{flex-shrink:0;color:var(--accent);}
   .shot-edit{margin-top:10px;background:var(--surface-raised);border-radius:12px;padding:10px;}
   .steps{margin:0;padding-left:18px;font-size:13px;color:var(--ink-dim);line-height:1.7;}
   .sum-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
@@ -238,14 +275,14 @@
   .sum-box .n{font-family:var(--mono);font-size:20px;}
   .sum-box .t{font-size:11px;color:var(--ink-faint);margin-top:2px;}
   .check-row{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--ink-dim);padding:10px 0;line-height:1.5;}
-  .check-row input{width:18px;height:18px;flex-shrink:0;margin-top:1px;accent-color:var(--good);}
+  .check-row input{width:18px;height:18px;flex-shrink:0;margin-top:1px;accent-color:var(--accent);}
   .note-good{font-size:12px;color:var(--good);}
   .error-box{border:1px solid var(--warn);border-radius:12px;padding:12px;font-size:13px;color:var(--warn);margin-top:12px;line-height:1.5;}
 
   /* ---------- Accesos a las otras apps ---------- */
   .apps-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
   .app-tile{display:flex;flex-direction:column;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 6px;color:var(--ink);font-size:12.5px;cursor:pointer;font-family:var(--sans);}
-  .app-ico{width:38px;height:38px;border-radius:12px;background:var(--surface-raised);display:flex;align-items:center;justify-content:center;color:var(--good);}
+  .app-ico{width:38px;height:38px;border-radius:12px;background:var(--surface-raised);display:flex;align-items:center;justify-content:center;color:var(--accent);}
   .app-ico svg{width:21px;height:21px;}
   .card .apps-row{margin-bottom:8px;}
   .card .app-tile{background:var(--surface-raised);}
@@ -275,7 +312,7 @@
   .debt-detail{background:var(--surface-raised);border-radius:12px;padding:12px;margin:0 0 12px 0;}
   .debt-detail .mini-row:first-of-type{border-top:none;}
 
-  .link-inline{color:var(--good);cursor:pointer;}
+  .link-inline{color:var(--accent);cursor:pointer;}
   .q-cats{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px 0;}
   .q-foot{display:flex;gap:16px;align-items:center;margin-top:10px;border-top:1px solid var(--line);padding-top:8px;flex-wrap:wrap;}
   .up-btns{display:flex;gap:6px;width:100%;justify-content:flex-end;margin-top:6px;}
@@ -291,8 +328,8 @@
     font-size:10.5px;padding:4px 0;cursor:pointer;font-family:var(--sans);
   }
   .tabbar button svg{width:23px;height:23px;}
-  .tabbar button.active{color:var(--good);}
-  .tabbar button.active .pill{background:rgba(111,169,138,.16);}
+  .tabbar button.active{color:var(--accent);}
+  .tabbar button.active .pill{background:var(--accent-soft);}
   .tabbar .pill{border-radius:999px;padding:3px 14px;display:flex;}
 
   /* ---------- Aviso flotante ---------- */
@@ -359,7 +396,7 @@ function normalizeData(parsed){
 }
 
 let data = emptyData();
-let sectionsOpen = { income:true, debts:false, expenses:false, hormiga:false, loans:false, savings:false, stats:false, range:false, history:false };
+let sectionsOpen = { personalize:false, income:true, debts:false, expenses:false, hormiga:false, loans:false, savings:false, stats:false, range:false, history:false };
 let savingsTab = 'emergency';
 let editingItem = null; // {kind, id}
 let loaded = false;
@@ -417,7 +454,8 @@ function parseMoney(v){
 function startOfWeek(d){
   const date = new Date(d);
   const day = date.getDay(); // 0 Sun .. 6 Sat
-  const diff = (day === 0 ? -6 : 1) - day; // move to Monday
+  const ws = (typeof prefs !== 'undefined' && prefs && prefs.weekStart != null) ? prefs.weekStart : 1;
+  const diff = -((day - ws + 7) % 7); // al día en que empieza la semana (lunes por defecto)
   date.setDate(date.getDate() + diff);
   date.setHours(0,0,0,0);
   return date;
@@ -490,6 +528,7 @@ function loadData(){
   }
   loaded = true;
   const ghosts = cleanGhostTransactions();
+  applyPrefs();
   render();
   if(loadState === 'ok') scheduleNativeReminders();
   if(ghosts) setTimeout(() => showToast(`Quité ${ghosts} movimiento${ghosts===1?'':'s'} falso${ghosts===1?'':'s'} que salían de la tabla de saldos del PDF (no eran pagos de verdad).`), 400);
@@ -509,8 +548,9 @@ function cleanGhostTransactions(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
   return bad.length;
 }
+// Respaldo completo: finanzas + Inglés + Interés compuesto + Notas + preferencias.
 function downloadBackup(){
-  saveTextFile(`control-semanal-respaldo-${todayISO()}.json`, 'application/json', JSON.stringify(data, null, 2));
+  saveTextFile(`control-financiero-respaldo-${todayISO()}.json`, 'application/json', JSON.stringify(fullBackupObject(), null, 1));
 }
 
 let showBackupBox = false;
@@ -584,11 +624,8 @@ function restoreFromTextarea(){
 }
 
 function confirmRestore(){
-  data = normalizeData(pendingRestoreData);
+  restoreAnyBackup(pendingRestoreData);
   pendingRestoreData = null;
-  saveBlocked = false;
-  loadState = 'ok';
-  saveData();
   render();
 }
 
@@ -980,7 +1017,7 @@ function toggleSection(key){
 
 function renderBackupBox(){
   if(!showBackupBox) return '';
-  const text = JSON.stringify(data, null, 2)
+  const text = JSON.stringify(fullBackupObject(), null, 1)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   return `<div class="load-fail">
     <p class="load-fail-title">Tu respaldo (ya seleccionado, listo para copiar)</p>
@@ -2924,6 +2961,7 @@ function render(){
     return;
   }
 
+  if(needsOnboarding()){ app.innerHTML = renderOnboarding(); return; }
   const c = computeAll();
   let body = '';
   if(activeTab === 'home') body = renderHome(c);
@@ -2940,7 +2978,7 @@ function renderTopbar(){
   const todayStr = capFirst(new Date().toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'}));
   return `<div class="topbar">
     <div>
-      <p class="greeting">${getGreeting()}, Bran</p>
+      <p class="greeting">${greetingLine()}</p>
       <p class="page-title">${TAB_TITLES[activeTab]}</p>
       <p class="today">${todayStr}</p>
     </div>
@@ -3710,6 +3748,14 @@ function renderMoreTab(c){
     <button class="btn btn-solid btn-block" onclick="exportSummary()">Exportar resumen</button>
   </div>`;
 
+  // Personalizar
+  html += renderSection('personalize', 'Personalizar', '', `
+    <div class="field" style="margin-bottom:6px;"><label>Tu nombre</label><input type="text" value="${escapeAttr(prefs.name)}" placeholder="Tu nombre" onchange="setPref('name', this.value.trim())"></div>
+    ${renderPersonalize()}
+    <p class="ob-label">La semana empieza el</p>
+    <div class="opt-grid days">${[1,2,3,4,5,6,0].map(d => `<button class="opt ${prefs.weekStart===d?'on':''}" onclick="setPref('weekStart', ${d})">${capFirst(WEEKDAYS[d])}</button>`).join('')}</div>
+    <button class="card-link" style="margin-top:12px;" onclick="reopenOnboarding()">Ver otra vez la bienvenida</button>`);
+
   // Respaldo
   html += `<div class="card">
     <div class="card-head"><p class="card-title">Respaldo de tus datos</p></div>
@@ -3722,6 +3768,11 @@ function renderMoreTab(c){
     ${renderRestoreDialogs()}
   </div>`;
 
+  html += `<div class="card about">
+    <p class="card-title">Acerca de</p>
+    <p class="about-by">Creada por <b>Brandon Poveda</b></p>
+    <p class="item-meta">Hecha con la ayuda de Claude · versión ${APP_VERSION}</p>
+  </div>`;
   html += `<p class="footnote">Tus datos se guardan solo en este teléfono (no dependen de internet). La meta semanal reparte cada pago mensual entre 4.345 semanas. "Te falta" usa el mayor entre esa meta y lo que vence en los próximos 7 días, para que nunca te agarre corto. Los gastos hormiga y los otros gastos del banco se restan de lo que entra antes de calcular lo que falta. Los pagos de gastos fijos y deudas no se restan otra vez, porque ya están en la meta.</p>`;
   return html;
 }
@@ -4221,6 +4272,180 @@ function addShotRow(){
   if(!importPreview) return;
   importPreview.fresh.unshift({ date: todayISO(), desc: 'MOVIMIENTO', amount: 0, dir: 'out', balance: null, fromPdf: true, src: 'shot', category: 'gasto', auto: 'manual-set', id: 's' + Date.now().toString(36) + '_n' });
   shotEditIdx = 0; render();
+}
+
+// ================================================================ PREFERENCIAS Y BIENVENIDA
+// Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
+// para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
+const PREFS_KEY = 'app-prefs';
+const APP_VERSION = '3.3';
+const ACCENTS = {
+  verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
+  azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
+  morado:   { label:'Morado',   c:'#A18FF0', on:'#15112A' },
+  rosa:     { label:'Rosa',     c:'#E07AA5', on:'#2A0F1C' },
+  naranja:  { label:'Naranja',  c:'#E39A55', on:'#2A1708' },
+  turquesa: { label:'Turquesa', c:'#4FB8B8', on:'#0A2222' },
+  dorado:   { label:'Dorado',   c:'#D4B25A', on:'#241C06' },
+  rojo:     { label:'Rojo',     c:'#E37070', on:'#2A0D0D' }
+};
+const BACKGROUNDS = {
+  grafito:    { label:'Grafito',    bg:'#12161C', s:'#1B2129', r:'#232A35', l:'#2A313B' },
+  medianoche: { label:'Medianoche', bg:'#0D1322', s:'#151D31', r:'#1D263D', l:'#27324C' },
+  negro:      { label:'Negro',      bg:'#000000', s:'#0F1012', r:'#18191C', l:'#25272B' },
+  cafe:       { label:'Café',       bg:'#16120E', s:'#201A15', r:'#2A231C', l:'#362D25' },
+  bosque:     { label:'Bosque',     bg:'#0E1511', s:'#161F1A', r:'#1E2922', l:'#28352D' },
+  vino:       { label:'Vino',       bg:'#170E12', s:'#21151A', r:'#2C1C23', l:'#3A262F' }
+};
+const FONTS = {
+  clasica:    { label:'Clásica',    title:"Georgia, 'Noto Serif', serif",            body:"-apple-system, Roboto, 'Segoe UI', sans-serif" },
+  moderna:    { label:'Moderna',    title:"-apple-system, Roboto, 'Segoe UI', sans-serif", body:"-apple-system, Roboto, 'Segoe UI', sans-serif" },
+  condensada: { label:'Condensada', title:"'sans-serif-condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif", body:"'sans-serif-condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif" },
+  maquina:    { label:'Máquina',    title:"'monospace', ui-monospace, Consolas, monospace", body:"-apple-system, Roboto, 'Segoe UI', sans-serif" },
+  casual:     { label:'Casual',     title:"'casual', 'Comic Sans MS', 'Chalkboard SE', cursive", body:"-apple-system, Roboto, 'Segoe UI', sans-serif" },
+  manuscrita: { label:'Manuscrita', title:"'cursive', 'Dancing Script', 'Brush Script MT', cursive", body:"-apple-system, Roboto, 'Segoe UI', sans-serif" }
+};
+const SIZES = { normal:{ label:'Normal', z:1 }, grande:{ label:'Grande', z:1.08 }, xl:{ label:'Muy grande', z:1.16 } };
+const GREET_STYLES = { formal:'Buenos días, Brandon', parce:'¿Qué más, Brandon?', emoji:'☀️ Buenos días, Brandon' };
+
+function defaultPrefs(){ return { name:'', onboarded:false, accent:'verde', bg:'grafito', font:'clasica', size:'normal', greet:'formal', weekStart:1 }; }
+let prefs = loadPrefs();
+function loadPrefs(){ try{ return Object.assign(defaultPrefs(), JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); }catch(e){ return defaultPrefs(); } }
+function savePrefs(){ try{ localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); }catch(e){} }
+
+function hexA(hex, a){ const n = parseInt(hex.slice(1), 16); return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`; }
+function applyPrefs(){
+  const r = document.documentElement.style;
+  const ac = ACCENTS[prefs.accent] || ACCENTS.verde, bg = BACKGROUNDS[prefs.bg] || BACKGROUNDS.grafito, f = FONTS[prefs.font] || FONTS.clasica;
+  r.setProperty('--accent', ac.c); r.setProperty('--on-accent', ac.on);
+  r.setProperty('--accent-soft', hexA(ac.c, .16)); r.setProperty('--accent-line', hexA(ac.c, .5));
+  r.setProperty('--bg', bg.bg); r.setProperty('--surface', bg.s); r.setProperty('--surface-raised', bg.r); r.setProperty('--line', bg.l);
+  r.setProperty('--serif', f.title); r.setProperty('--sans', f.body);
+  document.body && (document.body.style.zoom = (SIZES[prefs.size] || SIZES.normal).z);
+  const meta = document.querySelector('meta[name=theme-color]'); if(meta) meta.content = bg.bg;
+}
+function setPref(k, v){ prefs[k] = v; savePrefs(); applyPrefs(); render(); }
+
+function firstName(){ return (prefs.name || '').trim().split(/\s+/)[0] || ''; }
+function greetingLine(){
+  const n = firstName();
+  const h = new Date().getHours();
+  const part = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const who = n ? `<b class="greet-name">${escapeAttr(n)}</b>` : '';
+  if(prefs.greet === 'parce'){
+    const day = Math.floor(Date.now() / 86400000);
+    const opts = h >= 19 || h < 5
+      ? ['Buenas noches', '¿Cómo te fue hoy', '¿Qué más pues']
+      : ['¿Qué más', 'Buenas', '¿Cómo va todo', '¿Qué hubo'];
+    const o = opts[day % opts.length];
+    const q = o.startsWith('¿');
+    return n ? `${o}, ${who}${q ? '?' : ''}` : `${o}${q ? '?' : ''}`;
+  }
+  const icon = prefs.greet === 'emoji' ? (h < 12 ? '☀️ ' : h < 19 ? '🌤️ ' : '🌙 ') : '';
+  return `${icon}${part}${n ? ', ' + who : ''}`;
+}
+
+// ---------------------------------------------------------------- bienvenida
+let obStep = 0, obError = '';
+function needsOnboarding(){ return !prefs.onboarded; }
+function obGo(n){ obError = ''; obStep = n; render(); window.scrollTo(0,0); setTimeout(() => { const el = document.querySelector('.ob [autofocus]'); if(el) el.focus(); }, 60); }
+function obSaveName(){ const v = (document.getElementById('ob-name') || {}).value || ''; prefs.name = v.trim(); savePrefs(); obGo(2); }
+function obSaveBalance(){
+  const el = document.getElementById('ob-bal');
+  if(el && el.value.trim() !== ''){ data.settings.currentBalance = parseMoney(el.value); saveData(); }
+  obGo(4);
+}
+function obFinish(){ prefs.onboarded = true; savePrefs(); obStep = 0; activeTab = 'home'; render(); window.scrollTo(0,0); showToast(firstName() ? `¡Listo, ${firstName()}! Todo quedó guardado` : '¡Listo! Todo quedó guardado'); }
+function reopenOnboarding(){ prefs.onboarded = false; savePrefs(); obGo(1); }
+function obRestoreFile(input){
+  const f = input.files && input.files[0]; input.value = '';
+  if(!f) return;
+  readFileText(f).then(txt => {
+    let parsed; try{ parsed = JSON.parse(txt); }catch(e){ obError = 'Ese archivo no es un respaldo de la app.'; render(); return; }
+    if(!parsed || typeof parsed !== 'object' || !(parsed.debts || parsed.bank || parsed.incomes || parsed.ledger)){ obError = 'Ese archivo no parece un respaldo de Control Financiero.'; render(); return; }
+    restoreAnyBackup(parsed);
+    obGo(1); showToast('Respaldo restaurado ✓');
+  }).catch(() => { obError = 'No pude abrir el archivo.'; render(); });
+}
+// Acepta el respaldo viejo (solo finanzas) y el completo (finanzas + subapps + preferencias).
+function restoreAnyBackup(parsed){
+  if(parsed.ledger){
+    Object.keys(parsed.extra || {}).forEach(k => { try{ localStorage.setItem(k, typeof parsed.extra[k] === 'string' ? parsed.extra[k] : JSON.stringify(parsed.extra[k])); }catch(e){} });
+    if(parsed.prefs){ prefs = Object.assign(defaultPrefs(), parsed.prefs, { onboarded: prefs.onboarded }); savePrefs(); applyPrefs(); }
+    parsed = parsed.ledger;
+  }
+  data = normalizeData(parsed); saveBlocked = false; loadState = 'ok'; saveData();
+}
+
+function swatches(kind){
+  if(kind === 'accent') return `<div class="swatches">${Object.entries(ACCENTS).map(([k,a]) => `<button class="sw ${prefs.accent===k?'on':''}" style="background:${a.c};" onclick="setPref('accent','${k}')" aria-label="${a.label}"></button>`).join('')}</div>`;
+  if(kind === 'bg') return `<div class="opt-grid">${Object.entries(BACKGROUNDS).map(([k,b]) => `<button class="opt ${prefs.bg===k?'on':''}" onclick="setPref('bg','${k}')"><span class="bgdot" style="background:${b.bg};box-shadow:inset 0 0 0 6px ${b.r};"></span>${b.label}</button>`).join('')}</div>`;
+  if(kind === 'font') return `<div class="opt-grid">${Object.entries(FONTS).map(([k,f]) => `<button class="opt ${prefs.font===k?'on':''}" onclick="setPref('font','${k}')"><span style="font-family:${f.title.replace(/"/g,"'")};font-size:17px;">Aa</span>${f.label}</button>`).join('')}</div>`;
+  if(kind === 'size') return `<div class="tab-row">${Object.entries(SIZES).map(([k,s]) => `<button class="tab-btn ${prefs.size===k?'active':''}" onclick="setPref('size','${k}')">${s.label}</button>`).join('')}</div>`;
+  if(kind === 'greet'){
+    const n = firstName() || 'Brandon';
+    const ex = { formal:`Buenos días, ${n}`, parce:`¿Qué más, ${n}?`, emoji:`☀️ Buenos días, ${n}` };
+    return `<div class="tab-row" style="flex-wrap:wrap;">${Object.keys(GREET_STYLES).map(k => `<button class="tab-btn ${prefs.greet===k?'active':''}" onclick="setPref('greet','${k}')">${escapeAttr(ex[k])}</button>`).join('')}</div>`;
+  }
+  return '';
+}
+function renderPersonalize(){
+  return `
+    <p class="ob-label">Color</p>${swatches('accent')}
+    <p class="ob-label">Fondo</p>${swatches('bg')}
+    <p class="ob-label">Letra de los títulos</p>${swatches('font')}
+    <p class="ob-label">Tamaño</p>${swatches('size')}
+    <p class="ob-label">Saludo</p>${swatches('greet')}`;
+}
+function obDots(){ return `<div class="ob-dots">${[1,2,3,4].map(i => `<span class="${obStep>=i?'on':''}"></span>`).join('')}</div>`; }
+function renderOnboarding(){
+  const n = firstName();
+  let body = '';
+  if(obStep === 0){
+    body = `<div class="ob-hero">
+        <div class="ob-logo">${ICONS.home}</div>
+        <p class="ob-title">Bienvenido a<br>Control Financiero</p>
+        <p class="ob-text">Tus ingresos, gastos, deudas y pagos en un solo lugar. Te voy a hacer unas preguntas rápidas para dejarla a tu gusto.</p>
+      </div>
+      <button class="btn btn-solid ob-main" onclick="obGo(1)">Empezar</button>
+      <label class="btn ob-main" for="ob-restore" style="display:block;text-align:center;margin-top:10px;">Vengo de otro teléfono: restaurar respaldo</label>
+      <input type="file" id="ob-restore" accept=".json,application/json,text/plain" style="display:none" onchange="obRestoreFile(this)">
+      ${obError ? `<div class="error-box">${escapeAttr(obError)}</div>` : ''}
+      <p class="ob-credit">Creada por <b>Brandon Poveda</b><br><span>hecha con la ayuda de Claude</span></p>`;
+  } else if(obStep === 1){
+    body = `${obDots()}<p class="ob-q">¿Cómo te llamas?</p>
+      <p class="ob-text">Para saludarte arriba cada vez que abras la app.</p>
+      <input type="text" id="ob-name" class="ob-input" placeholder="Tu nombre" value="${escapeAttr(prefs.name)}" autofocus autocomplete="given-name" onkeydown="if(event.key==='Enter')obSaveName()">
+      <button class="btn btn-solid ob-main" onclick="obSaveName()">Siguiente</button>`;
+  } else if(obStep === 2){
+    body = `${obDots()}<p class="ob-q">¿Qué día empieza tu semana?</p>
+      <p class="ob-text">La app cuenta tus ingresos y gastos por semana. Muchos la empiezan el día que les pagan.</p>
+      <div class="opt-grid days">${[1,2,3,4,5,6,0].map(d => `<button class="opt ${prefs.weekStart===d?'on':''}" onclick="prefs.weekStart=${d};savePrefs();render()">${capFirst(WEEKDAYS[d])}</button>`).join('')}</div>
+      <button class="btn btn-solid ob-main" onclick="obGo(3)">Siguiente</button>
+      <button class="card-link ob-skip" onclick="obGo(1)">← Atrás</button>`;
+  } else if(obStep === 3){
+    const cur = (data.settings && data.settings.currentBalance) || 0;
+    body = `${obDots()}<p class="ob-q">¿Cuánto tienes hoy en el banco?</p>
+      <p class="ob-text">Es tu punto de partida. Después se actualiza solo cuando subes extractos o capturas.</p>
+      <div class="ob-money"><span>$</span><input type="number" id="ob-bal" inputmode="decimal" step="0.01" placeholder="0.00" value="${cur ? cur.toFixed(2) : ''}" autofocus onkeydown="if(event.key==='Enter')obSaveBalance()"></div>
+      <button class="btn btn-solid ob-main" onclick="obSaveBalance()">Siguiente</button>
+      <button class="card-link ob-skip" onclick="obGo(4)">Saltar por ahora</button>`;
+  } else {
+    body = `${obDots()}<p class="ob-q">Ponla a tu gusto</p>
+      <div class="ob-preview"><p class="greeting">${greetingLine()}</p><p class="page-title">Inicio</p></div>
+      ${renderPersonalize()}
+      <button class="btn btn-solid ob-main" style="margin-top:18px;" onclick="obFinish()">${n ? `¡Listo, ${escapeAttr(n)}!` : '¡Listo!'}</button>
+      <button class="card-link ob-skip" onclick="obGo(3)">← Atrás</button>`;
+  }
+  return `<div class="ob">${body}</div>`;
+}
+
+// ---------------------------------------------------------------- respaldo completo
+function fullBackupObject(){
+  const extra = {};
+  ['ingles-data','interes-data','notas-data','notes-data','rotador-data'].forEach(k => { try{ const v = localStorage.getItem(k); if(v) extra[k] = v; }catch(e){} });
+  try{ for(let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if(k && k !== STORAGE_KEY && k !== PREFS_KEY && !(k in extra)) extra[k] = localStorage.getItem(k); } }catch(e){}
+  return { app:'control-financiero', version:2, date: todayISO(), ledger: data, prefs, extra };
 }
 
 loadData();

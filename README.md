@@ -87,3 +87,10 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 ### 3.2
 - **Subir captura de pantalla**: en "Subir extracto" ahora puedes subir screenshots de los movimientos recientes de la app de TD. El teléfono lee el texto (Google ML Kit, sin internet), arma los movimientos (pendientes con fecha de hoy, los demás con la fecha del título), ignora el saldo gris debajo de cada monto y toma el "Available balance" para actualizar tu saldo. Puedes corregir, quitar o agregar filas antes de guardar.
 - Las capturas que se pisan no se duplican, y cuando luego subes el extracto, los movimientos que ya llegaron por captura se confirman con los datos del extracto en vez de contarse dos veces.
+
+### 3.3
+- **Bienvenida** la primera vez que abres la app: tu nombre, qué día empieza tu semana, tu saldo de arranque y personalización. Opción de restaurar un respaldo si vienes de otro teléfono.
+- **Saludo arriba** con tu nombre, según la hora ("Buenos días / Buenas tardes / Buenas noches, Brandon"), estilo relajado ("¿Qué más, Brandon?") o con emoji.
+- **Personalizar** (Más → Personalizar): color, fondo, letra de los títulos, tamaño de letra, saludo y día de inicio de la semana. Las subapps (Inglés, Interés, Notas) usan los mismos colores.
+- **Respaldo completo**: "Guardar archivo" ahora guarda finanzas + Inglés + Interés compuesto + Notas + tus preferencias, y "Restaurar" lo recupera todo.
+- **Acerca de**: Creada por Brandon Poveda, hecha con la ayuda de Claude.
