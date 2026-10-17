@@ -83,3 +83,7 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 ### 3.1
 - Interés compuesto: tabla nueva más clara (Entra / Resultado / Queda / Fecha, cada fila separada, cifras grandes abreviadas).
 - "Otro resultado": registrar cualquier ganancia o pérdida poniendo el %, el monto o en cuánto quedó el capital; puedes decidir si cuenta como victoria.
+
+### 3.2
+- **Subir captura de pantalla**: en "Subir extracto" ahora puedes subir screenshots de los movimientos recientes de la app de TD. El teléfono lee el texto (Google ML Kit, sin internet), arma los movimientos (pendientes con fecha de hoy, los demás con la fecha del título), ignora el saldo gris debajo de cada monto y toma el "Available balance" para actualizar tu saldo. Puedes corregir, quitar o agregar filas antes de guardar.
+- Las capturas que se pisan no se duplican, y cuando luego subes el extracto, los movimientos que ya llegaron por captura se confirman con los datos del extracto en vez de contarse dos veces.

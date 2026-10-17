@@ -10,8 +10,8 @@ android {
         applicationId 'com.ktrsis.controlfinanciero'
         minSdk 26
         targetSdk 35
-        versionCode 18
-        versionName '3.1'
+        versionCode 19
+        versionName '3.2'
     }
 
     signingConfigs {
@@ -27,4 +27,9 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    // Lectura de texto en capturas de pantalla (modelo incluido en la app, funciona sin internet)
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }

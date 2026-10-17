@@ -61,10 +61,13 @@ public class MainActivity extends Activity {
                 fileCallback = callback;
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("*/*");
+                boolean images = false;
+                if (params != null && params.getAcceptTypes() != null)
+                    for (String t : params.getAcceptTypes()) if (t != null && t.startsWith("image")) images = true;
+                i.setType(images ? "image/*" : "*/*");
                 i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params != null && params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
                 try {
-                    startActivityForResult(Intent.createChooser(i, "Elige los extractos (CSV)"), REQ_FILE);
+                    startActivityForResult(Intent.createChooser(i, images ? "Elige las capturas" : "Elige los extractos"), REQ_FILE);
                 } catch (Exception e) {
                     fileCallback = null;
                     return false;
@@ -186,6 +189,50 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 return "";
             }
+        }
+
+        /** Lee el texto de una imagen (captura de pantalla del banco) con ML Kit, sin internet.
+         *  Devuelve por window.onOcrResult(id, {w,h,lines:[{t,x,y,w,h}]}). */
+        @JavascriptInterface
+        public void ocrImage(String id, String b64) {
+            try {
+                byte[] bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                if (bmp == null) { ocrError(id, "no se pudo abrir la imagen"); return; }
+                com.google.mlkit.vision.common.InputImage img = com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0);
+                com.google.mlkit.vision.text.TextRecognizer rec = com.google.mlkit.vision.text.TextRecognition.getClient(
+                        com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS);
+                final int w = bmp.getWidth(), h = bmp.getHeight();
+                rec.process(img)
+                        .addOnSuccessListener(text -> {
+                            try {
+                                JSONArray lines = new JSONArray();
+                                for (com.google.mlkit.vision.text.Text.TextBlock b : text.getTextBlocks()) {
+                                    for (com.google.mlkit.vision.text.Text.Line l : b.getLines()) {
+                                        android.graphics.Rect r = l.getBoundingBox();
+                                        if (r == null) continue;
+                                        JSONObject o = new JSONObject();
+                                        o.put("t", l.getText()); o.put("x", r.left); o.put("y", r.top);
+                                        o.put("w", r.width()); o.put("h", r.height());
+                                        lines.put(o);
+                                    }
+                                }
+                                JSONObject out = new JSONObject();
+                                out.put("w", w); out.put("h", h); out.put("lines", lines);
+                                final String js = "window.onOcrResult&&onOcrResult(" + JSONObject.quote(id) + "," + out.toString() + ")";
+                                runOnUiThread(() -> web.evaluateJavascript(js, null));
+                            } catch (Exception e) { ocrError(id, e.getMessage()); }
+                            rec.close();
+                        })
+                        .addOnFailureListener(e -> { ocrError(id, e.getMessage()); rec.close(); });
+            } catch (Throwable e) {
+                ocrError(id, e.getMessage());
+            }
+        }
+
+        private void ocrError(String id, String msg) {
+            final String js = "window.onOcrError&&onOcrError(" + JSONObject.quote(id) + "," + JSONObject.quote(msg == null ? "error" : msg) + ")";
+            runOnUiThread(() -> web.evaluateJavascript(js, null));
         }
 
         /** Recibe [{title, text, at}] y programa una notificación para cada uno (reemplaza las anteriores). */

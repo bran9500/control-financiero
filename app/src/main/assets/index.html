@@ -229,6 +229,9 @@
   .upload-zone .ico{width:46px;height:46px;border-radius:50%;background:var(--surface-raised);display:flex;align-items:center;justify-content:center;}
   .upload-zone .big{font-size:15px;color:var(--ink);}
   .upload-zone .small{font-size:12.5px;color:var(--ink-faint);}
+  .shot-zone{padding:16px;flex-direction:row;text-align:left;gap:14px;border-style:solid;border-color:var(--line);}
+  .shot-zone .ico{flex-shrink:0;color:var(--good);}
+  .shot-edit{margin-top:10px;background:var(--surface-raised);border-radius:12px;padding:10px;}
   .steps{margin:0;padding-left:18px;font-size:13px;color:var(--ink-dim);line-height:1.7;}
   .sum-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
   .sum-box{background:var(--surface-raised);border-radius:12px;padding:10px;text-align:center;}
@@ -1280,7 +1283,7 @@ function normDesc(s){ return String(s || '').toUpperCase().replace(/\s+/g,' ').t
 function txFingerprint(t){ return t.date+'|'+t.dir+'|'+Math.round(t.amount*100)+'|'+normDesc(t.desc); }
 
 // Nombre corto del comercio, para agrupar ("VISA DDA PUR 461234 SHELL OIL 5744 JERSEY CITY" → "SHELL OIL").
-const DESC_NOISE = /\b(VISA|DDA|PUR|PURCHASE|POS|DEBIT|CREDIT|CARD|CRD|DBT|CHECKCARD|DBCRD|CRCRD|ACH|ELECTRONIC|PMT|WEB|PAYMENT|RECURRING|ONLINE|XFER|AP|AUT|INTL|DES|ID|INDN|CO|PPD|CCD|TO|FROM|THE|SQ|TST|PP|DEPOSIT|DEP|WITHDRAWAL|WDRL)\b/g;
+const DESC_NOISE = /\b(VISA|DDA|PUR|PURCHASE|POS|DEBIT|CREDIT|CARD|CRD|DBT|CHECKCARD|DBCRD|CRCRD|ACH|ELECTRONIC|PMT|WEB|PAYMENT|RECURRING|ONLINE|XFER|AP|AUT|INTL|DES|ID|INDN|CO|PPD|CCD|TO|FROM|THE|SQ|TST|PP|DEPOSIT|DEP|WITHDRAWAL|WDRL|AUTHORIZATION|AUTHORIZ|TEMP|AUTH)\b/g;
 function merchantKey(desc){
   const raw = normDesc(desc);
   // Zelle: separar por persona ("ZELLE CARLOS MENDEZ") en vez de juntar todos como "TD ZELLE".
@@ -1426,12 +1429,16 @@ function buildImportPreview(files){
 
   const candidates = [];
   const taken = {};
-  let dup = 0, total = 0;
+  let dup = 0, total = 0, fromShots = 0;
+  const shotUpgrades = [], shotUsed = new Set();
   perFile.forEach((pf, fi) => pf.txs.forEach(t => {
     total++;
     if(fromFile[t.fp] !== fi){ dup++; return; }          // repetido en otro extracto
     taken[t.fp] = (taken[t.fp] || 0) + 1;
     if(taken[t.fp] <= (stored[t.fp] || 0)){ dup++; return; } // ya estaba guardado
+    // ya había llegado por una captura de pantalla: se completa con los datos del extracto
+    const sh = bankList().find(s => s.src === 'shot' && !shotUsed.has(s.id) && sameMove(s, t));
+    if(sh){ shotUsed.add(sh.id); shotUpgrades.push({ id: sh.id, date: t.date, desc: t.desc, balance: t.balance }); dup++; fromShots++; return; }
     candidates.push(t);
   }));
 
@@ -1469,7 +1476,8 @@ function buildImportPreview(files){
     fresh: candidates, dup, manualDup, skipped, total, warnings,
     from: all[0], to: all[all.length-1],
     lastBalance, lastBalanceDate,
-    updateBalance: lastBalance !== null && daysOld !== null && daysOld <= 7
+    updateBalance: lastBalance !== null && daysOld !== null && daysOld <= 7,
+    shotUpgrades, fromShots
   };
 }
 
@@ -1501,11 +1509,21 @@ function toggleUpdateBalance(v){ if(importPreview){ importPreview.updateBalance 
 function confirmImport(){
   if(!importPreview) return;
   const p = importPreview;
-  const imp = { id:'imp'+Date.now(), date: todayISO(), fileName: p.fileName, files: p.fileCount, added: p.fresh.length, dup: p.dup, from: p.from, to: p.to };
+  if(p.shot){
+    const bad = p.fresh.findIndex(t => !(t.amount > 0));
+    if(bad >= 0){ shotEditIdx = bad; render(); showToast('Hay un movimiento sin monto: corrígelo o quítalo'); return; }
+  }
+  (p.shotUpgrades || []).forEach(u => {
+    const t = bankList().find(x => x.id === u.id); if(!t) return;
+    t.date = u.date; t.desc = u.desc; t.src = 'stmt'; t.fromShot = true; t.fp = txFingerprint(t);
+    if(u.balance !== null && u.balance !== undefined) t.balance = u.balance;
+  });
+  const imp = { id:'imp'+Date.now(), date: todayISO(), fileName: p.fileName, files: p.fileCount, added: p.fresh.length, dup: p.dup, from: p.from, to: p.to, shot: !!p.shot };
   p.fresh.forEach(t => { t.importId = imp.id; data.bank.transactions.push(t); });
   data.bank.imports.push(imp);
   const autoLinked = autoLinkNew(p.fresh);
-  let msg = p.fresh.length ? `Listo: ${p.fresh.length} movimiento${p.fresh.length===1?'':'s'} nuevo${p.fresh.length===1?'':'s'} guardado${p.fresh.length===1?'':'s'}` : 'No había movimientos nuevos en ese extracto';
+  let msg = p.fresh.length ? `Listo: ${p.fresh.length} movimiento${p.fresh.length===1?'':'s'} nuevo${p.fresh.length===1?'':'s'} guardado${p.fresh.length===1?'':'s'}` : (p.shot ? 'No había movimientos nuevos en la captura' : 'No había movimientos nuevos en ese extracto');
+  if(p.fromShots) msg += ` · ${p.fromShots} de tus capturas quedaron confirmados`;
   if(p.updateBalance && p.lastBalance !== null){
     data.settings.currentBalance = p.lastBalance;
     msg += ` · saldo actualizado a ${fmtMoney(p.lastBalance)}`;
@@ -1518,7 +1536,7 @@ function confirmImport(){
   window.scrollTo(0,0);
   showToast(msg);
 }
-function cancelImport(){ importPreview = null; render(); }
+function cancelImport(){ importPreview = null; shotEditIdx = null; render(); }
 
 function undoImport(id){
   const imp = data.bank.imports.find(x => x.id === id);
@@ -2883,6 +2901,7 @@ function submitLoan(){
 let showOlder = {}; // { lista: bool } — meses anteriores escondidos por defecto
 
 const ICONS = {
+  camera:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg>',
   mov:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16"/><path d="m3 8 4-4 4 4"/><path d="M17 20V4"/><path d="m21 16-4 4-4-4"/></svg>',
   debts:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg>',
@@ -3492,6 +3511,14 @@ function renderImportTab(){
       <span class="small">Puedes elegir varios a la vez, por ejemplo los últimos 3 meses</span>
     </label>`}
     <input type="file" id="statement-input" accept=".pdf,application/pdf,.csv,text/csv,text/comma-separated-values,text/plain,application/vnd.ms-excel" multiple style="display:none" onchange="handleStatementFiles(this)">
+    ${shotBusy ? `<div class="upload-zone" style="cursor:default;margin-top:10px;">
+      <span class="ico">${ICONS.camera}</span><span class="big">Leyendo la captura…</span><span class="small">Unos segundos</span></div>`
+    : `<label class="upload-zone shot-zone" for="shot-input" style="margin-top:10px;">
+      <span class="ico">${ICONS.camera}</span>
+      <span style="display:flex;flex-direction:column;gap:3px;"><span class="big">Subir captura de pantalla</span>
+      <span class="small">De los movimientos recientes en la app del banco. Puedes elegir varias.</span></span>
+    </label>`}
+    <input type="file" id="shot-input" accept="image/*" multiple style="display:none" onchange="handleShotFiles(this)">
     ${importError ? `<div class="error-box">${escapeAttr(importError)}</div>` : ''}
   </div>
   <div class="card">
@@ -3503,6 +3530,7 @@ function renderImportTab(){
       <li>Vuelve aquí, toca <b>Elegir extractos</b> y selecciónalos todos juntos.</li>
     </ol>
     <p class="item-meta" style="margin-top:10px;">También sirve el archivo CSV de "Descargar movimientos" si alguna vez lo prefieres: trae los movimientos más recientes, incluso los de esta semana.</p>
+    <p class="item-meta" style="margin-top:10px;"><b style="color:var(--ink);">¿El extracto no trae lo de esta semana?</b> Toma captura de pantalla de los movimientos en la app de TD y súbela con <b>Subir captura</b>. Cuando llegue el extracto con esos movimientos, la app los reconoce y no los cuenta dos veces.</p>
     <p class="item-meta" style="margin-top:10px;">No importa si subes fechas que ya habías subido: los movimientos repetidos se detectan y no se cuentan dos veces. Tampoco los que ya anotaste a mano.</p>
   </div>`;
 
@@ -3513,7 +3541,7 @@ function renderImportTab(){
       <div class="item-row ${i===0?'list-first':''}">
         <div class="item-main">
           <div class="item-name">${fmtShortDate(imp.from)} – ${fmtShortDate(imp.to)}</div>
-          <div class="item-meta">Subido el ${fmtShortDate(imp.date)} · ${imp.added} nuevos${imp.dup?` · ${imp.dup} repetidos`:''}${imp.files>1?` · ${imp.files} archivos`:''}</div>
+          <div class="item-meta">${imp.shot ? '📷 Captura · ' : ''}Subido el ${fmtShortDate(imp.date)} · ${imp.added} nuevos${imp.dup?` · ${imp.dup} repetidos`:''}${imp.files>1?` · ${imp.files} archivos`:''}</div>
         </div>
         ${confirmingDeleteId === imp.id ? `<span class="del-confirm">
             <button class="item-del-yes" onclick="undoImport('${imp.id}')">Sí, deshacer</button>
@@ -3542,12 +3570,14 @@ function renderImportPreview(){
   const counts = {};
   p.fresh.forEach(t => { counts[t.category] = (counts[t.category]||0) + 1; });
   let html = `<div class="card">
-    <div class="card-head"><div><p class="card-title">Revisa antes de guardar</p><p class="card-sub">${p.fileCount} archivo${p.fileCount===1?'':'s'} · ${fmtShortDate(p.from)} – ${fmtShortDate(p.to)}</p></div></div>
+    <div class="card-head"><div><p class="card-title">Revisa antes de guardar</p><p class="card-sub">${p.shot ? (p.fileCount===1 ? '1 captura' : p.fileCount + ' capturas') : p.fileCount + ' archivo' + (p.fileCount===1?'':'s')} · ${fmtShortDate(p.from)} – ${fmtShortDate(p.to)}</p></div></div>
     <div class="sum-grid">
       <div class="sum-box"><div class="n" style="color:var(--good);">${p.fresh.length - p.manualDup}</div><div class="t">nuevos</div></div>
-      <div class="sum-box"><div class="n">${p.dup}</div><div class="t">repetidos (se saltan)</div></div>
+      <div class="sum-box"><div class="n">${p.dup}</div><div class="t">${p.shot ? 'ya estaban (se saltan)' : 'repetidos (se saltan)'}</div></div>
       <div class="sum-box"><div class="n">${p.manualDup}</div><div class="t">ya anotados a mano</div></div>
     </div>
+    ${p.shot ? `<p class="item-meta" style="margin:0 0 10px 0;">Revisa que la app haya leído bien cada movimiento: toca <b>Corregir</b> para cambiar fecha, nombre o monto, o <b>Quitar</b> si sobra.</p>` : ''}
+    ${p.fromShots ? `<p class="item-meta note-good" style="margin:0 0 10px 0;">${p.fromShots} movimiento${p.fromShots===1?'':'s'} de tus capturas aparece${p.fromShots===1?'':'n'} en este extracto: se confirman y no se duplican.</p>` : ''}
     ${p.warnings && p.warnings.length ? `<div class="error-box" style="margin-top:0;margin-bottom:10px;">${p.warnings.map(escapeAttr).join('<br>')}</div>` : ''}
     ${p.lastBalance !== null ? `<label class="check-row"><input type="checkbox" ${p.updateBalance?'checked':''} onchange="toggleUpdateBalance(this.checked)"><span>Actualizar mi saldo a <b style="color:var(--ink);">${fmtMoney(p.lastBalance)}</b> (saldo del banco al ${fmtShortDate(p.lastBalanceDate)})</span></label>` : ''}
     <div class="btn-row" style="margin-top:6px;">
@@ -3556,17 +3586,23 @@ function renderImportPreview(){
     </div>
   </div>`;
   if(!p.fresh.length){
-    return html + `<div class="card"><p class="empty-chart">Todos los movimientos de ${p.fileCount===1?'este extracto':'estos extractos'} ya estaban guardados. No hay nada nuevo.</p></div>`;
+    return html + `<div class="card"><p class="empty-chart">${p.shot ? 'Todos los movimientos de la captura ya estaban guardados. No hay nada nuevo.' : `Todos los movimientos de ${p.fileCount===1?'este extracto':'estos extractos'} ya estaban guardados. No hay nada nuevo.`}</p>${p.shot ? `<button class="btn" style="margin-top:10px;" onclick="addShotRow()">+ Agregar uno a mano</button>` : ''}</div>`;
   }
   html += `<div class="card">
-    <div class="card-head"><p class="card-title">Movimientos nuevos</p></div>
-    <p class="item-meta" style="margin:-4px 0 8px 0;">La app ya les puso categoría. Si alguna está mal, cámbiala aquí: los demás del mismo comercio se cambian solos.${p.fresh.some(t=>t.fromPdf) ? ' Si un movimiento del PDF quedó como entrada y era salida (o al revés), toca ⇄.' : ''}</p>
+    <div class="card-head"><p class="card-title">Movimientos nuevos</p>${p.shot ? `<button class="card-link" onclick="addShotRow()">+ Agregar</button>` : ''}</div>
+    <p class="item-meta" style="margin:-4px 0 8px 0;">La app ya les puso categoría. Si alguna está mal, cámbiala aquí: los demás del mismo comercio se cambian solos.${p.fresh.some(t=>t.fromPdf) ? ` Si un movimiento ${p.shot ? 'de la captura' : 'del PDF'} quedó como entrada y era salida (o al revés), toca ⇄.` : ''}</p>
     ${p.fresh.map((t,i) => `
       <div class="item-row ${i===0?'list-first':''}" style="align-items:flex-start;">
         <div class="item-main">
           <div class="item-name">${escapeAttr(t.dir==='in' ? incomeSourceName({bank:true, source:t.desc}) : niceName(merchantKey(t.desc)))}</div>
           <div class="item-meta">${fmtShortDate(t.date)} · ${escapeAttr(t.desc)}</div>
           ${t.auto==='manual' ? `<div class="item-meta note-good">Ya lo tenías anotado a mano — no se cuenta dos veces</div>` : ''}
+          ${p.shot ? (shotEditIdx === i ? `<div class="shot-edit">
+              <div class="field-row"><div class="field"><label>Fecha</label><input type="date" id="se-date" value="${t.date}"></div>
+              <div class="field"><label>Monto</label><input type="number" id="se-amt" inputmode="decimal" step="0.01" value="${t.amount || ''}"></div></div>
+              <div class="field"><label>Nombre</label><input type="text" id="se-desc" value="${escapeAttr(t.desc)}"></div>
+              <div class="btn-row" style="margin-top:8px;"><button class="btn btn-solid" style="flex:1;" onclick="saveShotRow(${i})">Guardar</button><button class="btn" onclick="editShotRow(${i})">Cancelar</button></div>
+            </div>` : `<div style="display:flex;gap:14px;margin-top:6px;"><button class="card-link" style="font-size:12px;padding:0;" onclick="editShotRow(${i})">Corregir</button><button class="card-link" style="font-size:12px;padding:0;color:var(--warn);" onclick="removeShotRow(${i})">Quitar</button></div>`) : ''}
         </div>
         <div class="item-amounts" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
           <span class="item-amount ${t.dir==='in'?'in':''}">${t.dir==='in'?'+':'-'}${fmtMoney(t.amount)}</span>
@@ -3933,6 +3969,259 @@ function keepFocusVisible(){
 }
 document.addEventListener('focusin', () => setTimeout(keepFocusVisible, 250));
 window.addEventListener('resize', keepFocusVisible);
+
+// ================================================================ CAPTURAS DEL BANCO
+// Subir un screenshot de los movimientos recientes (app de TD Bank, Zelle, etc.):
+// el teléfono lee el texto (ML Kit, sin internet), aquí se arman los movimientos,
+// se revisan/corrigen y se guardan. Cuando después llega el extracto con esos mismos
+// movimientos, se reconocen y no se duplican.
+
+const SHOT_IN_RE = /\b(DEPOSIT|DEP\b|PAYROLL|DIRECT DEP|ZELLE (FROM|PAYMENT FROM)|RECEIVED|RECIBID|REFUND|REEMBOLSO|CREDIT\b|INTEREST|MOBILE DEPOSIT|CASH APP.*FROM|TRANSFER FROM|FROM\b.*ZELLE)/i;
+const SHOT_SKIP_RE = /^(search|buscar|transactions?|activity|actividad|movimientos|filter|filtrar|accounts?|cuentas?|see all|ver todo|view all|details?|detalles|statements?|home|inicio|pay|deposit|transfer|menu|more|más|help|ayuda|back|atr[aá]s|done|listo|all|todos|posted|pending|pendientes?|\d{1,2}:\d{2}.*|[\d%\s.]+)$/i;
+const SHOT_BAL_RE = /(available|current|ledger|account)?\s*balance|saldo|disponible/i;
+const MONTHS_ES = {ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,set:9,oct:10,nov:11,dic:12};
+
+let shotBusy = false;
+let ocrSeq = 0;
+const ocrWaiters = {};
+window.onOcrResult = function(id, json){
+  const w = ocrWaiters[id]; if(!w) return;
+  delete ocrWaiters[id];
+  try{ w.res(typeof json === 'string' ? JSON.parse(json) : json); }catch(e){ w.rej(e); }
+};
+window.onOcrError = function(id, msg){ const w = ocrWaiters[id]; if(!w) return; delete ocrWaiters[id]; w.rej(new Error(msg || 'no se pudo leer la imagen')); };
+
+function canOcr(){ return !!(window.__ocrMock || (window.Android && typeof Android.ocrImage === 'function')); }
+
+function imageToJpegB64(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      // Ancho máximo 1280 px: suficiente para leer y no satura el puente con Android.
+      const sc = Math.min(1, 1280 / img.width);
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', 0.92).split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('no es una imagen')); };
+    img.src = url;
+  });
+}
+function ocrFile(file){
+  if(window.__ocrMock) return Promise.resolve(window.__ocrMock(file));
+  return imageToJpegB64(file).then(b64 => new Promise((res, rej) => {
+    const id = 'o' + (++ocrSeq);
+    ocrWaiters[id] = { res, rej };
+    setTimeout(() => { if(ocrWaiters[id]){ delete ocrWaiters[id]; rej(new Error('se demoró demasiado')); } }, 45000);
+    Android.ocrImage(id, b64);
+  }));
+}
+
+async function handleShotFiles(input){
+  const files = Array.from(input.files || []);
+  input.value = '';
+  if(!files.length) return;
+  if(!canOcr()){ importError = 'Leer capturas funciona dentro de la app del teléfono.'; render(); return; }
+  importError = null; shotBusy = true; render();
+  const all = [], warnings = []; let balance = null;
+  for(const f of files){
+    try{
+      const ocr = await ocrFile(f);
+      const r = parseShotOcr(ocr);
+      if(!r.txs.length) warnings.push((f.name || 'captura') + ': no encontré movimientos con monto');
+      all.push(...r.txs);
+      if(r.balance !== null && balance === null) balance = r.balance;
+    }catch(e){ warnings.push((f.name || 'captura') + ': ' + (e && e.message ? e.message : 'error')); }
+  }
+  shotBusy = false;
+  if(!all.length){ importError = 'No pude sacar movimientos de la captura. ' + warnings.join(' · '); render(); return; }
+  buildShotPreview(all, balance, files.length, warnings);
+  render(); window.scrollTo(0,0);
+}
+
+// ---- leer la captura: cada monto es un movimiento; las líneas de texto de la izquierda
+//      se juntan con el monto más cercano (en TD el nombre ocupa varias líneas) ----
+const AMT_ONLY_RE = /^([-−–+]?)\s*\(?\s*\$\s?(\d{1,3}(?:,\d{3})+|\d+)[.,](\d{2})\)?\s*(-|CR|DR)?$/i;
+const AMT_RE = /([-−–+]?)\s*\(?\s*\$\s?(\d{1,3}(?:,\d{3})+|\d+)[.,](\d{2})\)?/;
+const SHOT_NOISE_RE = /^(deposit|zelle®?|transfer|accounts?|pay\s*&\s*transfer|products|more|info\s*&\s*manage|statements?|account activity|account\s*&\s*routing numbers|pending|posted|search|filter|see all|view all|td simple checking|td .*checking|.*savings|x\d{3,5}|cuentas?|movimientos|actividad|pendientes?)$/i;
+const SHOT_SECTION_RE = /^(account activity|pending|actividad|movimientos|transactions|activity)$/i;
+
+function shotLines(ocr){
+  const H = ocr.h || 2400;
+  return (ocr.lines || []).filter(l => l && l.t && String(l.t).trim())
+    .map(l => ({ t:String(l.t).trim().replace(/^[^A-Za-z0-9$(+\-−–]+\s*/,'').replace(/^[£€¥@©®]\S*\s+/,''), x:l.x, y:l.y, w:l.w, h:l.h, cy:l.y + l.h/2, r:l.x + l.w }))
+    .filter(l => l.t)
+    .filter(l => l.cy > H * 0.035)
+    .flatMap(l => {
+      const m = l.t.match(/^(.*[A-Za-z].*?)\s+([-−–+]?\s?\$\s?[\d,]+[.,]\d{2})$/);
+      if(!m) return [l];
+      const cw = l.w / l.t.length, w2 = Math.round(m[2].length * cw);
+      return [{ ...l, t:m[1].trim(), w:l.w - w2, r:l.x + l.w - w2 }, { ...l, t:m[2], x:l.r - w2, w:w2 }];
+    })
+    .sort((a,b) => a.cy - b.cy || a.x - b.x);
+}
+function parseAmt(t){
+  const mm = String(t).replace(/\s+/g,'').replace(/[,.;:]+$/,'').match(AMT_ONLY_RE);
+  if(!mm) return null;
+  return { v: parseFloat(mm[2].replace(/,/g,'') + '.' + mm[3]), sign: (/[-−–]/.test(mm[1]||'') || mm[4] === '-' || /DR/i.test(mm[4]||'') || /^\(/.test(String(t).trim())) ? -1 : (mm[1] === '+' || /CR/i.test(mm[4]||'')) ? 1 : 0 };
+}
+function parseShotDate(s){
+  const t = String(s || '').trim().toLowerCase().replace(/\./g,'');
+  const today = todayISO();
+  if(/^(today|hoy)\b/.test(t)) return today;
+  if(/^(yesterday|ayer)\b/.test(t)){ const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() - 1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  let m = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  let y, mo, d;
+  if(m){ mo = +m[1]; d = +m[2]; y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : null; }
+  else {
+    m = t.match(/\b([a-záéíóú]{3,10})\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})?\b/);
+    if(m && (MONTHS_EN[m[1].slice(0,3)] || MONTHS_ES[m[1].slice(0,3)])){ mo = MONTHS_EN[m[1].slice(0,3)] || MONTHS_ES[m[1].slice(0,3)]; d = +m[2]; y = m[3] ? +m[3] : null; }
+    else {
+      m = t.match(/\b(\d{1,2})\s+(?:de\s+)?([a-záéíóú]{3,10})(?:\s+(?:de\s+)?(\d{4}))?\b/);
+      if(m && (MONTHS_ES[m[2].slice(0,3)] || MONTHS_EN[m[2].slice(0,3)])){ d = +m[1]; mo = MONTHS_ES[m[2].slice(0,3)] || MONTHS_EN[m[2].slice(0,3)]; y = m[3] ? +m[3] : null; }
+      else return null;
+    }
+  }
+  if(!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return null;
+  if(!y){ y = +today.slice(0,4); if(ymd(y, mo, d) > today) y--; }
+  return ymd(y, mo, d);
+}
+function isDateHeader(l){ return !!parseShotDate(l.t) && l.t.replace(/[^a-z]/gi,'').length <= 14 && !AMT_RE.test(l.t); }
+function descOk(t){
+  const letters = t.replace(/[^a-záéíóúñ]/gi,'');
+  return letters.length >= 2 && (/[aeiouáéíóú]/i.test(letters) || letters.length >= 4);
+}
+
+function parseShotOcr(ocr){
+  const W = ocr.w || 1080;
+  const lines = shotLines(ocr);
+  let balance = null;
+  // 1) saldo disponible y fin de la parte de arriba (todo lo de arriba de "Account Activity"/"Pending" no son movimientos)
+  let activityTop = -1;
+  lines.forEach((l, k) => {
+    if(/available balance|saldo disponible/i.test(l.t) && balance === null){
+      const inl = l.t.match(AMT_RE);
+      if(inl) balance = parseFloat(inl[2].replace(/,/g,'') + '.' + inl[3]);
+      else { const nx = lines.slice(k+1, k+4).find(o => parseAmt(o.t)); if(nx) balance = parseAmt(nx.t).v; }
+    }
+    if(SHOT_SECTION_RE.test(l.t) && activityTop < 0 && balance !== null) activityTop = l.y;
+  });
+  const isSummary = l => lines.some(o => o !== l && Math.abs(o.cy - l.cy) < Math.max(o.h, l.h) * 0.6 && /balance|total|saldo|disponible|numbers/i.test(o.t));
+  // 2) montos: principales y saldos corridos (el número gris debajo del monto)
+  const amts = [];
+  lines.forEach(l => {
+    const a = parseAmt(l.t);
+    if(!a || l.x < W * 0.4) return;
+    if(activityTop >= 0 && l.cy < activityTop) return;
+    if(isSummary(l)) return;
+    const prev = amts[amts.length - 1];
+    if(prev && !prev.sub && l.cy - prev.l.cy < Math.max(prev.l.h, l.h) * 1.7 && (Math.abs(l.r - prev.l.r) < W * 0.1 || (l.h < prev.l.h * 0.8 && l.x >= prev.l.x - W * 0.05))){
+      prev.sub = l; return;                                   // saldo después del movimiento: no es un movimiento
+    }
+    amts.push({ l, a, desc: [] });
+  });
+  if(!amts.length) return { txs: [], balance };
+  // 3) secciones por fecha
+  const headers = lines.filter(isDateHeader).map(l => ({ cy: l.cy, d: parseShotDate(l.t) }));
+  const pendingTops = lines.filter(l => /^(pending|pendientes?)$/i.test(l.t.replace(/[^a-z]/gi,''))).map(l => l.cy);
+  const sectionOf = cy => { let h = null; headers.forEach(x => { if(x.cy < cy) h = x; }); return h; };
+  // 4) texto de la izquierda → al monto más cercano dentro de la misma sección
+  lines.forEach(l => {
+    if(l.x > W * 0.6 || parseAmt(l.t) || isDateHeader(l) || SHOT_NOISE_RE.test(l.t) || !descOk(l.t)) return;
+    if(activityTop >= 0 && l.cy < activityTop) return;
+    const sec = sectionOf(l.cy);
+    let best = null, bd = 1e9;
+    amts.forEach(m => { if(sectionOf(m.l.cy) !== sec) return; const d = Math.abs(m.l.cy - l.cy); if(d < bd){ bd = d; best = m; } });
+    if(best && bd < Math.max(best.l.h, l.h) * 3.6) best.desc.push(l);
+  });
+  // 5) armar movimientos
+  const anyMinus = amts.some(m => m.a.sign < 0);
+  const txs = amts.map(m => {
+    const desc = m.desc.sort((a,b) => a.cy - b.cy).map(l => l.t).join(' ')
+      .replace(/[…]|\.\.\.$/g,'').replace(/\s+/g,' ').trim() || 'MOVIMIENTO';
+    const sec = sectionOf(m.l.cy);
+    const pending = !sec || pendingTops.some(p => p < m.l.cy && (!sec || p > sec.cy));
+    const dir = m.a.sign < 0 ? 'out' : m.a.sign > 0 ? 'in' : (anyMinus ? 'in' : (SHOT_IN_RE.test(desc) ? 'in' : 'out'));
+    return { date: sec ? sec.d : todayISO(), desc: desc.toUpperCase(), amount: m.a.v, dir, balance: null, fromPdf: true, src: 'shot', pending: pending && !sec };
+  });
+  return { txs, balance };
+}
+
+function shotWords(d){ return new Set(String(d).toUpperCase().split(/[^A-Z0-9']+/).filter(w => w.length >= 4 && !/^(DEBIT|CARD|AUTHORIZATION|PURCHASE|PAYMENT|TEMP|AUTH|RECEIVED|SENT)$/.test(w))); }
+function sameShotTx(a, b){
+  if(a.date !== b.date || a.dir !== b.dir || Math.round(a.amount*100) !== Math.round(b.amount*100)) return false;
+  if(merchantKey(a.desc) === merchantKey(b.desc)) return true;
+  const wa = shotWords(a.desc), wb = shotWords(b.desc);
+  for(const w of wa) if(wb.has(w)) return true;
+  return false;
+}
+
+// ¿Es el mismo movimiento? Mismo sentido y monto, fechas a 5 días o menos
+// (en la app sale la fecha de la compra y en el extracto la del cobro).
+function sameMove(a, b){
+  if(a.dir !== b.dir || Math.round(a.amount*100) !== Math.round(b.amount*100)) return false;
+  const da = new Date(a.date + 'T00:00:00'), db = new Date(b.date + 'T00:00:00');
+  return Math.abs(da - db) <= 5 * 86400000;
+}
+
+function buildShotPreview(txs, balance, nFiles, warnings){
+  // repetidos entre capturas que se pisan
+  const uniq = [];
+  txs.forEach(t => { const u = uniq.find(u => sameShotTx(u, t)); if(!u) uniq.push(t); else if(t.desc.length > u.desc.length) u.desc = t.desc; });
+  const usedStored = new Set();
+  const fresh = []; let dup = 0;
+  uniq.forEach(t => {
+    const hit = bankList().find(s => !usedStored.has(s.id) && sameMove(s, t));
+    if(hit){ usedStored.add(hit.id); dup++; return; }
+    fresh.push(t);
+  });
+  fresh.sort((a,b) => b.date.localeCompare(a.date));
+  const used = new Set(bankList().filter(t => t.manualId).map(t => t.manualId));
+  let manualDup = 0;
+  const stamp = Date.now().toString(36);
+  fresh.forEach((t, i) => {
+    t.fp = txFingerprint(t);
+    const g = guessCategory(t); t.category = g.category; t.auto = g.auto;
+    const m = findManualMatch(t, used);
+    if(m){ used.add(m.id); t.manualId = m.id; t.category = 'ignore'; t.auto = 'manual'; manualDup++; }
+    t.id = 's' + stamp + '_' + i;
+  });
+  const dates = uniq.map(t => t.date).sort();
+  importPreview = {
+    shot: true,
+    fileName: nFiles === 1 ? 'Captura' : nFiles + ' capturas', fileCount: nFiles,
+    fresh, dup, manualDup, skipped: 0, total: uniq.length, warnings,
+    from: dates[0], to: dates[dates.length-1],
+    lastBalance: balance, lastBalanceDate: balance !== null ? todayISO() : null,
+    updateBalance: balance !== null, shotUpgrades: []
+  };
+}
+
+// ---- corregir filas de la captura antes de guardar ----
+let shotEditIdx = null;
+function editShotRow(i){ shotEditIdx = shotEditIdx === i ? null : i; render(); }
+function saveShotRow(i){
+  const t = importPreview && importPreview.fresh[i]; if(!t) return;
+  const d = document.getElementById('se-date').value, ds = document.getElementById('se-desc').value.trim(), a = parseFloat(document.getElementById('se-amt').value);
+  if(d) t.date = d;
+  if(ds) t.desc = ds.toUpperCase();
+  if(a > 0) t.amount = Math.round(a * 100) / 100;
+  t.fp = txFingerprint(t);
+  if(t.auto !== 'manual-set'){ const g = guessCategory(t); t.category = g.category; t.auto = g.auto; }
+  shotEditIdx = null; render();
+}
+function removeShotRow(i){
+  if(!importPreview) return;
+  importPreview.fresh.splice(i, 1); shotEditIdx = null; render();
+}
+function addShotRow(){
+  if(!importPreview) return;
+  importPreview.fresh.unshift({ date: todayISO(), desc: 'MOVIMIENTO', amount: 0, dir: 'out', balance: null, fromPdf: true, src: 'shot', category: 'gasto', auto: 'manual-set', id: 's' + Date.now().toString(36) + '_n' });
+  shotEditIdx = 0; render();
+}
 
 loadData();
 </script>
