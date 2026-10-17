@@ -4370,7 +4370,7 @@ function addShotRow(){
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION = '3.7';
+const APP_VERSION = '3.8';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
@@ -4574,7 +4574,7 @@ function renderOnboarding(){
       <label class="btn ob-main" for="ob-restore" style="display:block;text-align:center;margin-top:10px;">Vengo de otro teléfono: restaurar respaldo</label>
       <input type="file" id="ob-restore" accept=".json,application/json,text/plain" style="display:none" onchange="obRestoreFile(this)">
       ${obError ? `<div class="error-box">${escapeAttr(obError)}</div>` : ''}
-      <p class="ob-credit">Creada por <b>Brandon Poveda</b><br><span>hecha con la ayuda de Claude</span></p>`;
+      <p class="ob-credit">Creada por <b>Brandon Poveda</b></p>`;
   } else if(obStep === 1){
     body = `${obDots()}<p class="ob-q">¿Cómo te llamas?</p>
       <p class="ob-text">Para saludarte arriba cada vez que abras la app.</p>
@@ -4690,7 +4690,8 @@ function renderSettingsPage(){
     <div class="card about">
       <p class="card-title">Acerca de</p>
       <p class="about-by">Creada por <b>Brandon Poveda</b></p>
-      <p class="item-meta">Hecha con la ayuda de Claude · versión ${APP_VERSION}</p>
+      <p class="item-meta">Versión ${APP_VERSION} · © ${new Date().getFullYear()} Brandon Poveda. Todos los derechos reservados.</p>
+      <p class="item-meta" style="margin-top:8px;">Traducciones del vocabulario: Wiktionary (CC BY-SA). Frases de ejemplo: Tatoeba (CC BY 2.0 FR). Lector de PDF: pdf.js (Apache 2.0).</p>
     </div>`;
 }
 function openSettings(){ activeTab = 'settings'; render(); window.scrollTo(0,0); }

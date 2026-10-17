@@ -116,3 +116,7 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 - Video tutorial **con voz en español** (acento latino) y música suave de fondo (2:30).
 - **Monedas de 20 países** (Colombia, México, Perú, Chile, Argentina, Venezuela, Centroamérica, Rep. Dominicana, Bolivia, Paraguay, Uruguay, Brasil, España, Canadá, Reino Unido…), cada una escrita como se usa allá.
 - **Cambio de moneda** (Más): convertidor con tasas incluidas en la app que se actualizan solas con internet.
+
+### 3.8
+- Créditos: "Creada por Brandon Poveda · © Todos los derechos reservados" (se mantienen las atribuciones obligatorias de Wiktionary, Tatoeba y pdf.js).
+- El código de las pantallas se comprime y revuelve al compilar (tools/protect.mjs); el código legible está en web-src/ (se arma con web-src/build.sh).
