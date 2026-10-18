@@ -216,8 +216,7 @@ public class OverlayService extends Service {
         planBox.addView(planTxt);
         LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT);
         pLp.topMargin = dp(5);
-        panel.addView(planBox, pLp);
-        planBox.setOnTouchListener(new DragListener(null));
+        // (el riesgo y la meta ahora flotan aparte con el Guardián)
 
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(6);
@@ -309,7 +308,7 @@ public class OverlayService extends Service {
         double net = engine.net();
         sessTxt.setText(String.format(Locale.US, "%d ops · %s", engine.ops, Engine.money(net)));
         sessTxt.setTextColor(net > 0 ? WIN : net < 0 ? LOSS : MUTED);
-        renderPlan(net);
+        // renderPlan(net);
         int i = engine.turn;
         if (i < 0) {
             who.setText("QUEMADOS");

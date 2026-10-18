@@ -50,6 +50,13 @@ public class GuardActivity extends Activity {
             });
         }
         setContentView(root);
+        if (getIntent() != null && getIntent().getBooleanExtra("autostart", false) && !GuardService.running) startGuard();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent != null && intent.getBooleanExtra("autostart", false) && !GuardService.running) startGuard();
     }
 
     private int sysDimen(String name) {

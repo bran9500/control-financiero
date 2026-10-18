@@ -126,3 +126,6 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 
 ### 3.10
 - Nueva subapp **Guardián**: ventana flotante independiente que lee tu saldo real del broker en la pantalla cada 2 segundos (sin internet), con riesgo % y meta %. Al tocar la meta o el riesgo, aviso a pantalla completa (verde/rojo, parpadeo, vibración fuerte y alarma). Espera configurable antes del aviso de riesgo para no confundir la apuesta abierta con una pérdida.
+
+### 3.11
+- Riesgo y meta salen del panel del Rotador y flotan **aparte**: botón "🛡 Flotar aparte" en el Rotador abre el Guardián con el mismo capital/riesgo/meta, leyendo el saldo real todo el tiempo. La ventanita del Guardián ahora se ve como el recuadro: −riesgo · +meta, barra, "Faltan $X", y el saldo abajo.

@@ -288,7 +288,7 @@ body.vert .ministats{display:block}
 
   <details class="hide-mini" id="planBox" open>
     <summary>Riesgo y meta del día</summary>
-    <p class="empty">Pon tu capital y qué porcentaje aceptas perder o quieres ganar. La ventana flotante te avisa cuando llegues a cualquiera de los dos.</p>
+    <p class="empty">Pon tu capital y qué porcentaje aceptas perder o quieres ganar. Con "Flotar aparte" queda en una ventanita propia que lee tu saldo real.</p>
     <div class="goalform" style="grid-template-columns:1fr 1fr 1fr;">
       <label for="planCap">Capital $<input id="planCap" type="number" min="1" step="1" inputmode="decimal" placeholder="1200"></label>
       <label for="planRisk">Riesgo %<input id="planRisk" type="number" min="0" step="0.5" inputmode="decimal" placeholder="6"></label>
@@ -299,6 +299,8 @@ body.vert .ministats{display:block}
       <button class="iconbtn yes" id="planSave" type="button">Guardar</button>
       <button class="iconbtn" id="planClear" type="button">Quitar</button>
     </div>
+    <button class="iconbtn gold" id="planFloat" type="button" style="width:100%;margin-top:10px;padding:12px;font-size:15px;">🛡 Flotar aparte (lee tu saldo real)</button>
+    <p class="empty" style="margin-top:6px;">Abre una ventanita aparte con solo el riesgo y la meta. Lee tu saldo de la app del broker todo el tiempo y te avisa en grande al tocar cualquiera de los dos.</p>
   </details>
 
   <details class="hide-mini" id="goalBox">
@@ -576,6 +578,11 @@ $("planSave").onclick=()=>{
   if(!(cap>0)){$("planCap").focus();return}
   if(!(risk>0)&&!(goal>0)){$("planRisk").focus();return}
   setPlan({cap,risk,goal});
+};
+$("planFloat").onclick=()=>{
+  const cap=parseFloat($("planCap").value)||0,risk=parseFloat($("planRisk").value)||6,goal=parseFloat($("planGoal").value)||9;
+  if(cap>0)setPlan({cap,risk,goal});
+  if(NA&&NA.floatPlan)NA.floatPlan(JSON.stringify({cap,risk,goal}));else alert("Esto funciona dentro de la app del teléfono");
 };
 $("planClear").onclick=()=>{setPlan(null);$("planCap").value="";$("planRisk").value="";$("planGoal").value="";updPlanCalc()};
 function renderPlanRow(){

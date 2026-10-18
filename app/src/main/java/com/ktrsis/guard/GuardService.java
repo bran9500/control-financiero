@@ -354,7 +354,7 @@ public class GuardService extends Service {
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setBackground(rounded(BG, 12, 0x66D9B45A));
         panel.setPadding(dp(8), dp(4), dp(8), dp(8));
-        int w = dp(128);
+        int w = dp(150);
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -373,12 +373,21 @@ public class GuardService extends Service {
         lvlTxt = text("", 10, MUTED, false);
         lvlTxt.setTypeface(Typeface.MONOSPACE);
         stTxt = text("", 11, FG, true);
-        panel.addView(balTxt);
-        panel.addView(plTxt);
-        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(w, dp(9)); bl.topMargin = dp(5); bl.bottomMargin = dp(4);
-        panel.addView(bar, bl);
+        // mismo orden que el recuadro del Rotador: −riesgo · +meta, barra, estado; abajo el saldo real
+        lvlTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        lvlTxt.setTextColor(MUTED);
+        stTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+        balTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        balTxt.setTypeface(Typeface.MONOSPACE);
+        balTxt.setTextColor(MUTED);
+        plTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         panel.addView(lvlTxt, new LinearLayout.LayoutParams(w, -2));
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(w, dp(10)); bl.topMargin = dp(6); bl.bottomMargin = dp(6);
+        panel.addView(bar, bl);
         panel.addView(stTxt, new LinearLayout.LayoutParams(w, -2));
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(w, -2); sl.topMargin = dp(4);
+        panel.addView(balTxt, sl);
+        panel.addView(plTxt);
 
         close.setOnClickListener(v -> stopSelf());
         // ⟳: el saldo actual pasa a ser el capital de inicio (empezar de nuevo)
@@ -392,6 +401,9 @@ public class GuardService extends Service {
         render();
     }
 
+    private static String fmt0(double v) { return Math.abs(v - Math.rint(v)) < 1e-9 ? String.valueOf((long) Math.rint(v)) : String.format(Locale.US, "%.1f", v); }
+    private static String short$(double v) { return Math.abs(v - Math.rint(v)) < 0.005 ? "$" + String.format(Locale.US, "%,d", (long) Math.rint(v)) : money(v); }
+
     private static String money(double v) {
         return (v < 0 ? "−$" : "$") + String.format(Locale.US, "%,.2f", Math.abs(v));
     }
@@ -399,25 +411,26 @@ public class GuardService extends Service {
     private void render() {
         if (panel == null) return;
         if (Double.isNaN(balance)) {
-            balTxt.setText("—");
-            plTxt.setText(status.isEmpty() ? "Leyendo…" : "Sin saldo"); plTxt.setTextColor(MUTED);
-            stTxt.setText(status.isEmpty() ? "" : "Abre el broker"); stTxt.setTextColor(GOLD);
-            lvlTxt.setText(Double.isNaN(start) ? "" : "−" + money(start - riskLevel()) + " · +" + money(goalLevel() - start));
-            bar.set(0, 1, 1);
+            balTxt.setText("Saldo —");
+            plTxt.setText(status.isEmpty() ? "Leyendo tu saldo…" : "No veo el saldo"); plTxt.setTextColor(MUTED);
+            stTxt.setText(status.isEmpty() ? "…" : "Abre el broker"); stTxt.setTextColor(GOLD);
+            lvlTxt.setText(Double.isNaN(start) ? "−" + fmt0(riskPct()) + "% · +" + fmt0(goalPct()) + "%"
+                    : "−" + short$(start - riskLevel()) + "  ·  +" + short$(goalLevel() - start));
+            bar.set(0, 1, 1.5);
             return;
         }
         double pl = balance - start;
-        balTxt.setText(money(balance));
+        balTxt.setText("Saldo " + money(balance));
         plTxt.setText((pl >= 0 ? "+" : "") + money(pl) + "  (" + String.format(Locale.US, "%+.1f%%", pl / start * 100) + ")");
         plTxt.setTextColor(pl > 0.004 ? WIN : pl < -0.004 ? LOSS : MUTED);
         double riskAmt = start - riskLevel(), goalAmt = goalLevel() - start;
         bar.set(pl, riskAmt, goalAmt);
-        lvlTxt.setText("Para " + money(riskLevel()).replace(".00", "") + "\nMeta " + money(goalLevel()).replace(".00", ""));
+        lvlTxt.setText("−" + short$(riskAmt) + "  ·  +" + short$(goalAmt));
         if (state == 1) { stTxt.setText("✓ META · CIERRA"); stTxt.setTextColor(WIN); }
         else if (state == -1) { stTxt.setText("✕ RIESGO · PARA"); stTxt.setTextColor(LOSS); }
         else if (riskSince > 0) { stTxt.setText("⚠ En el límite…"); stTxt.setTextColor(GOLD); }
-        else if (pl >= 0) { stTxt.setText("Faltan " + money(goalAmt - pl)); stTxt.setTextColor(FG); }
-        else { stTxt.setText("Margen " + money(riskAmt + pl)); stTxt.setTextColor(GOLD); }
+        else if (pl >= 0) { stTxt.setText("Faltan " + short$(goalAmt - pl)); stTxt.setTextColor(FG); }
+        else { stTxt.setText("Margen " + short$(riskAmt + pl)); stTxt.setTextColor(GOLD); }
         panel.setBackground(rounded(state == 1 ? 0xF2123A26 : state == -1 ? 0xF23A1414 : BG, 12,
                 state == 1 ? WIN : state == -1 ? LOSS : 0x66D9B45A));
     }

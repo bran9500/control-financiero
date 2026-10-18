@@ -96,6 +96,22 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String getGoal() { return engine.getGoal(); }
         @JavascriptInterface public void setGoal(String json) { runOnUiThread(() -> engine.setGoal(json)); }
         @JavascriptInterface public String getPlan() { return engine.getPlan(); }
+        /** Pasa capital, riesgo y meta al Guardián y lo activa (ventana aparte que lee el saldo real). */
+        @JavascriptInterface public void floatPlan(String json) {
+            runOnUiThread(() -> {
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(json);
+                    android.content.SharedPreferences g = getSharedPreferences("guardian", MODE_PRIVATE);
+                    double cap = o.optDouble("cap", 0);
+                    g.edit().putFloat("risk", (float) o.optDouble("risk", 6)).putFloat("goal", (float) o.optDouble("goal", 9))
+                            .putString("capMode", o.optBoolean("readStart", false) || !(cap > 0) ? "auto" : "manual")
+                            .putFloat("capital", (float) cap).apply();
+                } catch (Exception ignored) {}
+                Intent i = new Intent(MainActivity.this, com.ktrsis.guard.GuardActivity.class);
+                i.putExtra("autostart", true);
+                startActivity(i);
+            });
+        }
         @JavascriptInterface public void setPlan(String json) { runOnUiThread(() -> engine.setPlan(json)); }
         @JavascriptInterface public void setLots(int n) { runOnUiThread(() -> engine.setLots(n)); }
         @JavascriptInterface public void cut() { runOnUiThread(engine::cut); }
