@@ -33,7 +33,10 @@ public class OverlayService extends Service {
     private WindowManager.LayoutParams lp;
     private LinearLayout panel;
     private TextView bubble;
-    private TextView who, stake, cutBtn, sessTxt;
+    private TextView who, stake, cutBtn, sessTxt, planTxt, planLbl;
+    private PlanBar planBar;
+    private LinearLayout planBox;
+    private int planState = 0;   // 0 en juego, 1 meta cumplida, -1 riesgo tocado
     private final TextView[] lotTxt = new TextView[Engine.MAX];
     private final View[] lotBar = new View[Engine.MAX];
     private final View[] lotCell = new View[Engine.MAX];
@@ -197,6 +200,25 @@ public class OverlayService extends Service {
         sessTxt.setTypeface(Typeface.MONOSPACE);
         panel.addView(sessTxt);
 
+        // Riesgo y meta del día: barra con el riesgo a la izquierda y la meta a la derecha
+        planBox = new LinearLayout(this);
+        planBox.setOrientation(LinearLayout.VERTICAL);
+        planBox.setBackground(rounded(PANEL, 8, LINE));
+        planBox.setPadding(dp(5), dp(4), dp(5), dp(5));
+        planLbl = text("", 10, MUTED, false);
+        planLbl.setTypeface(Typeface.MONOSPACE);
+        planBar = new PlanBar(this);
+        planTxt = text("", 10.5f, FG, true);
+        planBox.addView(planLbl);
+        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(8));
+        pbLp.topMargin = dp(3); pbLp.bottomMargin = dp(3);
+        planBox.addView(planBar, pbLp);
+        planBox.addView(planTxt);
+        LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT);
+        pLp.topMargin = dp(5);
+        panel.addView(planBox, pLp);
+        planBox.setOnTouchListener(new DragListener(null));
+
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT);
         blp.topMargin = dp(6);
         winBtn = button("Ganó", WIN, 0xFF0E1116, 17, 11);
@@ -287,6 +309,7 @@ public class OverlayService extends Service {
         double net = engine.net();
         sessTxt.setText(String.format(Locale.US, "%d ops · %s", engine.ops, Engine.money(net)));
         sessTxt.setTextColor(net > 0 ? WIN : net < 0 ? LOSS : MUTED);
+        renderPlan(net);
         int i = engine.turn;
         if (i < 0) {
             who.setText("QUEMADOS");
@@ -319,6 +342,52 @@ public class OverlayService extends Service {
             winBtn.setText("Ganó");
             lossBtn.setBackground(rounded(LOSS, 8, 0));
             bubble.setText(fmtStake(sq[s]));
+        }
+    }
+
+    private void renderPlan(double net) {
+        double[] p = engine.plan();
+        if (p == null) { planBox.setVisibility(View.GONE); planState = 0; return; }
+        planBox.setVisibility(View.VISIBLE);
+        double risk = p[1], goal = p[2];
+        planLbl.setText("−" + fmtStake(risk) + "  ·  +" + fmtStake(goal));
+        planBar.set(net, risk, goal);
+        int st = goal > 0 && net >= goal - 1e-9 ? 1 : risk > 0 && net <= -risk + 1e-9 ? -1 : 0;
+        if (st == 1) { planTxt.setText("✓ META · CIERRA"); planTxt.setTextColor(WIN); }
+        else if (st == -1) { planTxt.setText("✕ RIESGO · PARA"); planTxt.setTextColor(LOSS); }
+        else if (net >= 0) { planTxt.setText("Faltan " + fmtStake(Engine.r2(goal - net))); planTxt.setTextColor(FG); }
+        else { planTxt.setText("Margen " + fmtStake(Engine.r2(risk + net))); planTxt.setTextColor(ACCENT); }
+        planBox.setBackground(rounded(st == 1 ? 0x332FC47A : st == -1 ? 0x33EF5A5A : PANEL, 8, st == 1 ? WIN : st == -1 ? LOSS : LINE));
+        if (st != 0 && st != planState) {
+            // aviso una sola vez al llegar: vibración y destello
+            flash(st == 1 ? WIN : LOSS);
+            try {
+                android.os.Vibrator vib = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
+                if (vib != null) vib.vibrate(android.os.VibrationEffect.createWaveform(new long[]{0, 180, 120, 180, 120, 380}, -1));
+            } catch (Exception ignored) {}
+        }
+        planState = st;
+    }
+
+    /** Barra de dos lados: rojo hacia la izquierda (riesgo usado), verde hacia la derecha (meta). */
+    private class PlanBar extends View {
+        private double net, risk, goal;
+        private final android.graphics.Paint pt = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        PlanBar(android.content.Context c) { super(c); }
+        void set(double n, double r, double g) { net = n; risk = r; goal = g; invalidate(); }
+        @Override protected void onDraw(android.graphics.Canvas c) {
+            float W = getWidth(), H = getHeight(), rad = H / 2f;
+            double tot = Math.max(0.01, risk + goal);
+            float zero = (float) (W * risk / tot);
+            pt.setColor(LINE); c.drawRoundRect(0, 0, W, H, rad, rad, pt);
+            if (net < 0 && risk > 0) {
+                float x = (float) Math.max(0, zero - zero * Math.min(1, -net / risk));
+                pt.setColor(LOSS); c.drawRoundRect(x, 0, zero, H, rad, rad, pt);
+            } else if (net > 0 && goal > 0) {
+                float x = (float) Math.min(W, zero + (W - zero) * Math.min(1, net / goal));
+                pt.setColor(WIN); c.drawRoundRect(zero, 0, x, H, rad, rad, pt);
+            }
+            pt.setColor(FG); c.drawRect(zero - dp(1), -1, zero + dp(1), H + 1, pt);
         }
     }
 

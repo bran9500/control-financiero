@@ -286,6 +286,21 @@ body.vert .ministats{display:block}
     </div>
   </details>
 
+  <details class="hide-mini" id="planBox" open>
+    <summary>Riesgo y meta del día</summary>
+    <p class="empty">Pon tu capital y qué porcentaje aceptas perder o quieres ganar. La ventana flotante te avisa cuando llegues a cualquiera de los dos.</p>
+    <div class="goalform" style="grid-template-columns:1fr 1fr 1fr;">
+      <label for="planCap">Capital $<input id="planCap" type="number" min="1" step="1" inputmode="decimal" placeholder="1200"></label>
+      <label for="planRisk">Riesgo %<input id="planRisk" type="number" min="0" step="0.5" inputmode="decimal" placeholder="6"></label>
+      <label for="planGoal">Meta %<input id="planGoal" type="number" min="0" step="0.5" inputmode="decimal" placeholder="9"></label>
+    </div>
+    <div class="goalsub" id="planCalc" style="margin-top:10px;line-height:1.6;"></div>
+    <div class="mergebar">
+      <button class="iconbtn yes" id="planSave" type="button">Guardar</button>
+      <button class="iconbtn" id="planClear" type="button">Quitar</button>
+    </div>
+  </details>
+
   <details class="hide-mini" id="goalBox">
     <summary>Meta de volumen</summary>
     <p class="empty">Para bonos del broker que se liberan al mover cierto volumen. Cuenta todo lo que apuestes desde la fecha que elijas, en todas las sesiones.</p>
@@ -457,6 +472,7 @@ function render(){
   for(const id of ["payout","base","steps","mode"])$(id).value=S.cfg[id];
   renderVolume();
   fillGoalForm();
+  fillPlanForm();
   fillProfile();
   renderArchive();
 }
@@ -535,7 +551,45 @@ function renderVolume(){
       <div class="goalbar"><i style="width:${pc}%"></i></div>
       <div class="goalsub">${left>0?`Faltan <b>${fmtUsd(left)}</b> · ${Math.floor(pc)}%`:`<span class="goalok">Meta cumplida ✓</span> Ya puedes revisar tu bono en el broker.`}</div>`;
   }
-  $("volCard").innerHTML=h;
+  $("volCard").innerHTML=renderPlanRow()+h;
+}
+// ---- Riesgo y meta del día ----
+const PLANKEY="rotador-plan-v1";
+function getPlan(){try{const r=NA&&NA.getPlan?NA.getPlan():localStorage.getItem(PLANKEY);return r?JSON.parse(r):null}catch(e){return null}}
+function setPlan(p){const j=p?JSON.stringify(p):"";if(NA&&NA.setPlan)NA.setPlan(j);else{try{localStorage.setItem(PLANKEY,j)}catch(e){}render()}}
+function planVals(p){if(!p||!(p.cap>0))return null;return{cap:p.cap,risk:r2(p.cap*(p.risk||0)/100),goal:r2(p.cap*(p.goal||0)/100)}}
+function planCalcText(cap,risk,goal){
+  if(!(cap>0))return "Escribe tu capital para ver los montos.";
+  const R=r2(cap*(risk||0)/100),G=r2(cap*(goal||0)/100);
+  return `Riesgo <b>${risk||0}%</b> = <b style="color:var(--loss,#ef5a5a)">${fmtUsd(R)}</b> · si llegas a ${fmtUsd(cap-R)}, paras.<br>Meta <b>${goal||0}%</b> = <b style="color:var(--win,#2fc47a)">${fmtUsd(G)}</b> · cierras con ${fmtUsd(cap+G)}.`;
+}
+function updPlanCalc(){$("planCalc").innerHTML=planCalcText(parseFloat($("planCap").value),parseFloat($("planRisk").value),parseFloat($("planGoal").value))}
+function fillPlanForm(){
+  if(document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#planBox"))return;
+  const p=getPlan();
+  $("planCap").value=p&&p.cap?p.cap:"";$("planRisk").value=p&&p.risk!=null?p.risk:"";$("planGoal").value=p&&p.goal!=null?p.goal:"";
+  updPlanCalc();
+}
+["planCap","planRisk","planGoal"].forEach(id=>$(id).addEventListener("input",updPlanCalc));
+$("planSave").onclick=()=>{
+  const cap=parseFloat($("planCap").value),risk=parseFloat($("planRisk").value)||0,goal=parseFloat($("planGoal").value)||0;
+  if(!(cap>0)){$("planCap").focus();return}
+  if(!(risk>0)&&!(goal>0)){$("planRisk").focus();return}
+  setPlan({cap,risk,goal});
+};
+$("planClear").onclick=()=>{setPlan(null);$("planCap").value="";$("planRisk").value="";$("planGoal").value="";updPlanCalc()};
+function renderPlanRow(){
+  const v=planVals(getPlan());if(!v)return "";
+  const net=+(S.lots||[]).reduce((a,l)=>a+(+l.pl||0),0)+(+S.plOff||0);
+  const tot=Math.max(0.01,v.risk+v.goal),zero=v.risk/tot*100;
+  let fill="";
+  if(net<0&&v.risk>0){const w=zero*Math.min(1,-net/v.risk);fill=`<i style="position:absolute;top:0;bottom:0;right:${100-zero}%;width:${w}%;background:#ef5a5a;border-radius:4px"></i>`}
+  else if(net>0&&v.goal>0){const w=(100-zero)*Math.min(1,net/v.goal);fill=`<i style="position:absolute;top:0;bottom:0;left:${zero}%;width:${w}%;background:#2fc47a;border-radius:4px"></i>`}
+  const st=v.goal>0&&net>=v.goal?1:v.risk>0&&net<=-v.risk?-1:0;
+  const msg=st===1?`<span class="goalok" style="color:#2fc47a">✓ Meta cumplida: cierra la sesión.</span>`:st===-1?`<span style="color:#ef5a5a;font-weight:600">✕ Llegaste a tu riesgo: para por hoy.</span>`:net>=0?`Faltan <b>${fmtUsd(r2(v.goal-net))}</b> para la meta`:`Te quedan <b>${fmtUsd(r2(v.risk+net))}</b> antes del límite`;
+  return `<div class="volrow"><span>Riesgo y meta · capital ${fmtUsd(v.cap)}</span><b>−${fmtUsd(v.risk)} / +${fmtUsd(v.goal)}</b></div>
+    <div class="goalbar" style="position:relative">${fill}<i style="position:absolute;top:-2px;bottom:-2px;left:${zero}%;width:2px;background:var(--fg,#e8ebf0)"></i></div>
+    <div class="goalsub">${msg}</div>`;
 }
 function fillGoalForm(){
   if(document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#goalBox"))return;

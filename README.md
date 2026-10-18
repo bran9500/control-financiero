@@ -120,3 +120,6 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 ### 3.8
 - Créditos: "Creada por Brandon Poveda · © Todos los derechos reservados" (se mantienen las atribuciones obligatorias de Wiktionary, Tatoeba y pdf.js).
 - El código de las pantallas se comprime y revuelve al compilar (tools/protect.mjs); el código legible está en web-src/ (se arma con web-src/build.sh).
+
+### 3.9
+- Rotador: **Riesgo y meta del día**. Pones capital, % de riesgo y % de meta (ej. $1,200 · 6% = $72 · 9% = $108). La ventana flotante muestra una barra con el riesgo a la izquierda y la meta a la derecha, cuánto falta o cuánto margen queda, y vibra y se pinta de verde ("META · CIERRA") o rojo ("RIESGO · PARA") al llegar.

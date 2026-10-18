@@ -95,6 +95,8 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String getSessions() { return engine.sessionsJson(); }
         @JavascriptInterface public String getGoal() { return engine.getGoal(); }
         @JavascriptInterface public void setGoal(String json) { runOnUiThread(() -> engine.setGoal(json)); }
+        @JavascriptInterface public String getPlan() { return engine.getPlan(); }
+        @JavascriptInterface public void setPlan(String json) { runOnUiThread(() -> engine.setPlan(json)); }
         @JavascriptInterface public void setLots(int n) { runOnUiThread(() -> engine.setLots(n)); }
         @JavascriptInterface public void cut() { runOnUiThread(engine::cut); }
         @JavascriptInterface public void setSessions(String json) { runOnUiThread(() -> engine.setSessions(json)); }

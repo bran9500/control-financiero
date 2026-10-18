@@ -170,6 +170,26 @@ public class Engine {
         changed();
     }
 
+    /** Riesgo y meta del día: {"cap":1200,"risk":6,"goal":9} (porcentajes del capital) o vacío. */
+    public String getPlan() { return prefs.getString("plan", ""); }
+
+    public void setPlan(String json) {
+        prefs.edit().putString("plan", json == null ? "" : json).apply();
+        changed();
+    }
+
+    /** {capital, riesgo $, meta $} o null si no hay plan. */
+    public double[] plan() {
+        try {
+            String s = getPlan();
+            if (s == null || s.isEmpty()) return null;
+            JSONObject o = new JSONObject(s);
+            double cap = o.optDouble("cap", 0), risk = o.optDouble("risk", 0), goal = o.optDouble("goal", 0);
+            if (cap <= 0 || (risk <= 0 && goal <= 0)) return null;
+            return new double[]{ cap, r2(cap * risk / 100.0), r2(cap * goal / 100.0) };
+        } catch (Exception e) { return null; }
+    }
+
     /** Cambia cuántos lotes rotan (1 a 6). Los lotes que se apagan conservan su resultado en el neto. */
     public void setLots(int n) {
         n = Math.max(1, Math.min(MAX, n));
