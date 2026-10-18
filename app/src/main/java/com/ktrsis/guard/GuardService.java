@@ -352,19 +352,19 @@ public class GuardService extends Service {
         lp.y = prefs.getInt("y", (int) (getResources().getDisplayMetrics().heightPixels * 0.42f));
         panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackground(rounded(BG, 12, 0x66D9B45A));
-        panel.setPadding(dp(8), dp(4), dp(8), dp(8));
-        int w = dp(150);
+        panel.setBackground(rounded(BG, 10, 0x66D9B45A));
+        panel.setPadding(dp(6), dp(2), dp(6), dp(5));
+        int w = dp(108);
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = text("⠿ GUARDIÁN", 10, GOLD, true);
-        TextView reset = text("⟳", 16, MUTED, true);
-        TextView close = text("×", 18, MUTED, true);
-        reset.setPadding(dp(6), 0, dp(6), 0); close.setPadding(dp(6), 0, 0, 0);
+        TextView title = text("⠿ GUARDIÁN", 8, GOLD, true);
+        TextView reset = text("⟳", 13, MUTED, true);
+        TextView close = text("×", 15, MUTED, true);
+        reset.setPadding(dp(5), 0, dp(5), 0); close.setPadding(dp(5), 0, 0, 0);
         top.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         top.addView(reset); top.addView(close);
-        panel.addView(top, new LinearLayout.LayoutParams(w, dp(24)));
+        panel.addView(top, new LinearLayout.LayoutParams(w, dp(19)));
 
         balTxt = text("—", 22, FG, true);
         balTxt.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
@@ -374,18 +374,18 @@ public class GuardService extends Service {
         lvlTxt.setTypeface(Typeface.MONOSPACE);
         stTxt = text("", 11, FG, true);
         // mismo orden que el recuadro del Rotador: −riesgo · +meta, barra, estado; abajo el saldo real
-        lvlTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        lvlTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         lvlTxt.setTextColor(MUTED);
-        stTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
-        balTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        stTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        balTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.5f);
         balTxt.setTypeface(Typeface.MONOSPACE);
         balTxt.setTextColor(MUTED);
-        plTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        plTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
         panel.addView(lvlTxt, new LinearLayout.LayoutParams(w, -2));
-        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(w, dp(10)); bl.topMargin = dp(6); bl.bottomMargin = dp(6);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(w, dp(6)); bl.topMargin = dp(4); bl.bottomMargin = dp(3);
         panel.addView(bar, bl);
         panel.addView(stTxt, new LinearLayout.LayoutParams(w, -2));
-        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(w, -2); sl.topMargin = dp(4);
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(w, -2); sl.topMargin = dp(2);
         panel.addView(balTxt, sl);
         panel.addView(plTxt);
 
@@ -431,7 +431,7 @@ public class GuardService extends Service {
         else if (riskSince > 0) { stTxt.setText("⚠ En el límite…"); stTxt.setTextColor(GOLD); }
         else if (pl >= 0) { stTxt.setText("Faltan " + short$(goalAmt - pl)); stTxt.setTextColor(FG); }
         else { stTxt.setText("Margen " + short$(riskAmt + pl)); stTxt.setTextColor(GOLD); }
-        panel.setBackground(rounded(state == 1 ? 0xF2123A26 : state == -1 ? 0xF23A1414 : BG, 12,
+        panel.setBackground(rounded(state == 1 ? 0xF2123A26 : state == -1 ? 0xF23A1414 : BG, 10,
                 state == 1 ? WIN : state == -1 ? LOSS : 0x66D9B45A));
     }
 

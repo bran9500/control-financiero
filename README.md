@@ -129,3 +129,6 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 
 ### 3.11
 - Riesgo y meta salen del panel del Rotador y flotan **aparte**: botón "🛡 Flotar aparte" en el Rotador abre el Guardián con el mismo capital/riesgo/meta, leyendo el saldo real todo el tiempo. La ventanita del Guardián ahora se ve como el recuadro: −riesgo · +meta, barra, "Faltan $X", y el saldo abajo.
+
+### 3.12
+- Ventanita del Guardián más pequeña (~30% menos).
