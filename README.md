@@ -123,3 +123,6 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 
 ### 3.9
 - Rotador: **Riesgo y meta del día**. Pones capital, % de riesgo y % de meta (ej. $1,200 · 6% = $72 · 9% = $108). La ventana flotante muestra una barra con el riesgo a la izquierda y la meta a la derecha, cuánto falta o cuánto margen queda, y vibra y se pinta de verde ("META · CIERRA") o rojo ("RIESGO · PARA") al llegar.
+
+### 3.10
+- Nueva subapp **Guardián**: ventana flotante independiente que lee tu saldo real del broker en la pantalla cada 2 segundos (sin internet), con riesgo % y meta %. Al tocar la meta o el riesgo, aviso a pantalla completa (verde/rojo, parpadeo, vibración fuerte y alarma). Espera configurable antes del aviso de riesgo para no confundir la apuesta abierta con una pérdida.

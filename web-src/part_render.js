@@ -77,7 +77,8 @@ const SUB_APPS = [
   ['bot','Bot Señales','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 6-8"/><path d="M15 6h3v3"/></svg>'],
   ['notas','Notas','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>'],
   ['ingles','Inglés','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7"/><path d="M7.5 3v2c0 4-2 7-4.5 8.5"/><path d="M5.5 9c1 2 3 3.5 5 4"/><path d="M12 21l4.5-10 4.5 10"/><path d="M13.5 18h6"/></svg>'],
-  ['interes','Interés','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M5 16l4-4 3 2 7-8"/><path d="M15 6h4v4"/></svg>']
+  ['interes','Interés','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M5 16l4-4 3 2 7-8"/><path d="M15 6h4v4"/></svg>'],
+  ['guardian','Guardián','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>']
 ];
 function renderAppsRow(){
   return `<div class="apps-row" data-tour="apps">${SUB_APPS.map(([k,l,ic]) => `

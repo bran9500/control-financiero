@@ -116,6 +116,7 @@ const HELP_GO = [
   { t:'Respaldo y restaurar', k:'respaldo backup restaurar otro telefono copia', go:"settingsOpen.datos=true;openSettings()" },
   { t:'App de Inglés', k:'ingles palabras aprender frases', go:"openSubApp('ingles')" },
   { t:'Interés compuesto', k:'interes compuesto victorias plan crecer', go:"openSubApp('interes')" },
+  { t:'Guardián: riesgo y meta en vivo', k:'guardian riesgo meta capital trading broker saldo alerta stop', go:"openSubApp('guardian')" },
   { t:'Notas por voz', k:'notas voz dictar apuntar', go:"openSubApp('notas')" }
 ];
 const FAQ = [

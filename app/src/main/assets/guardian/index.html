@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guardián</title>
+<style>
+  :root{ --bg:#12161C; --surface:#1B2129; --surface-raised:#232A35; --line:#2A313B; --ink:#E8E6E0; --ink-dim:#8B93A0; --ink-faint:#5B6472;
+    --good:#6FA98A; --win:#2FC47A; --loss:#EF5A5A; --gold:#D9B45A; --serif:Georgia,serif; --mono:ui-monospace,monospace; --sans:-apple-system,Roboto,sans-serif; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{background:var(--bg);margin:0;color:var(--ink);font-family:var(--sans);}
+  .wrap{max-width:560px;margin:0 auto;padding:18px 14px 60px 14px;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 14px 2px;}
+  .page-title{font-family:var(--serif);font-size:26px;margin:0;}
+  .sub{font-size:12.5px;color:var(--ink-faint);margin:2px 0 0 0;}
+  .icon-btn{background:var(--surface);border:1px solid var(--line);color:var(--ink-dim);width:42px;height:42px;border-radius:12px;font-size:18px;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;}
+  .card-title{font-family:var(--serif);font-size:17px;margin:0 0 10px 0;}
+  .muted{font-size:13px;color:var(--ink-dim);line-height:1.55;margin:0;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-faint);}
+  input[type=number]{background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:12px;font-size:20px;font-family:var(--mono);width:100%;}
+  .seg{display:flex;background:var(--surface-raised);border-radius:12px;padding:4px;gap:4px;margin:4px 0 10px 0;}
+  .seg button{flex:1;border:none;background:none;color:var(--ink-dim);padding:10px 6px;border-radius:9px;font-size:13px;}
+  .seg button.on{background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1px var(--gold);}
+  .lv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+  .lv div{border-radius:12px;padding:12px;text-align:center;}
+  .lv .r{background:rgba(239,90,90,.12);border:1px solid rgba(239,90,90,.5);}
+  .lv .g{background:rgba(47,196,122,.12);border:1px solid rgba(47,196,122,.5);}
+  .lv b{display:block;font-family:var(--mono);font-size:20px;margin-top:4px;}
+  .lv small{display:block;font-size:11.5px;color:var(--ink-dim);margin-top:4px;}
+  .go{width:100%;border:none;border-radius:16px;padding:18px;font-size:18px;font-weight:700;background:var(--gold);color:#1a1405;}
+  .go.stop{background:var(--surface-raised);color:var(--loss);border:1px solid var(--loss);}
+  .live{font-family:var(--mono);font-size:30px;}
+  .row{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-dim);padding:6px 0;border-top:1px solid var(--line);}
+  .row b{color:var(--ink);font-family:var(--mono);}
+  ol{margin:0;padding-left:20px;font-size:13.5px;color:var(--ink-dim);line-height:1.7;}
+  ol b{color:var(--ink);}
+  .chk{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink-dim);margin-top:10px;}
+  .chk input{width:20px;height:20px;accent-color:#D9B45A;}
+  .bar{position:relative;height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:12px 0 6px 0;}
+  .bar i{position:absolute;top:0;bottom:0;border-radius:5px;}
+</style>
+<script src="../theme.js"></script>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+const NA = window.Android || null;
+let S = { running:false, risk:6, goal:9, capMode:'auto', capital:0, delay:6, sound:true, overlayOk:true };
+function load(){ try{ if(NA) S = JSON.parse(NA.getState()); }catch(e){} }
+function save(){ if(NA) NA.save(JSON.stringify({risk:S.risk, goal:S.goal, capMode:S.capMode, capital:S.capital, delay:S.delay, sound:S.sound})); }
+const money = v => (v<0?'−$':'$') + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+function set(k, v){ S[k] = v; save(); render(); }
+function setNum(k, el){ const v = parseFloat(el.value); S[k] = isNaN(v) ? 0 : v; save(); renderLevels(); }
+function baseCap(){ return S.running && S.start ? S.start : S.capMode === 'manual' ? S.capital : (S.balance || S.capital || 0); }
+function levelsHtml(){
+  const c = baseCap();
+  if(!(c > 0)) return `<p class="muted" style="margin-top:12px;">${S.capMode==='auto' ? 'Al activarlo, tu saldo de ese momento será el capital de inicio y aquí verás los montos.' : 'Escribe tu capital para ver los montos.'}</p>`;
+  const R = c*S.risk/100, G = c*S.goal/100;
+  return `<div class="lv">
+    <div class="r">Riesgo ${S.risk}%<b>−${money(R)}</b><small>paras en ${money(c-R)}</small></div>
+    <div class="g">Meta ${S.goal}%<b>+${money(G)}</b><small>cierras en ${money(c+G)}</small></div></div>`;
+}
+function renderLevels(){ const el = document.getElementById('levels'); if(el) el.innerHTML = levelsHtml(); }
+function liveHtml(){
+  if(!S.running) return '';
+  if(S.balance == null) return `<div class="card"><p class="card-title">Activo</p><p class="muted">${S.status || 'Buscando tu saldo…'} Abre el broker con el saldo visible arriba.</p></div>`;
+  const c = S.start, pl = S.balance - c, R = c*S.risk/100, G = c*S.goal/100, tot = R+G, zero = R/tot*100;
+  let fill = '';
+  if(pl < 0) fill = `<i style="right:${100-zero}%;width:${zero*Math.min(1,-pl/R)}%;background:var(--loss)"></i>`;
+  else if(pl > 0) fill = `<i style="left:${zero}%;width:${(100-zero)*Math.min(1,pl/G)}%;background:var(--win)"></i>`;
+  const st = S.state === 1 ? '<b style="color:var(--win)">✓ META · CIERRA</b>' : S.state === -1 ? '<b style="color:var(--loss)">✕ RIESGO · PARA</b>' : pl >= 0 ? `Faltan <b>${money(G-pl)}</b> para la meta` : `Te quedan <b>${money(R+pl)}</b> antes del límite`;
+  return `<div class="card">
+    <p class="card-title">En vivo</p>
+    <div class="live">${money(S.balance)}</div>
+    <div style="color:${pl>0?'var(--win)':pl<0?'var(--loss)':'var(--ink-dim)'};font-family:var(--mono);">${pl>=0?'+':''}${money(pl)}</div>
+    <div class="bar">${fill}<i style="left:${zero}%;width:2px;background:var(--ink)"></i></div>
+    <p class="muted">${st}</p>
+    <div class="row" style="margin-top:8px;"><span>Capital de inicio</span><b>${money(c)}</b></div>
+    <div class="row"><span>Última lectura</span><b>${S.lastRead || '—'}</b></div>
+  </div>`;
+}
+function render(){
+  document.getElementById('app').innerHTML = `
+    <div class="topbar"><div><p class="page-title">Guardián</p><p class="sub">Tu riesgo y tu meta, vigilados en vivo</p></div>
+      ${NA ? `<button class="icon-btn" onclick="Android.goHome()">⌂</button>` : ''}</div>
+    ${liveHtml()}
+    <div class="card">
+      <p class="card-title">Riesgo y meta</p>
+      <div class="grid">
+        <label class="f">Riesgo %<input type="number" inputmode="decimal" step="0.5" value="${S.risk}" oninput="setNum('risk', this)"></label>
+        <label class="f">Meta %<input type="number" inputmode="decimal" step="0.5" value="${S.goal}" oninput="setNum('goal', this)"></label>
+      </div>
+      <p class="muted" style="margin:14px 0 4px 0;">Capital de inicio</p>
+      <div class="seg">
+        <button class="${S.capMode==='auto'?'on':''}" onclick="set('capMode','auto')">Leer mi saldo al activar</button>
+        <button class="${S.capMode==='manual'?'on':''}" onclick="set('capMode','manual')">Escribirlo</button>
+      </div>
+      ${S.capMode === 'manual' ? `<label class="f">Capital $<input type="number" inputmode="decimal" step="1" value="${S.capital || ''}" placeholder="1200" oninput="setNum('capital', this)"></label>` : ''}
+      <div id="levels">${levelsHtml()}</div>
+    </div>
+    <button class="go ${S.running?'stop':''}" onclick="${NA?'Android.toggle()':''}">${S.running ? 'Detener Guardián' : '🛡 Activar Guardián'}</button>
+    <div class="card" style="margin-top:12px;">
+      <p class="card-title">Cómo funciona</p>
+      <ol>
+        <li>Toca <b>Activar</b> y acepta grabar la pantalla (es para leer tu saldo; nada sale del teléfono).</li>
+        <li>Abre tu broker con el <b>saldo visible arriba</b>. La ventanita del Guardián lee tu saldo cada 2 segundos.</li>
+        <li>Al llegar a la <b>meta</b> o tocar el <b>riesgo</b>, toda la pantalla se pone verde o roja, vibra y suena.</li>
+        <li>Con <b>⟳</b> en la ventanita, el saldo de ese momento pasa a ser tu nuevo capital de inicio.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <p class="card-title">Ajustes</p>
+      <label class="f">Esperar antes del aviso de riesgo (segundos)<input type="number" inputmode="numeric" step="1" min="0" value="${S.delay}" oninput="setNum('delay', this)"></label>
+      <p class="muted" style="margin-top:8px;">El broker descuenta la apuesta apenas la abres. Con operaciones de 3 segundos, 6 segundos evita falsas alarmas.</p>
+      <label class="chk"><input type="checkbox" ${S.sound?'checked':''} onchange="set('sound', this.checked)"> Sonido de alarma (suena aunque el teléfono esté en silencio)</label>
+      <p class="muted" style="margin-top:10px;">El Guardián y el Bot Señales usan la misma grabación de pantalla: usa uno a la vez.</p>
+    </div>`;
+}
+load(); render();
+setInterval(() => { if(!NA) return; const prev = JSON.stringify([S.running,S.balance,S.state,S.status,S.start]); load();
+  if(JSON.stringify([S.running,S.balance,S.state,S.status,S.start]) !== prev && !(document.activeElement && document.activeElement.tagName === 'INPUT')) render(); }, 1000);
+</script>
+</body>
+</html>

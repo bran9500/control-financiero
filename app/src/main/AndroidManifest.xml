@@ -95,6 +95,18 @@
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Subapp: Guardián (riesgo y meta en vivo leyendo el saldo del broker) -->
+        <activity
+            android:name="com.ktrsis.guard.GuardActivity"
+            android:label="Guardián"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize" />
+        <service
+            android:name="com.ktrsis.guard.GuardService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
         <!-- Subapp: Interés compuesto -->
         <activity
             android:name="com.ktrsis.interes.InterestActivity"
