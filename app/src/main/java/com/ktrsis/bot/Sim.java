@@ -38,7 +38,8 @@ public final class Sim {
     JSONArray recent = new JSONArray();   // últimas operaciones (más reciente primero)
 
     // operación pendiente
-    long pEntry = 0, pCond = 0; char pDir = 0, pIf = 0; String pNames = "", pType = ""; boolean pNeed;
+    long pEntry = 0, pCond = 0; char pDir = 0, pIf = 0, pNeedC = 0, pRisk = 0, pBirth = 0; int pMode = 0; String pNames = "", pType = ""; boolean pNeed;
+    java.util.Map<String, Integer> why = new java.util.LinkedHashMap<>();
 
     final class M {
         String id, label; int K; boolean follow;
@@ -112,6 +113,7 @@ public final class Sim {
     public synchronized void reset() {
         build();
         signals = hits = misses = cancelled = streakW = streakL = maxStreakL = maxStreakW = noData = 0;
+        why.clear();
         startedAt = System.currentTimeMillis();
         recent = new JSONArray();
         pEntry = 0;
@@ -138,7 +140,7 @@ public final class Sim {
         if (!on || o == null || o.error != null || o.det == null) return;
         logCandles(o);
         settle(o);
-        if (pEntry == 0) pick(o);
+        if (pEntry == 0) { pick(o); if (pEntry != 0) settle(o); }   // en la misma lectura: ver cómo nace la vela de entrada
         save();
     }
 
@@ -155,14 +157,22 @@ public final class Sim {
     private void pick(Analyzer.Output o) {
         for (Rules.Verdict v : o.verdicts) {
             if (v.type == Rules.V_DIR && (v.need == 0 || useNeed)) {
-                pEntry = o.formingStartMs + v.offset * o.tfMs; pDir = v.dir; pIf = 0; pCond = 0;
+                pEntry = o.formingStartMs + v.offset * o.tfMs; pDir = v.dir; pIf = 0; pCond = pEntry - o.tfMs;
                 pNames = String.join(" + ", v.names); pType = v.need == 0 ? "directa" : "directa (pedía nacer " + (v.need == 'V' ? "verde" : "roja") + ")";
-                pNeed = v.need != 0;
+                pNeed = v.need != 0; pNeedC = v.need; pRisk = v.risk; pMode = 0; pBirth = 0;
+                if (pRisk != 0) pType += " (no debía cerrar " + (pRisk == 'V' ? "verde" : "roja") + " la anterior)";
+                return;
+            }
+            if ((v.type == Rules.V_BIRTH_REVERSE || v.type == Rules.V_BIRTH_SAME) && useNeed) {
+                pEntry = o.formingStartMs + v.offset * o.tfMs; pDir = 0; pIf = 0; pCond = 0; pRisk = 0; pNeedC = 0; pBirth = 0;
+                pMode = v.type == Rules.V_BIRTH_REVERSE ? 2 : 3; pNeed = true;
+                pNames = String.join(" + ", v.names); pType = pMode == 2 ? "según nacimiento (al revés)" : "según nacimiento (igual)";
                 return;
             }
             if (v.type == Rules.V_IF && useIf) {
                 pEntry = o.formingStartMs + Math.max(1, v.offset) * o.tfMs; pDir = v.dir; pIf = v.ifColor; pCond = pEntry - o.tfMs;
                 pNames = String.join(" + ", v.names); pType = "si cierra " + (v.ifColor == 'V' ? "verde" : "roja"); pNeed = false;
+                pNeedC = 0; pRisk = 0; pMode = 0; pBirth = 0;
                 return;
             }
         }
@@ -173,8 +183,28 @@ public final class Sim {
         if (pIf != 0) {
             char c = colorAt(o, pCond);
             if (c == 0) return;
-            if (c == 'X' || c != pIf) { cancelled++; addRecent("cancelada", "no cerró " + (pIf == 'V' ? "verde" : "roja"), 0); pEntry = 0; return; }
+            if (c == 'X' || c != pIf) { cancel("no cerró " + (pIf == 'V' ? "verde" : "roja")); return; }
             pIf = 0;   // condición cumplida: ahora espera la vela de entrada
+        }
+        // la vela anterior a la entrada no debe cerrar del color que contradice la señal
+        if (pRisk != 0) {
+            char c = colorAt(o, pCond);
+            if (c == 0) return;
+            if (c == pRisk) { cancel("se contradijo (cerró " + (pRisk == 'V' ? "verde" : "roja") + ")"); return; }
+            if (c == 'X') { noData++; pEntry = 0; return; }
+            pRisk = 0;
+        }
+        // color con que NACE la vela de entrada: se ve en la lectura del comienzo de esa vela
+        if ((pNeedC != 0 || pMode != 0) && pBirth == 0) {
+            if (o.formingStartMs == pEntry && o.captureMs - pEntry <= Math.max(6000, o.tfMs * 4 / 10)) {
+                pBirth = o.det.candles.get(o.det.candles.size() - 1).color;
+                if (pNeedC != 0 && pBirth != pNeedC) { cancel("no nació " + (pNeedC == 'V' ? "verde" : "roja")); return; }
+                if (pMode == 2) pDir = pBirth == 'V' ? 'R' : 'V';
+                if (pMode == 3) pDir = pBirth;
+                if (pMode != 0) pType += " · nació " + (pBirth == 'V' ? "verde" : "roja");
+                return;   // el resultado se ve cuando esta vela cierre
+            } else if (o.formingStartMs > pEntry) { noData++; why.merge("no se vio cómo nació", 1, Integer::sum); pEntry = 0; return; }
+            else return;
         }
         char col = colorAt(o, pEntry);
         if (col == 0) return;
@@ -204,6 +234,11 @@ public final class Sim {
         addRecent(botWin ? "acierto" : "fallo", (pDir == 'V' ? "BUY" : "SELL") + " · vela " + (col == 'V' ? "verde" : "roja") + " · " + pNames,
                 0, netA, netB);
         pEntry = 0;
+    }
+
+    private void cancel(String w) {
+        cancelled++; why.merge(w, 1, Integer::sum);
+        addRecent("cancelada", w + " · " + pNames, 0); pEntry = 0;
     }
 
     private void addRecent(String res, String txt, int x) { addRecent(res, txt, x, 0, 0); }
@@ -274,6 +309,8 @@ public final class Sim {
             JSONObject o = new JSONObject(json());
             o.put("pEntry", pEntry); o.put("pCond", pCond); o.put("pDir", String.valueOf(pDir == 0 ? ' ' : pDir));
             o.put("pIf", String.valueOf(pIf == 0 ? ' ' : pIf)); o.put("pNames", pNames); o.put("pType", pType);
+            o.put("pNeedC", String.valueOf(pNeedC == 0 ? ' ' : pNeedC)); o.put("pRisk", String.valueOf(pRisk == 0 ? ' ' : pRisk));
+            o.put("pBirth", String.valueOf(pBirth == 0 ? ' ' : pBirth)); o.put("pMode", pMode);
             sp.edit().putString("state", o.toString()).apply();
         } catch (Exception ignored) {}
     }
@@ -298,8 +335,11 @@ public final class Sim {
             String d = o.optString("pDir", " "), f = o.optString("pIf", " ");
             pDir = d.trim().isEmpty() ? 0 : d.charAt(0); pIf = f.trim().isEmpty() ? 0 : f.charAt(0);
             pNames = o.optString("pNames"); pType = o.optString("pType");
+            pNeedC = ch(o.optString("pNeedC", " ")); pRisk = ch(o.optString("pRisk", " ")); pBirth = ch(o.optString("pBirth", " ")); pMode = o.optInt("pMode");
         } catch (Exception ignored) { build(); }
     }
+
+    private static char ch(String s) { return s.trim().isEmpty() ? 0 : s.charAt(0); }
 
     /** Informe completo para exportar (resumen + operaciones + velas). */
     public synchronized String report() {
@@ -313,7 +353,7 @@ public final class Sim {
         r.append("## Señales del bot\n");
         r.append("- Operadas: ").append(tot).append(" · aciertos ").append(hits).append(" · fallos ").append(misses)
          .append(" · efectividad ").append(tot > 0 ? String.format(Locale.US, "%.1f%%", hits * 100.0 / tot) : "-").append("\n");
-        r.append("- Canceladas (condición no se cumplió): ").append(cancelled).append(" · sin dato: ").append(noData).append("\n");
+        r.append("- Canceladas (condición no se cumplió): ").append(cancelled).append(why.isEmpty() ? "" : " " + why).append(" · sin dato: ").append(noData).append("\n");
         r.append("- Racha máxima de aciertos: ").append(maxStreakW).append(" · de fallos: ").append(maxStreakL).append("\n");
         r.append("- Efectividad mínima para no perder con payout ").append(payout).append(": ").append(String.format(Locale.US, "%.1f%%", 100 / payout)).append("\n\n");
         for (int s = 0; s < 2; s++) {
