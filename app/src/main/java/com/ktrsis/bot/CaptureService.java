@@ -195,12 +195,15 @@ public class CaptureService extends Service {
         bg.post(() -> { try { old.close(); } catch (Exception ignored) {} });
     }
 
-    private final Runnable autoRead = () -> { if (engine.settings.auto) { onRead(); } scheduleAuto(); };
+    private boolean autoPending = false;
+    private final Runnable autoRead = () -> { autoPending = false; if (engine.settings.auto) { onRead(); } scheduleAuto(); };
 
     /** Modo AUTO: lee sola al empezar cada vela (unos segundos después, cuando la vela anterior ya cerró). */
     private void scheduleAuto() {
         ui.removeCallbacks(autoRead);
+        autoPending = false;
         if (!engine.settings.auto) return;
+        autoPending = true;
         long tf = engine.settings.tfSec * 1000L;
         long now = System.currentTimeMillis() + engine.settings.clockOffsetSec * 1000L;
         long minElapsed = Math.min(2500, tf * 3 / 10);
@@ -454,6 +457,7 @@ public class CaptureService extends Service {
 
     private void render() {
         if (panel == null) return;
+        if (engine.settings.auto && !autoPending) scheduleAuto();   // AUTO activado desde la app (por ejemplo el simulador)
         if (minimized) return;
         tfChip.setText(Engine.tfLabel(engine.settings.tfSec));
         autoChip.setText(engine.settings.auto ? "AUTO ●" : "AUTO");
@@ -488,7 +492,19 @@ public class CaptureService extends Service {
             rowTop[0].setTextColor(MUTED);
             rowBottom[0].setText(engine.settings.auto ? "esperando la próxima vela" : "LEER otra vez");
         }
-        contextTxt.setVisibility(View.GONE);
+        // Simulador en papel: resultado de los dos escenarios en una línea
+        Sim sim = Sim.get(this);
+        if (sim.on) {
+            try {
+                org.json.JSONObject j = new org.json.JSONObject(sim.json());
+                double a = j.getJSONObject("A").getDouble("net"), b = j.getJSONObject("B").getDouble("net");
+                int h = j.getInt("hits"), t = h + j.getInt("misses");
+                contextTxt.setText(String.format(java.util.Locale.US, "SIM A %s$%.2f · B %s$%.2f · bot %s",
+                        a >= 0 ? "+" : "−", Math.abs(a), b >= 0 ? "+" : "−", Math.abs(b), t > 0 ? (h * 100 / t) + "%" : "–"));
+                contextTxt.setTextColor(MUTED);
+                contextTxt.setVisibility(View.VISIBLE);
+            } catch (Exception e) { contextTxt.setVisibility(View.GONE); }
+        } else contextTxt.setVisibility(View.GONE);
     }
 
     static String sq(char c) { return c == 'V' ? "🟩" : "🟥"; }

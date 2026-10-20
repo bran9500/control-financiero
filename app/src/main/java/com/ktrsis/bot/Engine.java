@@ -154,6 +154,7 @@ public final class Engine {
             Detector.Result det = Detector.detect(px, cw, chh);
             Analyzer.Output out = Analyzer.run(det, settings, captureMs);
             last = out;
+            try { Sim.get(ctx).onRead(out); } catch (Throwable ignored) {}
             lastJson = Analyzer.toJson(out);
             prefs.edit().putString("lastJson", lastJson).apply();
 

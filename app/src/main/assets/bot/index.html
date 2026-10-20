@@ -88,6 +88,7 @@ label.f{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
   <button data-t="cap" class="on">Captura</button>
   <button data-t="sig">Alertas</button>
   <button data-t="cfg">Estrategias</button>
+  <button data-t="sim">Simulador</button>
 </nav>
 <main id="main"></main>
 <div class="fab"><button class="btn" id="fabBtn">Iniciar ventana flotante</button></div>
@@ -147,6 +148,7 @@ function render(){
   const scrollY=window.scrollY;
   if(tab==="cap") m.innerHTML=capView();
   else if(tab==="sig") m.innerHTML=sigView();
+  else if(tab==="sim") m.innerHTML=simView();
   else m.innerHTML=cfgView();
   if(tab==="cap") drawCrop();
   window.scrollTo(0,scrollY);
@@ -318,6 +320,60 @@ function cfgView(){
   <div class="note" style="margin-top:14px">Las alertas son apoyo para decidir, no garantía. Las decisiones y el dinero son tuyos.</div>`;
 }
 
+// ---------------- Simulador Masaniello ----------------
+let SIM=null;
+function loadSim(){ try{ SIM=A&&A.getSim?JSON.parse(A.getSim()):demoSim(); }catch(e){ SIM=demoSim(); } }
+function demoSim(){ const mk=(id,l,K,f,w)=>({id,label:l,K,follow:f,cap:50,n:9,k:K,next:K===1?0.58:1.21,wait:w,cw:0,cl:0,trades:0,wins:0,injected:50});
+  return {on:false,payout:1.92,base:50,ops:9,useNeed:true,useIf:true,signals:0,hits:0,misses:0,cancelled:0,noData:0,streakW:0,streakL:0,maxStreakL:0,maxStreakW:0,pending:null,
+  A:{total:200,injected:200,net:0,m:[mk("A1","1 acierto · sigue",1,true,0),mk("A2","1 acierto · sigue (desfasada)",1,true,1),mk("A3","2 aciertos · contrario",2,false,0),mk("A4","2 aciertos · contrario (desfasada)",2,false,1)]},
+  B:{total:200,injected:200,net:0,m:[mk("B1","1 acierto · contrario",1,false,0),mk("B2","1 acierto · contrario (desfasada)",1,false,1),mk("B3","2 aciertos · sigue",2,true,0),mk("B4","2 aciertos · sigue (desfasada)",2,true,1)]},recent:[]}; }
+const usd=v=>(v<0?"−$":"$")+Math.abs(v).toFixed(2);
+function simSet(o){ if(A&&A.simConfig) A.simConfig(JSON.stringify(o)); setTimeout(render,150); }
+function simApply(){ const g=id=>parseFloat(document.getElementById(id).value);
+  simSet({base:g("sBase")||50,ops:Math.round(g("sOps")||9),payout:g("sPay")||1.92,useNeed:document.getElementById("sNeed").checked,useIf:document.getElementById("sIf").checked}); }
+function simReset(){ if(!confirm("¿Reiniciar la simulación? Se borran los resultados y las operaciones guardadas.")) return; if(A&&A.simReset) A.simReset(); setTimeout(render,150); }
+function scenCard(name,desc,sc){
+  const pos=sc.net>=0;
+  return `<div class="card"><div class="row"><div class="grow"><h3 style="margin:0">${name}</h3><div class="note">${desc}</div></div>
+    <div style="text-align:right"><div class="big" style="color:${pos?"var(--green)":"var(--red)"}">${pos?"+":""}${usd(sc.net)}</div><div class="small muted">capital ${usd(sc.total)} · puesto ${usd(sc.injected)}</div></div></div>
+    ${sc.m.map(m=>`<div class="mk" style="display:block;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px">
+      <div class="row"><b class="grow">${m.id} · ${esc(m.label)}</b><b>${usd(m.cap)}</b></div>
+      <div class="note">${m.wait>0?"Arranca en la próxima operación":`Faltan <b>${m.k}</b> acierto${m.k===1?"":"s"} en <b>${m.n}</b> op · próxima apuesta <b>${usd(m.next)}</b>`} · ciclos ✓${m.cw} ✕${m.cl} · ${m.wins}/${m.trades} ganadas</div>
+    </div>`).join("")}</div>`;
+}
+function simView(){
+  loadSim(); const s=SIM, tot=s.hits+s.misses, eff=tot?Math.round(s.hits*1000/tot)/10:null, need=Math.round(10000/s.payout)/100;
+  let h=`<div class="card"><h3>Simulador Masaniello (en papel)</h3>
+    <div class="note">Opera las señales del bot con 4 gestiones Masaniello en dos escenarios a la vez, sin dinero real. Cada operación se resuelve con el color con que cierra la vela.</div>
+    <label class="switch" style="margin-top:10px"><input type="checkbox" ${s.on?"checked":""} onchange="simSet({on:this.checked})"> Simulador encendido</label>
+    <div class="note" style="margin-top:6px">Necesita la ventana flotante abierta sobre el gráfico con <b>AUTO</b> (se activa solo al encender).</div>
+    ${s.pending?`<div class="sig ${s.pending.dir}" style="margin-top:10px"><div class="top">En curso: ${s.pending.dir==="V"?"▲ BUY":"▼ SELL"} ${hms(s.pending.entry,true)}</div><div class="meta">${esc(s.pending.names)} · ${esc(s.pending.type)}</div></div>`:""}
+  </div>
+  <div class="card"><h3>Efectividad de las señales del bot</h3>
+    <div class="stats">
+      <div class="stat"><b style="color:${eff===null?"inherit":eff>=need?"var(--green)":"var(--red)"}">${eff===null?"–":eff+"%"}</b><span>aciertos (${s.hits}/${tot})</span></div>
+      <div class="stat"><b>${s.maxStreakW} / ${s.maxStreakL}</b><span>racha máx ✓ / ✕</span></div>
+      <div class="stat"><b>${s.cancelled}</b><span>canceladas</span></div>
+    </div>
+    <div class="note" style="margin-top:8px">Con payout ${s.payout} hace falta acertar más de <b>${need}%</b> para ganar a la larga.</div>
+  </div>
+  ${scenCard("Escenario A","1 acierto sigue al bot · 2 aciertos al contrario",s.A)}
+  ${scenCard("Escenario B","1 acierto al contrario · 2 aciertos sigue al bot",s.B)}
+  <div class="card"><h3>Últimas operaciones</h3>${(s.recent||[]).length?s.recent.slice(0,15).map(r=>`<div class="note" style="padding:6px 0;border-top:1px solid var(--line)"><b style="color:${r.res==="acierto"?"var(--green)":r.res==="fallo"?"var(--red)":"inherit"}">${r.res}</b> ${hms(r.t,true)} · ${esc(r.txt)}${r.res!=="cancelada"?` · A ${r.a>=0?"+":""}${usd(r.a)} · B ${r.b>=0?"+":""}${usd(r.b)}`:""}</div>`).join(""):`<div class="note">Todavía no hay operaciones.</div>`}</div>
+  <div class="card"><h3>Configuración</h3>
+    <label class="f">Capital por gestión ($)</label><input type="number" id="sBase" value="${s.base}" inputmode="decimal">
+    <label class="f">Operaciones por ciclo</label><input type="number" id="sOps" value="${s.ops}" inputmode="numeric">
+    <label class="f">Payout (1.92 = 92%)</label><input type="number" id="sPay" value="${s.payout}" step="0.01" inputmode="decimal">
+    <label class="switch" style="margin-top:10px"><input type="checkbox" id="sNeed" ${s.useNeed?"checked":""}> Incluir señales que piden color de nacimiento</label>
+    <label class="switch" style="margin-top:6px"><input type="checkbox" id="sIf" ${s.useIf?"checked":""}> Incluir señales "si cierra verde/roja"</label>
+    <button class="btn ghost" style="margin-top:10px" onclick="simApply()">Guardar (reinicia si cambias capital, operaciones o payout)</button>
+  </div>
+  <button class="btn" onclick="A&&A.simExport()">📄 Exportar informe (operaciones + velas)</button>
+  <button class="btn ghost" style="margin-top:10px" onclick="simReset()">Reiniciar simulación</button>
+  <div class="note" style="margin-top:12px">Es una prueba para estudiar las señales. Los resultados en papel no garantizan resultados reales.</div>`;
+  return h;
+}
+
 // ---------------- Calibración ----------------
 let calRect=null, calStart=null;
 function openCal(){
@@ -358,7 +414,7 @@ function alertBox(msg){document.getElementById("status").textContent=msg}
 function demoState(){return {tf:60,tfLabel:"M1",auto:false,strategies:[],clockOffset:0,overlay:false,status:"Vista de prueba",regionP:null,regionL:null,fullOrient:"p",now:Date.now(),last:null}}
 
 render();
-setInterval(()=>{ if(tab==="sig"||tab==="cap") { if(tab==="sig") render(); else { load(); document.getElementById("status").textContent=S.status||""; if(S.last&&S.last.captureMs!==cropFor) render(); } } else load(); }, 1000);
+setInterval(()=>{ if(tab==="sim"){ const ae=document.activeElement; if(!(ae&&ae.tagName==="INPUT"&&ae.type!=="checkbox")) render(); return; } if(tab==="sig"||tab==="cap") { if(tab==="sig") render(); else { load(); document.getElementById("status").textContent=S.status||""; if(S.last&&S.last.captureMs!==cropFor) render(); } } else load(); }, 1000);
 </script>
 </body>
 </html>

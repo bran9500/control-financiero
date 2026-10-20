@@ -132,3 +132,6 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 
 ### 3.12
 - Ventanita del Guardián más pequeña (~30% menos).
+
+### 3.13
+- Bot Señales → pestaña **Simulador**: opera en papel las señales del bot con gestiones Masaniello (misma fórmula que el Excel v9). Dos escenarios a la vez con $200 cada uno (4 gestiones de $50, 9 operaciones): A = 1 acierto sigue al bot / 2 aciertos al contrario; B = al revés. Cada operación se resuelve con el color de cierre de la vela. Efectividad del bot, rachas, ciclos ganados/quemados, línea "SIM" en la ventana flotante y exportación del informe (resumen + operaciones + velas) a Descargas para compartir.

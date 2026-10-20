@@ -101,6 +101,30 @@ public class MainActivity extends Activity {
         moveTaskToBack(true);
     }
 
+    /** Guarda el informe en Descargas y abre "Compartir" para mandarlo (por ejemplo a Claude). */
+    private void exportSim() {
+        String text = Sim.get(this).report();
+        String name = "informe-bot-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(new java.util.Date()) + ".md";
+        android.net.Uri uri = null;
+        try {
+            android.content.ContentValues v = new android.content.ContentValues();
+            v.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name);
+            v.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/markdown");
+            if (Build.VERSION.SDK_INT >= 29) v.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS);
+            uri = getContentResolver().insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+            if (uri != null) try (java.io.OutputStream os = getContentResolver().openOutputStream(uri)) {
+                os.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        } catch (Exception e) { uri = null; }
+        Intent send = new Intent(Intent.ACTION_SEND);
+        send.setType("text/plain");
+        send.putExtra(Intent.EXTRA_SUBJECT, name);
+        if (uri != null) { send.putExtra(Intent.EXTRA_STREAM, uri); send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+        else send.putExtra(Intent.EXTRA_TEXT, text.length() > 90000 ? text.substring(0, 90000) : text);
+        android.widget.Toast.makeText(this, uri != null ? "Guardado en Descargas: " + name : "No se pudo guardar; se comparte como texto", android.widget.Toast.LENGTH_LONG).show();
+        try { startActivity(Intent.createChooser(send, "Enviar informe")); } catch (Exception ignored) {}
+    }
+
     private class Bridge {
         @JavascriptInterface public String getState() { return engine.stateJson(CaptureService.running); }
         @JavascriptInterface public String getImage(String which) { return engine.imageDataUri("full".equals(which) ? "full.jpg" : "crop.jpg"); }
@@ -114,5 +138,13 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void clearLast() { runOnUiThread(engine::clearLast); }
         @JavascriptInterface public void goToTrading() { runOnUiThread(() -> moveTaskToBack(true)); }
+        // ---- simulador Masaniello ----
+        @JavascriptInterface public String getSim() { return Sim.get(MainActivity.this).json(); }
+        @JavascriptInterface public void simConfig(String json) {
+            try { Sim.get(MainActivity.this).config(new org.json.JSONObject(json)); } catch (Exception ignored) {}
+            if (Sim.get(MainActivity.this).on && !engine.settings.auto) runOnUiThread(() -> engine.setAuto(true));  // necesita leer cada vela
+        }
+        @JavascriptInterface public void simReset() { Sim.get(MainActivity.this).reset(); }
+        @JavascriptInterface public void simExport() { runOnUiThread(MainActivity.this::exportSim); }
     }
 }
