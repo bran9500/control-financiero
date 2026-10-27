@@ -183,6 +183,10 @@ function occurrencesInRange(s, e, paidBefore){
     o.paid = Math.min(paid, o.amount);
     o.remaining = Math.max(0, Math.round((o.amount - o.paid) * 100) / 100);
     o.overpaid = o.kind === 'expense' ? Math.max(0, Math.round((paid - o.amount) * 100) / 100) : 0;
+    // Pagado casi completo (el banco cobró unos centavos/dólares distinto): cuenta como pagado.
+    if(o.paid > 0 && o.remaining > 0 && o.remaining <= Math.min(5, Math.max(1, o.amount * 0.01))) o.remaining = 0;
+    // Marcado como pagado a mano en "Ya lo pagué" (efectivo, otra cuenta, o lo que faltaba no se va a pagar).
+    if((data.paidMarks || {})[o.key]) o.remaining = 0;
   });
   return out;
 }
@@ -302,6 +306,23 @@ function markPaidCandidates(dateIso, amount, wide){
     .sort((a,b) => a.score - b.score)
     .slice(0, wide ? 40 : 8)
     .map(x => x.t);
+}
+function markPaidLinked(u){
+  const d0 = isoToDate(u.date);
+  return bankList().filter(t => t.link && t.link.id === u.refId && t.link.type === (u.kind === 'debt' ? 'debt' : 'expense')
+    && Math.abs((isoToDate(t.date) - d0) / 86400000) <= 25).sort((a,b) => b.date.localeCompare(a.date));
+}
+function markPaidManual(){
+  if(!sheet || sheet.type !== 'markpaid') return;
+  const u = sheet.u;
+  if(!data.paidMarks) data.paidMarks = {};
+  data.paidMarks[u.key] = todayISO();
+  sheet = null; saveData(); render();
+  showToast(`"${u.name}" quedó como pagado.`);
+}
+function unmarkPaid(key){
+  if(data.paidMarks) delete data.paidMarks[key];
+  saveData(); render();
 }
 function openMarkPaid(u){ sheet = { type:'markpaid', u, wide:false }; render(); }
 function chooseMarkPaid(txId){

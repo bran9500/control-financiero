@@ -1015,7 +1015,12 @@ function renderSheet(c){
     const u = sheet.u;
     title = `¿Con cuál movimiento pagaste ${escapeAttr(u.name)}?`;
     const cands = markPaidCandidates(u.date, u.amount, sheet.wide);
-    body = `<p class="item-meta" style="margin:0 0 10px 0;">${fmtMoney(u.amount)} · ${fmtShortDate(u.date)}. Primero salen los que más se parecen en monto y fecha.</p>
+    const linked = markPaidLinked(u);
+    body = `${linked.length ? `<p class="sub-head" style="margin-top:0;">Ya conectado</p>
+      ${linked.map(t => `<div class="pick" style="cursor:default;"><span style="min-width:0;"><span style="display:block;">${escapeAttr(displayName(t))}</span><span class="item-meta" style="margin:0;">${fmtShortDate(t.date)}${t.pending ? ' · pendiente' : ''}</span></span><b style="font-family:var(--mono);font-weight:normal;">${fmtMoney(t.amount)}</b></div>`).join('')}
+      <p class="item-meta" style="margin:6px 0 10px 0;">Falta ${fmtMoney(u.amount)}. Si con eso ya quedó pagado, ciérralo aquí:</p>` : ''}
+      <button class="btn btn-solid btn-block" style="margin-bottom:12px;" onclick="markPaidManual()">${linked.length ? 'Ya quedó pagado' : 'Lo pagué por otro lado (efectivo, otra cuenta)'}</button>
+      <p class="item-meta" style="margin:0 0 10px 0;">${linked.length ? 'O elige otro movimiento que lo pagó' : 'O elige el movimiento del banco'}: ${fmtMoney(u.amount)} · ${fmtShortDate(u.date)}. Primero salen los que más se parecen en monto y fecha.</p>
       ${cands.length ? cands.map(t => `<button class="pick" onclick="chooseMarkPaid('${t.id}')"><span style="min-width:0;"><span style="display:block;">${escapeAttr(displayName(t))}</span><span class="item-meta" style="margin:0;">${fmtShortDate(t.date)} · ${escapeAttr(t.desc.slice(0,48))}</span></span><b style="font-family:var(--mono);font-weight:normal;">${fmtMoney(t.amount)}</b></button>`).join('')
         : '<p class="item-meta">No encontré pagos del banco cerca de esa fecha. ¿Ya subiste el extracto de esos días?</p>'}
       ${sheet.wide ? '' : `<button class="card-link" onclick="sheet.wide=true;render()">Ver más movimientos</button>`}

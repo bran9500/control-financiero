@@ -421,7 +421,7 @@ function emptyData(){
     savings: { emergency: { movements: [] }, investments: { movements: [], rate: 0 } },
     history: { paidDebts: [] },
     bank: { transactions: [], rules: [], imports: [], sourceNames: {}, names: {}, linkMemory: {}, trust: {} },
-    allocations: [], shifts: {}, merges: {}
+    allocations: [], shifts: {}, merges: {}, paidMarks: {}
   };
 }
 function normalizeData(parsed){
@@ -458,6 +458,7 @@ function normalizeData(parsed){
     dupIgnored: parsed.dupIgnored || [],
     conflictOk: parsed.conflictOk || [],
     shifts: parsed.shifts || {},
+    paidMarks: parsed.paidMarks || {},
     merges: parsed.merges || {}
   };
 }
@@ -2690,6 +2691,10 @@ function occurrencesInRange(s, e, paidBefore){
     o.paid = Math.min(paid, o.amount);
     o.remaining = Math.max(0, Math.round((o.amount - o.paid) * 100) / 100);
     o.overpaid = o.kind === 'expense' ? Math.max(0, Math.round((paid - o.amount) * 100) / 100) : 0;
+    // Pagado casi completo (el banco cobró unos centavos/dólares distinto): cuenta como pagado.
+    if(o.paid > 0 && o.remaining > 0 && o.remaining <= Math.min(5, Math.max(1, o.amount * 0.01))) o.remaining = 0;
+    // Marcado como pagado a mano en "Ya lo pagué" (efectivo, otra cuenta, o lo que faltaba no se va a pagar).
+    if((data.paidMarks || {})[o.key]) o.remaining = 0;
   });
   return out;
 }
@@ -2809,6 +2814,23 @@ function markPaidCandidates(dateIso, amount, wide){
     .sort((a,b) => a.score - b.score)
     .slice(0, wide ? 40 : 8)
     .map(x => x.t);
+}
+function markPaidLinked(u){
+  const d0 = isoToDate(u.date);
+  return bankList().filter(t => t.link && t.link.id === u.refId && t.link.type === (u.kind === 'debt' ? 'debt' : 'expense')
+    && Math.abs((isoToDate(t.date) - d0) / 86400000) <= 25).sort((a,b) => b.date.localeCompare(a.date));
+}
+function markPaidManual(){
+  if(!sheet || sheet.type !== 'markpaid') return;
+  const u = sheet.u;
+  if(!data.paidMarks) data.paidMarks = {};
+  data.paidMarks[u.key] = todayISO();
+  sheet = null; saveData(); render();
+  showToast(`"${u.name}" quedó como pagado.`);
+}
+function unmarkPaid(key){
+  if(data.paidMarks) delete data.paidMarks[key];
+  saveData(); render();
 }
 function openMarkPaid(u){ sheet = { type:'markpaid', u, wide:false }; render(); }
 function chooseMarkPaid(txId){
@@ -4035,7 +4057,12 @@ function renderSheet(c){
     const u = sheet.u;
     title = `¿Con cuál movimiento pagaste ${escapeAttr(u.name)}?`;
     const cands = markPaidCandidates(u.date, u.amount, sheet.wide);
-    body = `<p class="item-meta" style="margin:0 0 10px 0;">${fmtMoney(u.amount)} · ${fmtShortDate(u.date)}. Primero salen los que más se parecen en monto y fecha.</p>
+    const linked = markPaidLinked(u);
+    body = `${linked.length ? `<p class="sub-head" style="margin-top:0;">Ya conectado</p>
+      ${linked.map(t => `<div class="pick" style="cursor:default;"><span style="min-width:0;"><span style="display:block;">${escapeAttr(displayName(t))}</span><span class="item-meta" style="margin:0;">${fmtShortDate(t.date)}${t.pending ? ' · pendiente' : ''}</span></span><b style="font-family:var(--mono);font-weight:normal;">${fmtMoney(t.amount)}</b></div>`).join('')}
+      <p class="item-meta" style="margin:6px 0 10px 0;">Falta ${fmtMoney(u.amount)}. Si con eso ya quedó pagado, ciérralo aquí:</p>` : ''}
+      <button class="btn btn-solid btn-block" style="margin-bottom:12px;" onclick="markPaidManual()">${linked.length ? 'Ya quedó pagado' : 'Lo pagué por otro lado (efectivo, otra cuenta)'}</button>
+      <p class="item-meta" style="margin:0 0 10px 0;">${linked.length ? 'O elige otro movimiento que lo pagó' : 'O elige el movimiento del banco'}: ${fmtMoney(u.amount)} · ${fmtShortDate(u.date)}. Primero salen los que más se parecen en monto y fecha.</p>
       ${cands.length ? cands.map(t => `<button class="pick" onclick="chooseMarkPaid('${t.id}')"><span style="min-width:0;"><span style="display:block;">${escapeAttr(displayName(t))}</span><span class="item-meta" style="margin:0;">${fmtShortDate(t.date)} · ${escapeAttr(t.desc.slice(0,48))}</span></span><b style="font-family:var(--mono);font-weight:normal;">${fmtMoney(t.amount)}</b></button>`).join('')
         : '<p class="item-meta">No encontré pagos del banco cerca de esa fecha. ¿Ya subiste el extracto de esos días?</p>'}
       ${sheet.wide ? '' : `<button class="card-link" onclick="sheet.wide=true;render()">Ver más movimientos</button>`}
@@ -4376,7 +4403,7 @@ function addShotRow(){
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION='3.15';
+const APP_VERSION='3.16';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
