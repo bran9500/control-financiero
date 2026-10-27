@@ -81,7 +81,7 @@ const SHOT_SECTION_RE = /^(account activity|pending|actividad|movimientos|transa
 function shotLines(ocr){
   const H = ocr.h || 2400;
   return (ocr.lines || []).filter(l => l && l.t && String(l.t).trim())
-    .map(l => ({ t:String(l.t).trim().replace(/^[^A-Za-z0-9$(+\-−–]+\s*/,'').replace(/^[£€¥@©®]\S*\s+/,''), x:l.x, y:l.y, w:l.w, h:l.h, cy:l.y + l.h/2, r:l.x + l.w }))
+    .map(l => ({ t:String(l.t).trim().replace(/^[^A-Za-z0-9$(+\-−–]+\s*/,'').replace(/^[£€¥@©®]\S*\s+/,'').replace(/\s*[>›»❯〉→]+$/,'').replace(/^(?=\S{1,3}\s)[^A-Za-z\s]*[)\]}|©®@£€¥]\S*\s+/,''), x:l.x, y:l.y, w:l.w, h:l.h, cy:l.y + l.h/2, r:l.x + l.w }))
     .filter(l => l.t)
     .filter(l => l.cy > H * 0.035)
     .flatMap(l => {
@@ -136,8 +136,13 @@ function parseShotOcr(ocr){
       if(inl) balance = parseFloat(inl[2].replace(/,/g,'') + '.' + inl[3]);
       else { const nx = lines.slice(k+1, k+4).find(o => parseAmt(o.t)); if(nx) balance = parseAmt(nx.t).v; }
     }
-    if(SHOT_SECTION_RE.test(l.t) && activityTop < 0 && balance !== null) activityTop = l.y;
+    if(SHOT_SECTION_RE.test(l.t) && activityTop < 0 && (balance !== null || /account activity|actividad/i.test(l.t))) activityTop = l.y;
   });
+  // En TD el saldo disponible sale arriba en letra grande y sin etiqueta: el monto más grande antes de "Account Activity".
+  if(balance === null && activityTop >= 0){
+    const big = lines.filter(l => l.cy < activityTop && parseAmt(l.t)).sort((a,b) => b.h - a.h)[0];
+    if(big && lines.filter(l => l.cy < activityTop && parseAmt(l.t)).every(o => o === big || o.h < big.h * 0.7)) balance = parseAmt(big.t).v;
+  }
   const isSummary = l => lines.some(o => o !== l && Math.abs(o.cy - l.cy) < Math.max(o.h, l.h) * 0.6 && /balance|total|saldo|disponible|numbers/i.test(o.t));
   // 2) montos: principales y saldos corridos (el número gris debajo del monto)
   const amts = [];
