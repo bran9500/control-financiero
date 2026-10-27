@@ -6,8 +6,8 @@ function renderPayOptions(){
   const f = payFreq();
   let extra = '';
   if(f === 'semanal'){
-    extra = `<p class="ob-label">¿Qué día te pagan? (ahí empieza tu semana)</p>
-      <div class="opt-grid days">${[1,2,3,4,5,6,0].map(d => `<button class="opt ${prefs.weekStart===d?'on':''}" onclick="setPay('weekStart', ${d})">${capFirst(WEEKDAYS[d])}</button>`).join('')}</div>`;
+    extra = `<p class="ob-label">¿Qué día te cae la plata del pago? (ahí empieza tu semana)</p>
+      <div class="opt-grid days">${[1,2,3,4,5,6,0].map(d => `<button class="opt ${prefs.weekStart===d?'on':''}" onclick="prefs.depositConfirmed=true;setPay('weekStart', ${d})">${capFirst(WEEKDAYS[d])}</button>`).join('')}</div>`;
   } else if(f === 'biweekly'){
     extra = `<p class="ob-label">¿Cuándo fue tu último pago?</p>
       <input type="date" class="ob-input" value="${prefs.payAnchor || todayISO()}" onchange="setPay('payAnchor', this.value)">`;

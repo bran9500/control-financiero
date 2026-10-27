@@ -89,6 +89,7 @@ function renderHome(c){
   let html = renderAppsBar();
   html += renderQuestionsCard();
   html += renderLoansDueCard();
+  html += renderPaydayCard(c);
 
   // Avisos de pagos que vencen en 3 días o menos (o ya vencidos esta semana sin pagar)
   const soon = c.upcoming.filter(u => u.days <= 3);
@@ -1060,6 +1061,53 @@ function renderSheet(c){
       <div class="card-head"><p class="card-title" style="font-size:17px;">${title}</p><button class="item-del" onclick="closeSheet()">×</button></div>
       ${body}
     </div>`;
+}
+
+// ---- El día que cae la plata del pago: ¿ya llegó? ¿alcanza para lo de la semana? ----
+function setDepositDay(d){ prefs.weekStart = d; prefs.depositConfirmed = true; savePrefs(); render(); showToast(`Listo: tu semana va del ${WEEKDAYS[d]} al ${WEEKDAYS[(d+6)%7]}. Con la plata de ese día se paga todo lo de la semana.`); }
+function renderPaydayCard(c){
+  if(payFreq() !== 'semanal') return '';
+  if(!prefs.depositConfirmed){
+    return `<div class="card">
+      <div class="card-head" style="margin-bottom:6px;"><p class="card-title" style="font-size:15px;">¿Qué día te cae la plata del pago?</p></div>
+      <p class="item-meta" style="margin:0 0 10px 0;">El día que llega a tu cuenta, no el día que te pagan. Con esa plata se cubre todo lo de la semana, y la app te avisa si no llega a tiempo.</p>
+      <div class="opt-grid days">${[1,2,3,4,5,6,0].map(d => `<button class="opt ${prefs.weekStart===d?'on':''}" onclick="setDepositDay(${d})">${capFirst(WEEKDAYS[d])}</button>`).join('')}</div>
+    </div>`;
+  }
+  const today = isoToDate(todayISO());
+  const wk = c.weeksAhead.find(w => w.isCurrent);
+  const dep = new Date(wk.weekStart); dep.setHours(0,0,0,0);
+  const next = addDays(dep, 7);
+  const winEnd = addDays(dep, 3); winEnd.setHours(23,59,59,999);
+  const inWin = allIncomes().filter(i => { const d = isoToDate(i.date); return d >= dep && d <= winEnd; }).sort((a,b) => b.amount - a.amount);
+  const pay = inWin[0];
+  const daysSince = Math.round((today - dep) / 86400000);
+  const bills = occurrencesInRange(wk.weekStart, wk.weekEnd).filter(o => o.remaining > 0.004).sort((a,b) => a.date - b.date);
+  const due = bills.reduce((s,o) => s + o.remaining, 0);
+  let status, color;
+  if(pay){
+    const late = Math.round((isoToDate(pay.date) - dep) / 86400000);
+    status = `✓ Te cayó ${fmtMoney(pay.amount)} el ${fmtShortDate(pay.date)}${late > 0 ? ` (${late} día${late===1?'':'s'} tarde)` : ''}`;
+    color = late > 0 ? 'var(--warn)' : 'var(--good)';
+  } else if(daysSince <= 0){
+    status = `Hoy te cae la plata del pago`; color = 'var(--ink)';
+  } else {
+    status = `No ha llegado la plata del ${WEEKDAYS[dep.getDay()]} ${fmtShortDate(dayISO(dep))}. Revisa con tu trabajo o sube el extracto si ya llegó.`;
+    color = 'var(--warn)';
+  }
+  let cover = '';
+  if(due > 0){
+    const ok = pay && pay.amount >= due - 0.009;
+    cover = `<p class="item-meta" style="margin:10px 0 4px 0;">Con esa plata pagas lo de esta semana: <b style="color:var(--ink);">${fmtMoney(due)}</b>${pay ? (ok ? ` · alcanza y sobran ${fmtMoney(pay.amount - due)}` : ` · faltan ${fmtMoney(due - pay.amount)}`) : ''}</p>
+      ${bills.map(o => `<div class="upcoming-row"><span>${escapeAttr(o.name)} <span class="days">${WEEKDAYS[o.date.getDay()]} ${fmtShortDate(dayISO(o.date))}</span></span><span class="amt">${fmtMoney(o.remaining)}</span></div>`).join('')}`;
+  } else if(pay){
+    cover = `<p class="item-meta" style="margin:10px 0 0 0;">No te queda nada pendiente esta semana.</p>`;
+  }
+  return `<div class="card" style="border-color:${pay ? 'var(--line)' : daysSince > 0 ? 'var(--warn)' : 'var(--line)'};">
+    <div class="card-head" style="margin-bottom:6px;"><div><p class="card-title" style="font-size:15px;">Plata del pago</p><p class="card-sub">Semana del ${fmtShortDate(dayISO(dep))} al ${fmtShortDate(dayISO(addDays(dep,6)))} · el próximo cae el ${WEEKDAYS[next.getDay()]} ${fmtShortDate(dayISO(next))}</p></div></div>
+    <p style="margin:0;color:${color};font-size:14.5px;line-height:1.5;">${status}</p>
+    ${cover}
+  </div>`;
 }
 
 function renderLoansDueCard(){
