@@ -1070,6 +1070,13 @@ function renderSheet(c){
 
 // ---- El día que cae la plata del pago: ¿ya llegó? ¿alcanza para lo de la semana? ----
 function setDepositDay(d){ prefs.weekStart = d; prefs.depositConfirmed = true; savePrefs(); render(); showToast(`Listo: tu semana va del ${WEEKDAYS[d]} al ${WEEKDAYS[(d+6)%7]}. Con la plata de ese día se paga todo lo de la semana.`); }
+function markPayArrived(iso){
+  const a = parseMoney((document.getElementById('pay-arr-amt') || {}).value);
+  if(!data.payArrived) data.payArrived = {};
+  data.payArrived[iso] = { date: iso, amount: a > 0 ? a : 0 };
+  saveData(); render(); showToast('Listo, quedó que te llegó la plata de esa semana.');
+}
+function unmarkPayArrived(iso){ if(data.payArrived) delete data.payArrived[iso]; saveData(); render(); }
 function renderPaydayCard(c){
   if(payFreq() !== 'semanal') return '';
   if(!prefs.depositConfirmed){
@@ -1083,23 +1090,39 @@ function renderPaydayCard(c){
   const wk = c.weeksAhead.find(w => w.isCurrent);
   const dep = new Date(wk.weekStart); dep.setHours(0,0,0,0);
   const next = addDays(dep, 7);
-  const winEnd = addDays(dep, 3); winEnd.setHours(23,59,59,999);
-  const inWin = allIncomes().filter(i => { const d = isoToDate(i.date); return d >= dep && d <= winEnd; }).sort((a,b) => b.amount - a.amount);
-  const pay = inWin[0];
+  // El banco a veces pone el depósito el día antes (jueves) o lo muestra unos días después.
+  const winStart = addDays(dep, -2), winEnd = addDays(dep, 3); winEnd.setHours(23,59,59,999);
+  const inRange = iso => { const d = isoToDate(iso); return d >= winStart && d <= winEnd; };
+  const ids = new Set();
+  const cands = allIncomes().filter(i => inRange(i.date)).map(i => { if(i.id) ids.add(i.id); return i; })
+    .concat(bankList().filter(t => t.dir === 'in' && !ids.has(t.id) && t.amount >= 50 && inRange(t.date)
+      && !['trading','own','loanback','ignore'].includes(t.category)).map(t => ({ id:t.id, amount:t.amount, date:t.date })));
+  let pay = cands.sort((a,b) => b.amount - a.amount)[0];
+  const depIso = dayISO(dep);
+  const manual = (data.payArrived || {})[depIso];
+  if(!pay && manual) pay = { amount: manual.amount || 0, date: manual.date || depIso, manual: true };
+  // ¿Hay movimientos del banco de esos días? Si no, todavía no se puede saber.
+  const bankSeen = bankList().some(t => isoToDate(t.date) >= dep);
   const daysSince = Math.round((today - dep) / 86400000);
   const bills = occurrencesInRange(wk.weekStart, wk.weekEnd).filter(o => o.remaining > 0.004).sort((a,b) => a.date - b.date);
   const due = bills.reduce((s,o) => s + o.remaining, 0);
   let status, color;
-  if(pay){
+  if(pay && pay.manual){
+    status = `✓ Marcaste que te llegó la plata del ${fmtShortDate(depIso)}${pay.amount ? ': ' + fmtMoney(pay.amount) : ''}`; color = 'var(--good)';
+  } else if(pay){
     const late = Math.round((isoToDate(pay.date) - dep) / 86400000);
     status = `✓ Te cayó ${fmtMoney(pay.amount)} el ${fmtShortDate(pay.date)}${late > 0 ? ` (${late} día${late===1?'':'s'} tarde)` : ''}`;
     color = late > 0 ? 'var(--warn)' : 'var(--good)';
   } else if(daysSince <= 0){
     status = `Hoy te cae la plata del pago`; color = 'var(--ink)';
+  } else if(!bankSeen){
+    status = `Todavía no veo movimientos del banco desde el ${WEEKDAYS[dep.getDay()]} ${fmtShortDate(depIso)}, así que no sé si ya te cayó la plata. Sube el extracto o una captura donde salga el depósito.`;
+    color = 'var(--ink-dim)';
   } else {
-    status = `No ha llegado la plata del ${WEEKDAYS[dep.getDay()]} ${fmtShortDate(dayISO(dep))}. Revisa con tu trabajo o sube el extracto si ya llegó.`;
+    status = `No veo el depósito del ${WEEKDAYS[dep.getDay()]} ${fmtShortDate(depIso)} entre tus movimientos. Si ya te llegó, puede que esté clasificado como otra cosa: márcalo como Ingreso en Movimientos.`;
     color = 'var(--warn)';
   }
+  const arrivedBtn = !pay && daysSince > 0 ? `<div class="field-row" style="margin-top:10px;"><input type="number" inputmode="decimal" id="pay-arr-amt" placeholder="Monto (opcional)"><button class="btn btn-solid" onclick="markPayArrived('${depIso}')">Sí me llegó</button></div>` : '';
   let cover = '';
   if(due > 0){
     const ok = pay && pay.amount >= due - 0.009;
@@ -1108,9 +1131,11 @@ function renderPaydayCard(c){
   } else if(pay){
     cover = `<p class="item-meta" style="margin:10px 0 0 0;">No te queda nada pendiente esta semana.</p>`;
   }
-  return `<div class="card" style="border-color:${pay ? 'var(--line)' : daysSince > 0 ? 'var(--warn)' : 'var(--line)'};">
+  return `<div class="card" style="border-color:${pay || !bankSeen ? 'var(--line)' : daysSince > 0 ? 'var(--warn)' : 'var(--line)'};">
     <div class="card-head" style="margin-bottom:6px;"><div><p class="card-title" style="font-size:15px;">Plata del pago</p><p class="card-sub">Semana del ${fmtShortDate(dayISO(dep))} al ${fmtShortDate(dayISO(addDays(dep,6)))} · el próximo cae el ${WEEKDAYS[next.getDay()]} ${fmtShortDate(dayISO(next))}</p></div></div>
     <p style="margin:0;color:${color};font-size:14.5px;line-height:1.5;">${status}</p>
+    ${arrivedBtn}
+    ${pay && pay.manual ? `<button class="card-link" style="padding:4px 0 0 0;" onclick="unmarkPayArrived('${depIso}')">Deshacer</button>` : ''}
     ${cover}
   </div>`;
 }

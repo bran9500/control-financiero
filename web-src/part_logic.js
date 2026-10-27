@@ -6,7 +6,7 @@ function emptyData(){
     savings: { emergency: { movements: [] }, investments: { movements: [], rate: 0 } },
     history: { paidDebts: [] },
     bank: { transactions: [], rules: [], imports: [], sourceNames: {}, names: {}, linkMemory: {}, trust: {} },
-    allocations: [], shifts: {}, merges: {}, paidMarks: {}
+    allocations: [], shifts: {}, merges: {}, paidMarks: {}, payArrived: {}
   };
 }
 function normalizeData(parsed){
@@ -44,6 +44,7 @@ function normalizeData(parsed){
     conflictOk: parsed.conflictOk || [],
     shifts: parsed.shifts || {},
     paidMarks: parsed.paidMarks || {},
+    payArrived: parsed.payArrived || {},
     merges: parsed.merges || {}
   };
 }
