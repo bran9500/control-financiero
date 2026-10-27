@@ -4031,7 +4031,9 @@ function renderSheet(c){
     if(!w){ sheet = null; return ''; }
     title = `${capFirst(PL().noun)} del ${fmtShortDate(dayISO(w.weekStart))} al ${fmtShortDate(dayISO(w.weekEnd))}`;
     const items = w.items.slice().sort((a,b)=>a.date-b.date);
-    body = `${items.length ? items.map(o => `<div class="mini-row"><span>${fmtShortDate(dayISO(o.date))} · ${escapeAttr(o.name)}${o.shifted?' <span class="item-meta" style="display:inline;">(movido)</span>':''}</span><b style="${o.remaining<=0.004?'color:var(--good);':''}">${o.remaining<=0.004?'pagado ✓':fmtMoney(o.remaining)}</b></div>`).join('') : '<p class="item-meta">No vence nada esta semana.</p>'}
+    const dupes = weekDupes(items);
+    body = `${dupes.map(renderWeekDupe).join('')}
+      ${items.length ? items.map(o => `<div class="mini-row clickable" style="cursor:pointer;" onclick="goToItem('${o.kind}','${o.refId}')"><span>${fmtShortDate(dayISO(o.date))} · ${escapeAttr(o.name)}${o.shifted?' <span class="item-meta" style="display:inline;">(movido)</span>':''}</span><span style="display:flex;gap:8px;align-items:center;"><b style="${o.remaining<=0.004?'color:var(--good);':''}">${o.remaining<=0.004?'pagado ✓':fmtMoney(o.remaining)}</b><span style="color:var(--ink-dim);">›</span></span></div>`).join('') + '<p class="item-meta" style="margin:6px 0 0 0;">Toca un pago para ver dónde está guardado y corregirlo.</p>' : '<p class="item-meta">No vence nada esta semana.</p>'}
       <div class="total-line"><span>Vence en ese periodo</span><b>${fmtMoney(w.due)}</b></div>
       <div class="total-line" style="border-top:none;margin-top:0;"><span>Conviene ganar</span><b style="color:var(--warn);">${fmtMoney(w.need)}</b></div>
       <p class="item-meta" style="margin-top:8px;">"Conviene ganar" es el mayor entre lo que vence en ese periodo y tu meta promedio (${fmtMoney(c.weeklyTarget)}), para ir guardando para los pagos grandes.</p>`;
@@ -4149,6 +4151,44 @@ function renderPaydayCard(c){
     <div class="card-head" style="margin-bottom:6px;"><div><p class="card-title" style="font-size:15px;">Plata del pago</p><p class="card-sub">Semana del ${fmtShortDate(dayISO(dep))} al ${fmtShortDate(dayISO(addDays(dep,6)))} · el próximo cae el ${WEEKDAYS[next.getDay()]} ${fmtShortDate(dayISO(next))}</p></div></div>
     <p style="margin:0;color:${color};font-size:14.5px;line-height:1.5;">${status}</p>
     ${cover}
+  </div>`;
+}
+
+// ---- Ir desde la semana al pago guardado (deuda o gasto fijo) para corregirlo ----
+function goToItem(kind, refId){
+  sheet = null;
+  startEdit(kind === 'debt' ? 'debts' : 'expenses', refId);
+}
+function baseName(n){ return String(n || '').replace(/\s*\(pago programado\)\s*$/i, '').trim().toLowerCase(); }
+// Pagos que parecen el mismo en la misma semana: mismo nombre, o mismo monto el mismo día.
+function weekDupes(items){
+  const out = [], seen = new Set();
+  items.forEach((a, i) => items.slice(i + 1).forEach(b => {
+    const sameName = baseName(a.name) === baseName(b.name);
+    const sameAmtDay = Math.abs(a.amount - b.amount) < 0.01 && dayISO(a.date) === dayISO(b.date);
+    if(!sameName && !sameAmtDay) return;
+    const k = 'dup|' + [a.kind + ':' + a.refId + ':' + baseName(a.name), b.kind + ':' + b.refId + ':' + baseName(b.name)].sort().join('|');
+    if(seen.has(k) || (data.conflictOk || []).includes(k)) return;
+    seen.add(k); out.push({ a, b, k });
+  }));
+  return out;
+}
+function okWeekDupe(k){ if(!data.conflictOk) data.conflictOk = []; data.conflictOk.push(k); saveData(); render(); }
+function renderWeekDupe(d){
+  const where = o => o.kind === 'debt' ? (/programado/i.test(o.name) ? 'Deudas (pago programado)' : 'Deudas') : 'Gastos fijos';
+  const same = d.a.refId === d.b.refId && d.a.kind === d.b.kind;
+  const msg = same
+    ? `"${escapeAttr(baseName(d.a.name))}" sale 2 veces porque tiene el pago mensual y además un pago programado.`
+    : `"${escapeAttr(d.a.name)}" aparece 2 veces: en ${where(d.a)} y en ${where(d.b)}.`;
+  const ref = o => (o.kind === 'debt' ? 'd:' : 'e:') + o.refId;
+  return `<div class="done-box" style="display:block;border-color:var(--warn);margin-bottom:10px;">
+    <p style="margin:0 0 8px 0;">⚠ ${msg} Si es el mismo pago, se está contando doble.</p>
+    <div class="btn-row" style="flex-wrap:wrap;">
+      <button class="btn" style="flex:1;" onclick="goToItem('${d.a.kind}','${d.a.refId}')">Ver el 1.º</button>
+      ${same ? '' : `<button class="btn" style="flex:1;" onclick="goToItem('${d.b.kind}','${d.b.refId}')">Ver el 2.º</button>`}
+      ${same ? '' : `<button class="btn btn-solid" style="flex:1;" onclick="sheet={type:'mergeInto', ref:'${ref(d.b)}'};render()">Unirlos</button>`}
+    </div>
+    <button class="card-link" style="margin-top:6px;" onclick="okWeekDupe('${d.k}')">Son pagos distintos, no avisar</button>
   </div>`;
 }
 
@@ -4451,7 +4491,7 @@ function addShotRow(){
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION='3.17';
+const APP_VERSION='3.18';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
