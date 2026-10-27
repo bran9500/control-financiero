@@ -274,6 +274,8 @@ function createAndLink(txId, kind){
   const name = (document.getElementById('nl-name') || {}).value || '';
   const amt = parseMoney((document.getElementById('nl-amount') || {}).value);
   if(!t || !name.trim()) { showToast('Escribe un nombre'); return; }
+  const twin = sameNameItem(name);
+  if(twin){ chooseLink(txId, twin.type, twin.item.id); showToast(`Ya tenías "${twin.item.name}": lo conecté ahí en vez de crear otro.`); return; }
   if(kind === 'debt'){
     const pay = parseMoney((document.getElementById('nl-pay') || {}).value);
     const id = 'd'+Date.now();

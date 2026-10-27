@@ -190,9 +190,11 @@ function loadData(){
   }
   loaded = true;
   const ghosts = cleanGhostTransactions();
+  const twins = mergeExactTwins();
   applyPrefs();
   render();
   if(loadState === 'ok') scheduleNativeReminders();
+  if(twins) setTimeout(() => showToast(`Encontré ${twins} gasto${twins===1?'':'s'} fijo${twins===1?'':'s'} guardado${twins===1?'':'s'} dos veces (mismo nombre, monto y día) y los uní. Ya no se cuentan doble.`), 900);
   if(ghosts) setTimeout(() => showToast(`Quité ${ghosts} movimiento${ghosts===1?'':'s'} falso${ghosts===1?'':'s'} que salían de la tabla de saldos del PDF (no eran pagos de verdad).`), 400);
 }
 
@@ -351,7 +353,36 @@ function updateDebt(id, name, balance, rate, dueDate, monthlyPayment){
   saveData(); render();
 }
 // ---- Gastos fijos ----
+// Un gasto fijo o deuda ya guardado con el mismo nombre (sin importar mayúsculas/espacios).
+function sameNameItem(name){
+  const n = String(name || '').trim().toLowerCase().replace(/\s+/g,' ');
+  if(!n) return null;
+  const e = data.expenses.find(x => String(x.name||'').trim().toLowerCase().replace(/\s+/g,' ') === n);
+  if(e) return { type:'expense', item:e };
+  const d = data.debts.find(x => String(x.name||'').trim().toLowerCase().replace(/\s+/g,' ') === n);
+  return d ? { type:'debt', item:d } : null;
+}
+// Gastos fijos idénticos (mismo nombre, monto, día y frecuencia): se unen solos al abrir la app.
+function mergeExactTwins(){
+  let n = 0;
+  const sig = e => [String(e.name||'').trim().toLowerCase(), Math.round((e.amount||0)*100), expenseFreq(e), expenseFreq(e)==='week' ? e.weekday : e.dueDay].join('|');
+  const seen = {};
+  data.expenses.slice().forEach(e => {
+    const k = sig(e);
+    if(!seen[k]){ seen[k] = e; return; }
+    const keep = seen[k];
+    bankList().forEach(t => { if(t.link && t.link.type === 'expense' && t.link.id === e.id) t.link.id = keep.id; });
+    (data.allocations || []).forEach(a => { if(a.expenseId === e.id) a.expenseId = keep.id; });
+    Object.values((data.bank && data.bank.linkMemory) || {}).forEach(m => { if(m.type === 'expense' && m.id === e.id) m.id = keep.id; });
+    data.expenses = data.expenses.filter(x => x.id !== e.id);
+    n++;
+  });
+  if(n) saveData();
+  return n;
+}
 function addExpense(name, amount, dueDay, freq, weekday){
+  const twin = sameNameItem(name);
+  if(twin){ showToast(`Ya tienes "${twin.item.name}" en ${twin.type==='debt'?'Deudas':'Gastos fijos'}. Edítalo ahí en vez de crearlo otra vez.`); startEdit(twin.type==='debt'?'debts':'expenses', twin.item.id); return; }
   data.expenses.push({id:'e'+Date.now(), name, amount:parseMoney(amount), dueDay:Number(dueDay)||1, freq: freq==='week'?'week':'month', weekday: Number(weekday)});
   saveData(); render();
 }

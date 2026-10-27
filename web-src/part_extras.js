@@ -418,6 +418,14 @@ function detectRecurring(){
 function addRecurringAsExpense(key){
   const r = detectRecurring().find(x => x.key === key);
   if(!r) return;
+  const twin = sameNameItem(r.name) || (data.expenses.find(e => Math.abs((e.amount||0) - r.amount) <= Math.max(1, r.amount*0.05) && Math.abs((e.dueDay||1) - r.day) <= 5) ? { type:'expense', item: data.expenses.find(e => Math.abs((e.amount||0) - r.amount) <= Math.max(1, r.amount*0.05) && Math.abs((e.dueDay||1) - r.day) <= 5) } : null);
+  if(twin){
+    upsertRule(key, 'out', twin.type === 'debt' ? 'debt' : 'fixed');
+    bankList().forEach(t => { if(t.dir === 'out' && merchantKey(t.desc) === key && !t.link) linkTx(t, twin.type, twin.item.id); });
+    saveData(); render();
+    showToast(`Ese cobro ya lo tenías como "${twin.item.name}". Lo conecté ahí en vez de crearlo otra vez.`);
+    return;
+  }
   data.expenses.push({ id:'e'+Date.now(), name: r.name, amount: Math.round(r.amount*100)/100, dueDay: Math.min(28, Math.max(1, r.day)) });
   upsertRule(key, 'out', 'fixed');
   bankList().forEach(t => { if(t.dir === 'out' && merchantKey(t.desc) === key && t.auto !== 'manual-set' && t.auto !== 'manual') { t.category = 'fixed'; t.auto = 'rule'; } });
