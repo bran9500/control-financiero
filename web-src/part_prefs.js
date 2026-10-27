@@ -3,7 +3,7 @@
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION='3.19';
+const APP_VERSION='3.20';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
@@ -33,7 +33,7 @@ const FONTS = {
 const SIZES = { normal:{ label:'Normal', z:1 }, grande:{ label:'Grande', z:1.08 }, xl:{ label:'Muy grande', z:1.16 } };
 const GREET_STYLES = { formal:'Buenos días, Brandon', parce:'¿Qué más, Brandon?', emoji:'☀️ Buenos días, Brandon' };
 
-function defaultPrefs(){ return { name:'', onboarded:false, accent:'verde', bg:'grafito', font:'clasica', size:'normal', greet:'formal', weekStart:1, payFreq:'semanal', payDay:30, payAnchor:'', currency:'USD' }; }
+function defaultPrefs(){ return { name:'', onboarded:false, accent:'verde', bg:'grafito', font:'clasica', size:'normal', greet:'formal', weekStart:1, payFreq:'semanal', payDay:30, payAnchor:'', currency:'USD', goalMode:'fechas' }; }
 let prefs = loadPrefs();
 function loadPrefs(){ try{ return Object.assign(defaultPrefs(), JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); }catch(e){ return defaultPrefs(); } }
 function savePrefs(){ if(typeof previewMode !== 'undefined' && previewMode) return; try{ localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); }catch(e){} }
@@ -46,6 +46,7 @@ const PAY_FREQS = {
   mensual:  { label:'Cada mes',        noun:'mes',      art:'este mes',      plural:'meses',     adj:'mensual',  por:'por mes' }
 };
 function payFreq(){ return (typeof prefs !== 'undefined' && prefs && PAY_FREQS[prefs.payFreq]) ? prefs.payFreq : 'semanal'; }
+function byDates(){ return !(typeof prefs !== 'undefined' && prefs && prefs.goalMode === 'promedio'); }
 function PL(){ return PAY_FREQS[payFreq()]; }
 function periodsPerMonth(){ return { semanal:4.345, biweekly:26/12, quincenal:2, mensual:1 }[payFreq()]; }
 function startOfUserWeek(d){

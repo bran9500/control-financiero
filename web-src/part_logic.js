@@ -668,7 +668,7 @@ function computeAll(){
   const hormigaOver = hormigaThisWeek - hormigaLimit;
 
   const availableThisWeek = incomeThisWeek - hormigaThisWeek - gastoThisWeek;
-  const need = Math.max(weeklyTarget, dueThisWeek);
+  const need = byDates() ? dueThisWeek : Math.max(weeklyTarget, dueThisWeek);
   const shortfall = need - availableThisWeek;
 
   const currentBalance = (data.settings && data.settings.currentBalance) || 0;
@@ -686,7 +686,7 @@ function computeAll(){
     cursor = new Date(we.getFullYear(), we.getMonth(), we.getDate() + 1);
     const occ = w === 0 ? occWeek : occurrencesInRange(ws, we);
     const due = occ.reduce((s,o)=>s+o.remaining,0);
-    weeksAhead.push({ weekStart: ws, weekEnd: we, due, need: Math.max(weeklyTarget, due), items: occ, isCurrent: w===0 });
+    weeksAhead.push({ weekStart: ws, weekEnd: we, due, need: byDates() ? due : Math.max(weeklyTarget, due), items: occ, isCurrent: w===0 });
   }
 
   return {weeklyTarget, dueThisWeek, incomeThisWeek, hormigaThisWeek, gastoThisWeek, hormigaLimit, hormigaOver, availableThisWeek, shortfall, totalDebt, monthlyTotal, upcoming, weeklyEquivDebt, weeklyEquivExp, need, weeksAhead, currentBalance, totalWithBalance, realGap};

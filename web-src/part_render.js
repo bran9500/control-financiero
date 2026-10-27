@@ -108,7 +108,7 @@ function renderHome(c){
     <p class="hero-label">${covered ? 'Vas cubierto ' + PL().art : 'Te falta ganar ' + PL().art}</p>
     <p class="hero-number ${covered?'good':'warn'}">${fmtMoney(Math.max(c.shortfall,0))}</p>
     <div class="progress ${covered?'':'warn'}"><span style="width:${(pct*100).toFixed(1)}%"></span></div>
-    <p class="hero-sub">Entró ${fmtMoney(c.incomeThisWeek)} · gastaste ${fmtMoney(c.hormigaThisWeek + c.gastoThisWeek)} · disponible ${fmtMoney(c.availableThisWeek)} de una meta de ${fmtMoney(c.need)}</p>
+    <p class="hero-sub">Entró ${fmtMoney(c.incomeThisWeek)} · gastaste ${fmtMoney(c.hormigaThisWeek + c.gastoThisWeek)} · disponible ${fmtMoney(c.availableThisWeek)} de ${fmtMoney(c.need)} ${byDates() ? 'que vence ' + PL().art : 'de meta'}</p>
     <div class="hero-split">
       <span class="lbl">${c.realGap > 0 ? 'Sumando tu saldo, aún te faltan' : 'Sumando tu saldo, te sobran'}</span>
       <span class="val" style="color:${c.realGap>0?'var(--warn)':'var(--good)'};">${fmtMoney(Math.abs(c.realGap))}</span>
@@ -116,12 +116,15 @@ function renderHome(c){
     <p class="sub-head" style="margin:16px 0 8px 0;">Lo que conviene ganar ${PL().noun === 'mes' ? 'los próximos meses' : 'las próximas ' + PL().plural}</p>
     <div class="week-chips" data-tour="weeks">${next.map((w,i) => `
       <button class="week-chip" onclick="sheet={type:'week', idx:${i+1}};render()">
-        <span class="wc-range">${fmtShortDate(dayISO(w.weekStart))} – ${fmtShortDate(dayISO(w.weekEnd))}</span>
+        <span class="wc-range">${WEEKDAYS[w.weekStart.getDay()].slice(0,3)} ${fmtShortDate(dayISO(w.weekStart))} – ${WEEKDAYS[w.weekEnd.getDay()].slice(0,3)} ${fmtShortDate(dayISO(w.weekEnd))}</span>
         <span class="wc-amt">${fmtMoney(w.need)}</span>
         <span class="wc-due">${w.items.filter(o=>o.remaining>0).length} pago${w.items.filter(o=>o.remaining>0).length===1?'':'s'}</span>
       </button>`).join('')}
     </div>
-    <p class="item-meta" style="margin-top:8px;">${PL().noun === 'mes' ? 'Cada mes' : 'Cada ' + PL().noun} es el mayor entre tu meta promedio (${fmtMoney(c.weeklyTarget)}) y lo que vence en ${PL().noun === 'mes' ? 'ese mes' : 'esa ' + PL().noun}. Toca uno para ver qué pagos caen ahí.</p>
+    <p class="item-meta" style="margin-top:8px;">${byDates()
+      ? `Cada ${PL().noun} suma solo lo que vence en esas fechas${payFreq()==='semanal' ? ` (de ${WEEKDAYS[periodBounds(new Date()).s.getDay()]} a ${WEEKDAYS[(periodBounds(new Date()).s.getDay()+6)%7]}, con la plata que te cae ese ${WEEKDAYS[periodBounds(new Date()).s.getDay()]})` : ''}. Toca uno para ver qué pagos caen ahí.`
+      : `${PL().noun === 'mes' ? 'Cada mes' : 'Cada ' + PL().noun} es el mayor entre tu meta promedio (${fmtMoney(c.weeklyTarget)}) y lo que vence en ${PL().noun === 'mes' ? 'ese mes' : 'esa ' + PL().noun}. Toca uno para ver qué pagos caen ahí.`}
+      <button class="card-link" style="padding:4px 0 0 0;display:block;" onclick="prefs.goalMode=byDates()?'promedio':'fechas';savePrefs();render()">${byDates() ? `Ver con promedio parejo (${fmtMoney(c.weeklyTarget)} ${PL().por}, para ahorrar para pagos grandes)` : 'Ver solo lo que vence en cada fecha'}</button></p>
   </div>`;
 
   // Mini tarjetas
@@ -994,7 +997,7 @@ function renderSheet(c){
       ${items.length ? items.map(o => `<div class="mini-row clickable" style="cursor:pointer;" onclick="goToItem('${o.kind}','${o.refId}')"><span>${fmtShortDate(dayISO(o.date))} · ${escapeAttr(o.name)}${o.shifted?' <span class="item-meta" style="display:inline;">(movido)</span>':''}</span><span style="display:flex;gap:8px;align-items:center;"><b style="${o.remaining<=0.004?'color:var(--good);':''}">${o.remaining<=0.004?'pagado ✓':fmtMoney(o.remaining)}</b><span style="color:var(--ink-dim);">›</span></span></div>`).join('') + '<p class="item-meta" style="margin:6px 0 0 0;">Toca un pago para ver dónde está guardado y corregirlo.</p>' : '<p class="item-meta">No vence nada esta semana.</p>'}
       <div class="total-line"><span>Vence en ese periodo</span><b>${fmtMoney(w.due)}</b></div>
       <div class="total-line" style="border-top:none;margin-top:0;"><span>Conviene ganar</span><b style="color:var(--warn);">${fmtMoney(w.need)}</b></div>
-      <p class="item-meta" style="margin-top:8px;">"Conviene ganar" es el mayor entre lo que vence en ese periodo y tu meta promedio (${fmtMoney(c.weeklyTarget)}), para ir guardando para los pagos grandes.</p>`;
+      <p class="item-meta" style="margin-top:8px;">${byDates() ? `"Conviene ganar" es lo que vence en esas fechas.` : `"Conviene ganar" es el mayor entre lo que vence en ese periodo y tu meta promedio (${fmtMoney(c.weeklyTarget)}), para ir guardando para los pagos grandes.`}</p>`;
   } else if(sheet.type === 'source'){
     const name = sheet.name;
     const b = monthBounds(0);
