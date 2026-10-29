@@ -234,7 +234,7 @@ function removeScheduledPayment(debtId, sid){
 // =====================================================================
 let sheet = null; // {type:'link', txId, kind} | {type:'shift', key, baseIso, date, name} | {type:'week', idx} | {type:'source', name} | {type:'alloc', expenseId, periodDate, amount} | {type:'rename', txId}
 function closeSheet(){ sheet = null; render(); }
-function openLinkSheet(txId, kind){ sheet = { type:'link', txId, kind }; render(); }
+function openLinkSheet(txId, kind){ sheet = { type:'link', txId, kind, back: sheet && sheet.back }; render(); }
 // Conecta este pago y todos los del mismo comercio/persona que aún no estén conectados.
 function chooseLink(txId, type, id, force){
   const t = bankList().find(x => x.id === txId);
@@ -251,7 +251,7 @@ function chooseLink(txId, type, id, force){
     linkTx(o, type, id); others++;
   });
   upsertRule(merchantKey(t.desc), t.dir, type === 'debt' ? 'debt' : 'fixed');
-  sheet = null;
+  sheet = (sheet && sheet.back) || null;
   saveData(); render();
   const extra = others ? ` También conecté ${others} pago${others===1?'':'s'} más de "${displayName(t)}".` : '';
   if(type === 'debt'){

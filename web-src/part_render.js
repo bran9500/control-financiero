@@ -1255,6 +1255,17 @@ function renderDaySpendSheet(fromIso){
       <b style="font-family:var(--mono);font-weight:normal;">${fmtMoney(g.total)}</b></button>`).join('') || '<p class="item-meta">No hay gastos del banco en ese tiempo.</p>'}
     ${manual > 0 ? `<p class="item-meta" style="margin-top:8px;">Además, ${fmtMoney(manual)} de gastos hormiga que anotaste a mano.</p>` : ''}`;
 }
+// ¿Este pago del banco es una de tus deudas o gastos fijos? Sugerencias por nombre y por monto parecido.
+function linkSuggestions(t){
+  const items = data.debts.map(d => ({ type:'debt', id:d.id, name:d.name, amount: d.payFreq === 'week' ? (d.weeklyPayment||0) : (d.monthlyPayment||0), what:'deuda' }))
+    .concat(data.expenses.map(e => ({ type:'expense', id:e.id, name:e.name, amount:e.amount||0, what:'gasto fijo' })));
+  return items.map(it => {
+    const byName = nameMatches(t.desc, it.name) || nameMatches(it.name, t.desc);
+    const diff = it.amount > 0 ? Math.abs(t.amount - it.amount) / it.amount : 9;
+    return { ...it, byName, diff, score: (byName ? 0 : 1) + Math.min(diff, 2) };
+  }).filter(x => x.byName || x.diff <= 0.15).sort((a,b) => a.score - b.score).slice(0, 4);
+}
+function quickLink(txId, type, id){ chooseLink(txId, type, id); }
 function renderMerchantSheet(){
   const gk = sheet.gk;
   const txs = bankList().filter(x => groupKeyOf(x) === gk).sort((a,b) => b.date.localeCompare(a.date));
@@ -1263,6 +1274,9 @@ function renderMerchantSheet(){
   return `<p class="item-meta" style="margin:0 0 6px 0;">${txs.length} movimiento${txs.length===1?'':'s'} · último ${fmtShortDate(t.date)} · ${fmtMoney(t.amount)}</p>
     <p class="item-meta" style="margin:0 0 10px 0;">${escapeAttr(t.desc)}</p>
     ${t.link ? `<p class="note-good" style="font-size:13px;margin:0 0 10px 0;">${escapeAttr(assignmentOf(t).label)}</p>` : ''}
+    ${(() => { if(t.dir !== 'out' || t.link) return ''; const sg = linkSuggestions(t); return sg.length ? `<p class="sub-head" style="margin-top:0;">¿Es el pago de uno de estos?</p>
+      ${sg.map(s => `<button class="pick" onclick="quickLink('${t.id}','${s.type}','${s.id}')"><span style="min-width:0;"><span style="display:block;">${escapeAttr(s.name)}</span><span class="item-meta" style="margin:0;">${s.what} · ${fmtMoney(s.amount)}${s.byName ? ' · mismo nombre' : ''}</span></span><b style="color:var(--good);font-weight:600;">Conectar</b></button>`).join('')}
+      <p class="item-meta" style="margin:4px 0 12px 0;">Se conecta este y los demás de "${escapeAttr(displayName(t))}", y deja de contarse como gasto del día a día. Si no está en la lista, elige abajo "Pago de deuda" o "Gasto fijo".</p>` : ''; })()}
     <p class="sub-head" style="margin-top:0;">¿Qué es?</p>
     ${catChips(gk, t.dir, t.category)}
     <button class="btn btn-block" style="margin-top:8px;" onclick="sheet=null;startSourceEdit('${t.id}');setTab('mov');setMovSeg('bank');startSourceEdit('${t.id}')">✎ Ponerle nombre</button>
