@@ -363,11 +363,19 @@ public class Engine {
         try {
             o.put("payout", payout); o.put("base", base); o.put("steps", steps); o.put("mode", mode);
         } catch (Exception ignored) {}
-        prefs.edit().putString("state", o.toString()).apply();
+        // El historial para Deshacer también se guarda, para que siga sirviendo si Android cierra la app o la actualizas.
+        JSONArray h = new JSONArray();
+        for (String x : history) h.put(x);
+        prefs.edit().putString("state", o.toString()).putString("undo", h.toString()).apply();
     }
 
     private void load() {
         try { sessions = new JSONArray(prefs.getString("sessions", "[]")); } catch (Exception e) { sessions = new JSONArray(); }
+        try {
+            JSONArray h = new JSONArray(prefs.getString("undo", "[]"));
+            history.clear();
+            for (int i = 0; i < h.length(); i++) history.addLast(h.getString(i));
+        } catch (Exception ignored) {}
         String raw = prefs.getString("state", null);
         if (raw == null) return;
         try {

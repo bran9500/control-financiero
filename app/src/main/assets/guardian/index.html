@@ -50,9 +50,27 @@ const NA = window.Android || null;
 let S = { running:false, risk:6, goal:9, capMode:'auto', capital:0, delay:6, sound:true, overlayOk:true };
 function load(){ try{ if(NA) S = JSON.parse(NA.getState()); }catch(e){} }
 function save(){ if(NA) NA.save(JSON.stringify({risk:S.risk, goal:S.goal, capMode:S.capMode, capital:S.capital, delay:S.delay, sound:S.sound})); }
-const money = v => (v<0?'−$':'$') + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+// Moneda elegida en el Rotador (Ajustes → Moneda)
+const CURS={USD:["$",2],EUR:["€",2],COP:["$",0],MXN:["$",2],BRL:["R$",2],PEN:["S/",2],ARS:["$",0],CLP:["$",0],GTQ:["Q",2],DOP:["RD$",2],VES:["Bs.",2],GBP:["£",2],USDT:["₮",2]};
+let CUR='USD'; try{ if(NA && NA.getCurrency){ const c = NA.getCurrency(); if(CURS[c]) CUR = c; } }catch(e){}
+const DEC = CURS[CUR][1], SYM = CURS[CUR][0];
+const money = v => (v<0?'−':'') + SYM + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:DEC,maximumFractionDigits:DEC});
+// Lee montos como los escribes: "200.000" o "200,000" en pesos = doscientos mil; "1,250.50" o "1.250,50" = mil doscientos cincuenta.
+function parseAmt(str, decs){
+  let t=String(str==null?"":str).replace(/[^0-9.,-]/g,"");
+  if(!t)return NaN;
+  const lastDot=t.lastIndexOf("."),lastCom=t.lastIndexOf(",");
+  if(decs===0)return parseFloat(t.replace(/[.,]/g,""));
+  if(lastDot>=0&&lastCom>=0){const decSep=lastDot>lastCom?".":",";t=t.split(decSep==="."?",":".").join("");if(decSep===",")t=t.replace(",",".");return parseFloat(t)}
+  const sep=lastDot>=0?".":lastCom>=0?",":null;
+  if(!sep)return parseFloat(t);
+  const parts=t.split(sep);
+  // un solo separador con 3 cifras después, o varios separadores: son miles
+  if(parts.length>2||(parts[parts.length-1].length===3&&parts[0].length>=1&&parts[0]!=="0"))return parseFloat(parts.join(""));
+  return parseFloat(parts.join("."));
+}
 function set(k, v){ S[k] = v; save(); render(); }
-function setNum(k, el){ const v = parseFloat(el.value); S[k] = isNaN(v) ? 0 : v; save(); renderLevels(); }
+function setNum(k, el){ const v = k === 'capital' ? parseAmt(el.value, DEC) : parseFloat(el.value); S[k] = isNaN(v) ? 0 : v; save(); renderLevels(); }
 function baseCap(){ return S.running && S.start ? S.start : S.capMode === 'manual' ? S.capital : (S.balance || S.capital || 0); }
 function levelsHtml(){
   const c = baseCap();
@@ -97,7 +115,7 @@ function render(){
         <button class="${S.capMode==='auto'?'on':''}" onclick="set('capMode','auto')">Leer mi saldo al activar</button>
         <button class="${S.capMode==='manual'?'on':''}" onclick="set('capMode','manual')">Escribirlo</button>
       </div>
-      ${S.capMode === 'manual' ? `<label class="f">Capital $<input type="number" inputmode="decimal" step="1" value="${S.capital || ''}" placeholder="1200" oninput="setNum('capital', this)"></label>` : ''}
+      ${S.capMode === 'manual' ? `<label class="f">Capital ${SYM}<input type="text" inputmode="decimal" value="${S.capital ? S.capital.toLocaleString('en-US',{maximumFractionDigits:DEC}) : ''}" placeholder="${DEC===0?'200.000':'1200'}" oninput="setNum('capital', this)"></label>` : ''}
       <div id="levels">${levelsHtml()}</div>
     </div>
     <button class="go ${S.running?'stop':''}" onclick="${NA?'Android.toggle()':''}">${S.running ? 'Detener Guardián' : '🛡 Activar Guardián'}</button>

@@ -261,7 +261,7 @@ body.vert .ministats{display:block}
     <summary>Ajustes</summary>
     <div class="cfg">
       <label for="payout"><span id="payoutLbl">Payout %</span><input id="payout" type="number" min="50" max="100" step="1" value="85"></label>
-      <label for="base"><span class="cursym" data-t="Entrada base">Entrada base $</span><input id="base" type="number" min="1" step="0.1" value="1"></label>
+      <label for="base"><span class="cursym" data-t="Entrada base">Entrada base $</span><input id="base" type="text" inputmode="decimal" value="1"></label>
       <label for="curSel">Moneda<select id="curSel"></select></label>
       <label for="nLots">Número de lotes<select id="nLots"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
       <label for="steps">Pasos por lote<input id="steps" type="number" min="1" max="8" step="1" value="5"></label>
@@ -291,7 +291,7 @@ body.vert .ministats{display:block}
     <summary>Riesgo y meta del día</summary>
     <p class="empty">Pon tu capital y qué porcentaje aceptas perder o quieres ganar. Con "Flotar aparte" queda en una ventanita propia que lee tu saldo real.</p>
     <div class="goalform" style="grid-template-columns:1fr 1fr 1fr;">
-      <label for="planCap"><span class="cursym" data-t="Capital">Capital $</span><input id="planCap" type="number" min="1" step="1" inputmode="decimal" placeholder="1200"></label>
+      <label for="planCap"><span class="cursym" data-t="Capital">Capital $</span><input id="planCap" type="text" inputmode="decimal" placeholder="1200"></label>
       <label for="planRisk">Riesgo %<input id="planRisk" type="number" min="0" step="0.5" inputmode="decimal" placeholder="6"></label>
       <label for="planGoal">Meta %<input id="planGoal" type="number" min="0" step="0.5" inputmode="decimal" placeholder="9"></label>
     </div>
@@ -308,7 +308,7 @@ body.vert .ministats{display:block}
     <summary>Meta de volumen</summary>
     <p class="empty">Para bonos del broker que se liberan al mover cierto volumen. Cuenta todo lo que apuestes desde la fecha que elijas, en todas las sesiones.</p>
     <div class="goalform">
-      <label for="goalAmt"><span class="cursym" data-t="Meta">Meta $</span><input id="goalAmt" type="number" min="1" step="1" inputmode="decimal" placeholder="3000"></label>
+      <label for="goalAmt"><span class="cursym" data-t="Meta">Meta $</span><input id="goalAmt" type="text" inputmode="decimal" placeholder="3000"></label>
       <label for="goalSince">Desde<input id="goalSince" type="date"></label>
     </div>
     <div class="mergebar">
@@ -397,6 +397,21 @@ const amt=v=>sym()+num(v);
 const amt0=v=>sym()+(Math.abs(v-Math.round(v))<1e-9?Math.round(v).toLocaleString("en-US"):num(v));
 function setCurrency(c){if(!CURS[c])return;CUR=c;try{localStorage.setItem(CURKEY,c)}catch(e){}if(window.Android&&Android.setCurrency)Android.setCurrency(c);render()}
 const money=v=>(v<0?"−":"")+amt(Math.abs(v));
+// Lee montos como los escribes: "200.000" o "200,000" en pesos = doscientos mil; "1,250.50" o "1.250,50" = mil doscientos cincuenta.
+function parseAmt(str, decs){
+  let t=String(str==null?"":str).replace(/[^0-9.,-]/g,"");
+  if(!t)return NaN;
+  const lastDot=t.lastIndexOf("."),lastCom=t.lastIndexOf(",");
+  if(decs===0)return parseFloat(t.replace(/[.,]/g,""));
+  if(lastDot>=0&&lastCom>=0){const decSep=lastDot>lastCom?".":",";t=t.split(decSep==="."?",":".").join("");if(decSep===",")t=t.replace(",",".");return parseFloat(t)}
+  const sep=lastDot>=0?".":lastCom>=0?",":null;
+  if(!sep)return parseFloat(t);
+  const parts=t.split(sep);
+  // un solo separador con 3 cifras después, o varios separadores: son miles
+  if(parts.length>2||(parts[parts.length-1].length===3&&parts[0].length>=1&&parts[0]!=="0"))return parseFloat(parts.join(""));
+  return parseFloat(parts.join("."));
+}
+const pa=v=>parseAmt(v,dec());
 
 function nextAlive(from){
   const N=S.lots.length;for(let k=1;k<=N;k++){const i=(from+k)%N;if(!S.lots[i].dead)return i}
@@ -518,7 +533,7 @@ function bindReset(){$("resetBtn").onclick=()=>{
   $("resetWrap").innerHTML=`<span class="confirm">${S.ops?"¿Guardar esta sesión y empezar otra?":"No hay operaciones. ¿Empezar de cero?"} <button class="yes" id="rsY" type="button">Sí</button><button id="rsN" type="button">No</button></span>`;
   $("rsY").onclick=()=>{if(NA){NA.reset();restoreReset();return}archiveLocal();const m=S.view;S=fresh(S.cfg,S.lots.length);S.view=m;save();restoreReset();render()};
   $("rsN").onclick=restoreReset;}}
-for(const id of ["payout","base","steps"])$(id).onchange=()=>{const v=parseFloat($(id).value);if(!isNaN(v)){S.cfg[id]=id==="steps"?Math.max(1,Math.min(8,Math.round(v))):v;S.lots.forEach(L=>{if(L.step>=S.cfg.steps)L.step=S.cfg.steps-1});if(NA)pushCfg();else{save();render()}}};
+for(const id of ["payout","base","steps"])$(id).onchange=()=>{const v=id==="base"?pa($(id).value):parseFloat($(id).value);if(!isNaN(v)){S.cfg[id]=id==="steps"?Math.max(1,Math.min(8,Math.round(v))):v;S.lots.forEach(L=>{if(L.step>=S.cfg.steps)L.step=S.cfg.steps-1});if(NA)pushCfg();else{save();render()}}};
 $("mode").onchange=()=>{S.cfg.mode=$("mode").value;if(NA)pushCfg();else{save();render()}};
 const SKEY="rotador-sesiones-v1";
 function getSessions(){
@@ -580,7 +595,7 @@ function planCalcText(cap,risk,goal){
   const R=r2(cap*(risk||0)/100),G=r2(cap*(goal||0)/100);
   return `Riesgo <b>${risk||0}%</b> = <b style="color:var(--loss,#ef5a5a)">${fmtUsd(R)}</b> · si llegas a ${fmtUsd(cap-R)}, paras.<br>Meta <b>${goal||0}%</b> = <b style="color:var(--win,#2fc47a)">${fmtUsd(G)}</b> · cierras con ${fmtUsd(cap+G)}.`;
 }
-function updPlanCalc(){$("planCalc").innerHTML=planCalcText(parseFloat($("planCap").value),parseFloat($("planRisk").value),parseFloat($("planGoal").value))}
+function updPlanCalc(){$("planCalc").innerHTML=planCalcText(pa($("planCap").value),parseFloat($("planRisk").value),parseFloat($("planGoal").value))}
 function fillPlanForm(){
   if(document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#planBox"))return;
   const p=getPlan();
@@ -589,13 +604,13 @@ function fillPlanForm(){
 }
 ["planCap","planRisk","planGoal"].forEach(id=>$(id).addEventListener("input",updPlanCalc));
 $("planSave").onclick=()=>{
-  const cap=parseFloat($("planCap").value),risk=parseFloat($("planRisk").value)||0,goal=parseFloat($("planGoal").value)||0;
+  const cap=pa($("planCap").value),risk=parseFloat($("planRisk").value)||0,goal=parseFloat($("planGoal").value)||0;
   if(!(cap>0)){$("planCap").focus();return}
   if(!(risk>0)&&!(goal>0)){$("planRisk").focus();return}
   setPlan({cap,risk,goal});
 };
 $("planFloat").onclick=()=>{
-  const cap=parseFloat($("planCap").value)||0,risk=parseFloat($("planRisk").value)||6,goal=parseFloat($("planGoal").value)||9;
+  const cap=pa($("planCap").value)||0,risk=parseFloat($("planRisk").value)||6,goal=parseFloat($("planGoal").value)||9;
   if(cap>0)setPlan({cap,risk,goal});
   if(NA&&NA.floatPlan)NA.floatPlan(JSON.stringify({cap,risk,goal}));else alert("Esto funciona dentro de la app del teléfono");
 };
@@ -620,7 +635,7 @@ function fillGoalForm(){
   if(g&&g.since){const d=new Date(g.since);$("goalSince").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}else $("goalSince").value="";
 }
 $("goalSave").onclick=()=>{
-  const t=parseFloat($("goalAmt").value);if(!(t>0)){$("goalAmt").focus();return}
+  const t=pa($("goalAmt").value);if(!(t>0)){$("goalAmt").focus();return}
   const d=$("goalSince").value;let since=0;
   if(d){const [y,m,dd]=d.split("-").map(Number);since=new Date(y,m-1,dd).getTime()}
   setGoal({target:t,since});
@@ -821,7 +836,7 @@ function drawIntro(){
     <label class="field" for="obBroker">Broker o plataforma (opcional)<input id="obBroker" type="text" maxlength="28" placeholder="Ej. Pocket Option" value="${esc(OB.broker)}"></label>
     <div class="grid2">
       <label class="field" for="obPayout">${ratio?"Ganancia por $1 (%)":"Payout %"}<input id="obPayout" type="number" inputmode="decimal" min="1" max="1000" value="${OB.payout}"></label>
-      <label class="field" for="obBase"><span class="cursym" data-t="Entrada base">Entrada base ${sym()}</span><input id="obBase" type="number" inputmode="decimal" min="0.01" step="0.01" value="${OB.base}"></label>
+      <label class="field" for="obBase"><span class="cursym" data-t="Entrada base">Entrada base ${sym()}</span><input id="obBase" type="text" inputmode="decimal" value="${OB.base}"></label>
       <label class="field" for="obLots">Número de lotes<select id="obLots">${[1,2,3,4,5,6].map(k=>`<option ${+OB.lots===k?"selected":""}>${k}</option>`).join("")}</select></label>
       <label class="field" for="obSteps">Pasos por lote<input id="obSteps" type="number" inputmode="numeric" min="1" max="8" value="${OB.steps}"></label>
       <label class="field" for="obMode">Secuencia<select id="obMode">
@@ -847,7 +862,7 @@ function drawIntro(){
 const esc=t=>String(t||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function previewSeq(){
   const el=$("obSeq");if(!el)return;
-  const save0=S.cfg;S.cfg={...S.cfg,payout:+OB.payout||1,base:+OB.base||1,steps:Math.max(1,Math.min(8,Math.round(+OB.steps||5))),mode:OB.mode};
+  const save0=S.cfg;S.cfg={...S.cfg,payout:+OB.payout||1,base:pa(OB.base)||1,steps:Math.max(1,Math.min(8,Math.round(+OB.steps||5))),mode:OB.mode};
   const sq=seq();S.cfg=save0;
   const tot=r2(sq.reduce((a,b)=>a+b,0)),nl=+OB.lots||3;
   el.textContent="Montos por lote: "+sq.map(x=>amt(x)).join(" → ")+" · cada lote "+amt(tot)+" · los "+nl+" juntos "+amt(r2(tot*nl))+" en riesgo";
@@ -867,7 +882,7 @@ $("onbNext").onclick=()=>{
   if(obStep<OB_STEPS-1){obStep++;drawIntro();$("onb").scrollTop=0;return}
   PROFILE={name:OB.name,market:OB.market||"otc",broker:(OB.broker||"").trim(),skin:OB.skin,done:true};
   saveProfile();applySkin(PROFILE.skin);
-  setCfg({payout:Math.max(1,+OB.payout||92),base:Math.max(0.01,+OB.base||1),steps:Math.max(1,Math.min(8,Math.round(+OB.steps||5))),mode:OB.mode});
+  setCfg({payout:Math.max(1,+OB.payout||92),base:Math.max(0.01,pa(OB.base)||1),steps:Math.max(1,Math.min(8,Math.round(+OB.steps||5))),mode:OB.mode});
   setLotCount(OB.lots);
   $("onb").hidden=true;render();
 };

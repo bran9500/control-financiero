@@ -112,6 +112,7 @@ public class GuardActivity extends Activity {
                         .putInt("delay", o.optInt("delay", 6)).putBoolean("sound", o.optBoolean("sound", true)).apply();
             } catch (Exception ignored) {}
         }
+        @JavascriptInterface public String getCurrency() { com.ktrsis.rotador.Engine.get(GuardActivity.this); return com.ktrsis.rotador.Engine.curCode; }
         @JavascriptInterface public void toggle() { runOnUiThread(GuardActivity.this::startGuard); }
         @JavascriptInterface public void goHome() { runOnUiThread(GuardActivity.this::finish); }
     }
