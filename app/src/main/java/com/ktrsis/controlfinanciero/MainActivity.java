@@ -153,6 +153,7 @@ public class MainActivity extends Activity {
                 else if ("ingles".equals(name)) c = com.ktrsis.ingles.EnglishActivity.class;
                 else if ("interes".equals(name)) c = com.ktrsis.interes.InterestActivity.class;
                 else if ("guardian".equals(name)) c = com.ktrsis.guard.GuardActivity.class;
+                else if ("trazador".equals(name)) c = com.ktrsis.trazador.TrazadorActivity.class;
                 if (c != null) startActivity(new Intent(MainActivity.this, c));
             });
         }

@@ -67,6 +67,17 @@
                 android:value="Ventana flotante de conteo de operaciones" />
         </service>
 
+        <!-- Subapp: Trazador (zonas y canal encima del gráfico del broker) -->
+        <activity
+            android:name="com.ktrsis.trazador.TrazadorActivity"
+            android:label="Trazador"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <service
+            android:name="com.ktrsis.trazador.TrazadorService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
         <!-- Subapp: Bot Señales -->
         <activity
             android:name="com.ktrsis.bot.MainActivity"
