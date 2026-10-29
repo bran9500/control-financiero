@@ -51,7 +51,7 @@ function normalizeData(parsed){
 
 let data = emptyData();
 let confirmingDeleteId = null;
-let sectionsOpen = { personalize:false, income:true, debts:false, expenses:false, hormiga:false, loans:false, savings:false, stats:false, range:false, history:false };
+let sectionsOpen = { personalize:false, income:true, debts:false, expenses:false, hormiga:false, loans:false, savings:false, balance:true, stats:false, range:false, history:false };
 let savingsTab = 'emergency';
 let editingItem = null; // {kind, id}
 let loaded = false;

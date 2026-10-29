@@ -466,7 +466,7 @@ function normalizeData(parsed){
 
 let data = emptyData();
 let confirmingDeleteId = null;
-let sectionsOpen = { personalize:false, income:true, debts:false, expenses:false, hormiga:false, loans:false, savings:false, stats:false, range:false, history:false };
+let sectionsOpen = { personalize:false, income:true, debts:false, expenses:false, hormiga:false, loans:false, savings:false, balance:true, stats:false, range:false, history:false };
 let savingsTab = 'emergency';
 let editingItem = null; // {kind, id}
 let loaded = false;
@@ -3868,6 +3868,30 @@ function renderMoreTab(c){
   const allWeeksForAvg = [{income:c.incomeThisWeek, hormiga:c.hormigaThisWeek}, ...pastWeeksForStats.map(w=>({income:w.income, hormiga:w.hormiga}))];
   const avgIncome = allWeeksForAvg.reduce((s,w)=>s+w.income,0)/allWeeksForAvg.length;
   const avgHormiga = allWeeksForAvg.reduce((s,w)=>s+w.hormiga,0)/allWeeksForAvg.length;
+  // Balance del mes: lo que entra contra tus responsabilidades fijas y lo que gastas en el día a día.
+  const gastoWeeks = [c.gastoThisWeek, ...pastWeeksForStats.map(w => w.gasto)];
+  const avgGasto = gastoWeeks.reduce((s,v)=>s+v,0) / gastoWeeks.length;
+  const ppm = periodsPerMonth();
+  const incMonth = avgIncome * ppm;
+  const debtFixed = data.debts.filter(d => (d.balance||0) > 0 && !d.flexible).reduce((s,d)=>s+(d.monthlyPayment||0),0);
+  const debtFlex = data.debts.filter(d => (d.balance||0) > 0 && d.flexible).reduce((s,d)=>s+(d.monthlyPayment||0),0);
+  const expMonth = data.expenses.reduce((s,e)=>s+expenseMonthly(e),0);
+  const varMonth = (avgHormiga + avgGasto) * ppm;
+  const respMonth = debtFixed + debtFlex + expMonth;
+  const balMonth = incMonth - respMonth - varMonth;
+  const balNoFlex = balMonth + debtFlex;
+  const mrow = (name, val, color, meta, strong) => `<div class="item-row"><div class="item-main"><div class="item-name" ${strong?'style="font-weight:600;"':''}>${name}</div>${meta?`<div class="item-meta">${meta}</div>`:''}</div><div class="item-amounts"><span class="item-amount" style="${color?'color:'+color+';':''}${strong?'font-weight:600;':''}">${val}</span></div></div>`;
+  html += renderSection('balance', 'Balance del mes', '', `<div class="stat-list">
+    ${mrow('Lo que ganas al mes', fmtMoney(incMonth), 'var(--good)', `Promedio: ${fmtMoney(avgIncome)} ${PL().por}`)}
+    ${mrow('Gastos fijos', '−' + fmtMoney(expMonth), '', `${data.expenses.length} gasto${data.expenses.length===1?'':'s'} fijo${data.expenses.length===1?'':'s'} (renta, servicios…)`)}
+    ${mrow('Pagos de deudas', '−' + fmtMoney(debtFixed), '', 'Los que no se pueden mover')}
+    ${debtFlex > 0.004 ? mrow('Deudas flexibles', '−' + fmtMoney(debtFlex), '', 'Se pueden mover o saltar') : ''}
+    ${mrow('Tus responsabilidades al mes', fmtMoney(respMonth), 'var(--warn)', `${fmtMoney(respMonth/ppm)} ${PL().por}`, true)}
+    ${mrow('Gasto del día a día', '−' + fmtMoney(varMonth), '', `Hormiga y otros gastos del banco, en promedio`)}
+    ${mrow(balMonth >= 0 ? 'Te sobra al mes' : 'Te falta al mes (déficit)', fmtMoney(Math.abs(balMonth)), balMonth >= 0 ? 'var(--good)' : 'var(--warn)', `${fmtMoney(Math.abs(balMonth)/ppm)} ${PL().por}`, true)}
+    ${debtFlex > 0.004 && balMonth < 0 ? `<p class="item-meta" style="margin:8px 0 0 0;">${balNoFlex >= 0 ? `Si saltas las deudas flexibles, alcanzas y te sobran ${fmtMoney(balNoFlex)} al mes.` : `Aun saltando las deudas flexibles te faltarían ${fmtMoney(-balNoFlex)} al mes.`}</p>` : ''}
+    <p class="item-meta" style="margin:8px 0 0 0;">Lo que ganas es el promedio de tus últimas ${allWeeksForAvg.length} ${PL().plural} con datos. Mientras más extractos subas, más exacto queda.</p>
+  </div>`);
   const totalPaidDebts = (data.history.paidDebts||[]).reduce((s,p)=>s+(p.balance||0),0);
   const totalLoansOut = data.loans.filter(l=>!l.returned).reduce((s,l)=>s+(l.amount||0),0);
   const totalSavings = savingsTotal('emergency') + savingsTotal('investments');
@@ -4596,7 +4620,7 @@ function addShotRow(){
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION='3.22';
+const APP_VERSION='3.23';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
