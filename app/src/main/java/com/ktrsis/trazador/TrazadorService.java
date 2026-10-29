@@ -493,8 +493,12 @@ public class TrazadorService extends Service {
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10); title.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
         TextView close = new TextView(this); close.setText("×"); close.setTextColor(MUTED); close.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
         close.setPadding(dp(10), 0, 0, 0);
+        TextView mini = new TextView(this); mini.setText("—"); mini.setTextColor(MUTED); mini.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        mini.setTypeface(Typeface.DEFAULT_BOLD); mini.setPadding(dp(14), 0, dp(4), 0);
         head.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        head.addView(mini);
         head.addView(close);
+        miniTitle = title; miniClose = close; miniBtn = mini;
         panel.addView(head);
 
         LinearLayout row = new LinearLayout(this);
@@ -504,6 +508,7 @@ public class TrazadorService extends Service {
         LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-2, -2); bl.setMargins(0, dp(4), 0, 0);
         row.addView(borrar, bl);
         panel.addView(row);
+        miniRow = row;
 
         status = new TextView(this); status.setTextColor(MUTED); status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         status.setMaxWidth(dp(230)); status.setPadding(0, dp(6), 0, 0);
@@ -522,9 +527,28 @@ public class TrazadorService extends Service {
             return true;
         });
         close.setOnClickListener(v -> stopSelf());
+        mini.setOnClickListener(v -> setCollapsed(true));
         head.setOnTouchListener(new Drag());
         title.setOnTouchListener(new Drag());
         wm.addView(panel, lpPanel);
+        if (prefs.getBoolean("mini", false)) setCollapsed(true);
+    }
+
+    private TextView miniTitle, miniClose, miniBtn;
+    private View miniRow;
+    private boolean collapsed;
+
+    /** Oculta la ventanita: queda solo una bolita transparente que se toca para volver a abrirla. */
+    private void setCollapsed(boolean c) {
+        collapsed = c;
+        prefs.edit().putBoolean("mini", c).apply();
+        int vis = c ? View.GONE : View.VISIBLE;
+        miniRow.setVisibility(vis); status.setVisibility(vis); miniClose.setVisibility(vis); miniBtn.setVisibility(vis);
+        miniTitle.setText(c ? "⠿ T" : "⠿ TRAZADOR");
+        miniTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, c ? 13 : 10);
+        panel.setPadding(dp(c ? 10 : 8), dp(c ? 6 : 4), dp(c ? 10 : 8), dp(c ? 6 : 8));
+        panel.setAlpha(c ? 0.35f : 1f);
+        try { wm.updateViewLayout(panel, lpPanel); } catch (Exception ignored) {}
     }
 
     /** Arrastra la ventanita desde el título. */
@@ -538,6 +562,7 @@ public class TrazadorService extends Service {
                     try { wm.updateViewLayout(panel, lpPanel); } catch (Exception ignored) {}
                     return true;
                 case MotionEvent.ACTION_UP:
+                    if (collapsed && Math.abs(e.getRawX() - sx) < dp(8) && Math.abs(e.getRawY() - sy) < dp(8)) { setCollapsed(false); return true; }
                     prefs.edit().putInt("x", lpPanel.x).putInt("y", lpPanel.y).apply();
                     return true;
             }
