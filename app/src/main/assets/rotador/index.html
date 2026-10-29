@@ -261,7 +261,8 @@ body.vert .ministats{display:block}
     <summary>Ajustes</summary>
     <div class="cfg">
       <label for="payout"><span id="payoutLbl">Payout %</span><input id="payout" type="number" min="50" max="100" step="1" value="85"></label>
-      <label for="base">Entrada base $<input id="base" type="number" min="1" step="0.1" value="1"></label>
+      <label for="base"><span class="cursym" data-t="Entrada base">Entrada base $</span><input id="base" type="number" min="1" step="0.1" value="1"></label>
+      <label for="curSel">Moneda<select id="curSel"></select></label>
       <label for="nLots">Número de lotes<select id="nLots"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
       <label for="steps">Pasos por lote<input id="steps" type="number" min="1" max="8" step="1" value="5"></label>
       <label for="mode">Secuencia
@@ -290,7 +291,7 @@ body.vert .ministats{display:block}
     <summary>Riesgo y meta del día</summary>
     <p class="empty">Pon tu capital y qué porcentaje aceptas perder o quieres ganar. Con "Flotar aparte" queda en una ventanita propia que lee tu saldo real.</p>
     <div class="goalform" style="grid-template-columns:1fr 1fr 1fr;">
-      <label for="planCap">Capital $<input id="planCap" type="number" min="1" step="1" inputmode="decimal" placeholder="1200"></label>
+      <label for="planCap"><span class="cursym" data-t="Capital">Capital $</span><input id="planCap" type="number" min="1" step="1" inputmode="decimal" placeholder="1200"></label>
       <label for="planRisk">Riesgo %<input id="planRisk" type="number" min="0" step="0.5" inputmode="decimal" placeholder="6"></label>
       <label for="planGoal">Meta %<input id="planGoal" type="number" min="0" step="0.5" inputmode="decimal" placeholder="9"></label>
     </div>
@@ -307,7 +308,7 @@ body.vert .ministats{display:block}
     <summary>Meta de volumen</summary>
     <p class="empty">Para bonos del broker que se liberan al mover cierto volumen. Cuenta todo lo que apuestes desde la fecha que elijas, en todas las sesiones.</p>
     <div class="goalform">
-      <label for="goalAmt">Meta $<input id="goalAmt" type="number" min="1" step="1" inputmode="decimal" placeholder="3000"></label>
+      <label for="goalAmt"><span class="cursym" data-t="Meta">Meta $</span><input id="goalAmt" type="number" min="1" step="1" inputmode="decimal" placeholder="3000"></label>
       <label for="goalSince">Desde<input id="goalSince" type="date"></label>
     </div>
     <div class="mergebar">
@@ -383,7 +384,17 @@ function seq(){
   }
   return out;
 }
-const money=v=>(v<0?"−$":"$")+Math.abs(v).toFixed(2);
+// ---- Moneda: se elige en Ajustes; la ventana flotante y el Guardián usan la misma ----
+const CURS={USD:["$",2,"Dólar (USD)"],EUR:["€",2,"Euro (EUR)"],COP:["$",0,"Peso colombiano (COP)"],MXN:["$",2,"Peso mexicano (MXN)"],BRL:["R$",2,"Real (BRL)"],PEN:["S/",2,"Sol (PEN)"],ARS:["$",0,"Peso argentino (ARS)"],CLP:["$",0,"Peso chileno (CLP)"],GTQ:["Q",2,"Quetzal (GTQ)"],DOP:["RD$",2,"Peso dominicano (DOP)"],VES:["Bs.",2,"Bolívar (VES)"],GBP:["£",2,"Libra (GBP)"],USDT:["₮",2,"Tether (USDT)"]};
+const CURKEY="rotador-moneda";
+function curCode(){let c=null;try{c=(window.Android&&Android.getCurrency)?Android.getCurrency():localStorage.getItem(CURKEY)}catch(e){}return CURS[c]?c:"USD"}
+let CUR=curCode();
+const sym=()=>CURS[CUR][0], dec=()=>CURS[CUR][1];
+const num=v=>(Math.abs(+v)<1e-9?0:+v).toLocaleString("en-US",{minimumFractionDigits:dec(),maximumFractionDigits:dec()});
+const amt=v=>sym()+num(v);
+const amt0=v=>sym()+(Math.abs(v-Math.round(v))<1e-9?Math.round(v).toLocaleString("en-US"):num(v));
+function setCurrency(c){if(!CURS[c])return;CUR=c;try{localStorage.setItem(CURKEY,c)}catch(e){}if(window.Android&&Android.setCurrency)Android.setCurrency(c);render()}
+const money=v=>(v<0?"−":"")+amt(Math.abs(v));
 
 function nextAlive(from){
   const N=S.lots.length;for(let k=1;k<=N;k++){const i=(from+k)%N;if(!S.lots[i].dead)return i}
@@ -429,15 +440,15 @@ function render(){
   const i=S.turn;
   if(i<0){
     $("who").innerHTML="<b>Los 3 lotes se quemaron</b>";
-    $("stake").innerHTML="<small>$</small>0.00";
+    $("stake").innerHTML=`<small>${sym()}</small>${num(0)}`;
     $("hint").textContent="Revisa la sesión antes de seguir. Nueva sesión reinicia todo.";
     $("winBtn").disabled=$("lossBtn").disabled=true;
   }else{
     const L=S.lots[i];
     $("who").innerHTML=v===2?`L<b>${i+1}</b> · P${L.step+1}/${n}`:`Lote <b>${i+1}</b> · paso ${L.step+1} de ${n}`;
-    $("stake").innerHTML=`<small>$</small>${sq[L.step].toFixed(2)}`;
+    $("stake").innerHTML=`<small>${sym()}</small>${num(sq[L.step])}`;
     $("hint").innerHTML=L.step<n-1
-      ?`Si pierde, el lote ${i+1} sube a <b>$${sq[L.step+1].toFixed(2)}</b> en su próximo turno.`
+      ?`Si pierde, el lote ${i+1} sube a <b>${amt(sq[L.step+1])}</b> en su próximo turno.`
       :`<span class="warn">Último paso de este lote.</span> Si pierde, el lote queda quemado.`;
     $("winBtn").disabled=$("lossBtn").disabled=false;
   }
@@ -449,11 +460,13 @@ function render(){
   const nm=(PROFILE&&PROFILE.name)||"";
   $("greet").textContent=(hr<5?"Buenas noches":hr<12?"Buenos días":hr<19?"Buenas tardes":"Buenas noches")+(nm?", "+nm:"");
   $("subTitle").textContent="Rotador de Lotes"+(PROFILE&&PROFILE.broker?" · "+PROFILE.broker:"");
-  $("payoutLbl").textContent=marketOf().kind==="ratio"?"Ganancia por cada $1 (%)":"Payout %";
+  document.querySelectorAll(".cursym").forEach(e=>e.textContent=e.dataset.t+" "+sym());
+  if(document.activeElement!==$("curSel"))$("curSel").innerHTML=Object.entries(CURS).map(([k,c])=>`<option value="${k}" ${k===CUR?"selected":""}>${c[2]} ${c[0]}</option>`).join("");
+  $("payoutLbl").textContent=marketOf().kind==="ratio"?"Ganancia por cada "+sym()+"1 (%)":"Payout %";
   $("lots").innerHTML=S.lots.map((L,k)=>{
     const dots=sq.map((_,j)=>`<div class="dot ${L.dead?"used":j<L.step?"used":j===L.step?"cur":""}"></div>`).join("");
     return `<div class="lot ${k===i?"on":""} ${L.dead?"dead":""}">
-      <div class="n"><span>Lote ${k+1}</span><span>${L.dead?"✕":"$"+sq[L.step].toFixed(0)}</span></div>
+      <div class="n"><span>Lote ${k+1}</span><span>${L.dead?"✕":amt0(Math.round(sq[L.step]))}</span></div>
       <div class="dots">${dots}</div>
       <div class="pl ${L.pl>0?"pos":L.pl<0?"neg":""}">${money(L.pl)}</div>
       ${L.dead?`<button type="button" data-rev="${k}">Reactivar</button>`:`<div class="st">${L.step===0?"en base":(L.step===1?"1 pérdida":L.step+" pérdidas seguidas")}</div>`}
@@ -466,10 +479,10 @@ function render(){
   const alive=S.lots.filter(L=>!L.dead).length;
   const NL=S.lots.length;
   $("miniStats").textContent=`${S.ops} ops · ${money(net)}`;$("miniStats").className="ministats "+(net>0?"pos":net<0?"neg":"");
-  $("pool").innerHTML=`Te quedan <b>${left} de ${n*NL}</b> balas en ${alive} lote${alive===1?"":"s"}. Cada lote cuesta <b>$${budget.toFixed(2)}</b> si se quema entero; ${NL>1?`los ${NL} juntos`:"en total"}, <b>$${(budget*NL).toFixed(2)}</b>. Ese es tu capital en riesgo.`;
+  $("pool").innerHTML=`Te quedan <b>${left} de ${n*NL}</b> balas en ${alive} lote${alive===1?"":"s"}. Cada lote cuesta <b>${amt(budget)}</b> si se quema entero; ${NL>1?`los ${NL} juntos`:"en total"}, <b>${amt(budget*NL)}</b>. Ese es tu capital en riesgo.`;
   if(document.activeElement!==$("nLots"))$("nLots").value=NL;
   const p=S.cfg.payout/100;let lost=0;
-  $("seq").innerHTML=sq.map((s,j)=>{const net=r2(s*p-lost);lost+=s;return `<b>$${s.toFixed(2)}</b>${net<0?`<span class="warn">(${money(net)})</span>`:`(+${net.toFixed(2)})`}`}).join(" → ")+`<br>Total por lote: $${budget.toFixed(2)}`;
+  $("seq").innerHTML=sq.map((s,j)=>{const net=r2(s*p-lost);lost+=s;return `<b>${amt(s)}</b>${net<0?`<span class="warn">(${money(net)})</span>`:`(+${num(net)})`}`}).join(" → ")+`<br>Total por lote: ${amt(budget)}`;
   $("log").innerHTML=S.log.length?S.log.map(logRow).join(""):"<li>Aún no hay operaciones.</li>";
   for(const id of ["payout","base","steps","mode"])$(id).value=S.cfg[id];
   renderVolume();
@@ -532,7 +545,7 @@ const stepOf=e=>e.s!=null?e.s:(+((e.t||"").split("p")[1])||1)-1;
 const isWin=e=>e.win!=null?e.win:e.v>0;
 function maxLossStreak(entries){let m=0,c=0;for(const e of entries){if(isWin(e))c=0;else{c++;if(c>m)m=c}}return m}
 
-const fmtUsd=v=>"$"+(+v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtUsd=v=>amt(v);
 const volOf=entries=>r2((entries||[]).reduce((a,e)=>a+(e.cut?0:(+e.stake||0)),0));
 const GKEY="rotador-meta-v1";
 function getGoal(){try{const r=NA?NA.getGoal():localStorage.getItem(GKEY);return r?JSON.parse(r):null}catch(e){return null}}
@@ -613,8 +626,8 @@ $("goalSave").onclick=()=>{
 $("goalClear").onclick=()=>{setGoal(null);$("goalAmt").value="";$("goalSince").value=""};
 function logRow(e,withTime){
   const t=withTime&&e.ts?fTime(e.ts)+" · ":"";
-  if(e.cut)return `<li><span>${t}${e.t} · cortado</span><span class="neu">Cortó (−$${(+e.lost||0).toFixed(2)} asumido)</span></li>`;
-  return `<li><span>${t}${e.t} · $${(+e.stake).toFixed(2)}${e.burn?" ✕":""}</span><span class="${e.v>0?"pos":"neg"}">${e.r} ${money(e.v)}</span></li>`;
+  if(e.cut)return `<li><span>${t}${e.t} · cortado</span><span class="neu">Cortó (−${amt(+e.lost||0)} asumido)</span></li>`;
+  return `<li><span>${t}${e.t} · ${amt(+e.stake)}${e.burn?" ✕":""}</span><span class="${e.v>0?"pos":"neg"}">${e.r} ${money(e.v)}</span></li>`;
 }
 function sessionStats(se){
   const raw=[...(se.log||[])].reverse();
@@ -806,7 +819,7 @@ function drawIntro(){
     <label class="field" for="obBroker">Broker o plataforma (opcional)<input id="obBroker" type="text" maxlength="28" placeholder="Ej. Pocket Option" value="${esc(OB.broker)}"></label>
     <div class="grid2">
       <label class="field" for="obPayout">${ratio?"Ganancia por $1 (%)":"Payout %"}<input id="obPayout" type="number" inputmode="decimal" min="1" max="1000" value="${OB.payout}"></label>
-      <label class="field" for="obBase">Entrada base $<input id="obBase" type="number" inputmode="decimal" min="0.01" step="0.01" value="${OB.base}"></label>
+      <label class="field" for="obBase"><span class="cursym" data-t="Entrada base">Entrada base ${sym()}</span><input id="obBase" type="number" inputmode="decimal" min="0.01" step="0.01" value="${OB.base}"></label>
       <label class="field" for="obLots">Número de lotes<select id="obLots">${[1,2,3,4,5,6].map(k=>`<option ${+OB.lots===k?"selected":""}>${k}</option>`).join("")}</select></label>
       <label class="field" for="obSteps">Pasos por lote<input id="obSteps" type="number" inputmode="numeric" min="1" max="8" value="${OB.steps}"></label>
       <label class="field" for="obMode">Secuencia<select id="obMode">
@@ -835,7 +848,7 @@ function previewSeq(){
   const save0=S.cfg;S.cfg={...S.cfg,payout:+OB.payout||1,base:+OB.base||1,steps:Math.max(1,Math.min(8,Math.round(+OB.steps||5))),mode:OB.mode};
   const sq=seq();S.cfg=save0;
   const tot=r2(sq.reduce((a,b)=>a+b,0)),nl=+OB.lots||3;
-  el.textContent="Montos por lote: "+sq.map(x=>"$"+(+x).toFixed(2)).join(" → ")+" · cada lote $"+tot.toFixed(2)+" · los "+nl+" juntos $"+r2(tot*nl).toFixed(2)+" en riesgo";
+  el.textContent="Montos por lote: "+sq.map(x=>amt(x)).join(" → ")+" · cada lote "+amt(tot)+" · los "+nl+" juntos "+amt(r2(tot*nl))+" en riesgo";
 }
 function wireIntro(){
   const n=$("obName");if(n){n.oninput=()=>{OB.name=n.value.trim();$("onbNext").disabled=!OB.name};$("onbNext").disabled=!OB.name;setTimeout(()=>n.focus(),50)}
@@ -868,6 +881,7 @@ function setLotCount(n){
   save();render();
 }
 $("nLots").onchange=()=>setLotCount($("nLots").value);
+$("curSel").onchange=()=>setCurrency($("curSel").value);
 
 function pushCfg(){NA.setConfig(S.cfg.payout,S.cfg.base,S.cfg.steps,S.cfg.mode)}
 

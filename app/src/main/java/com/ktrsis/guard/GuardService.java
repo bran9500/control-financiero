@@ -101,6 +101,7 @@ public class GuardService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        com.ktrsis.rotador.Engine.get(this); // carga la moneda elegida en el Rotador
         prefs = getSharedPreferences("guardian", MODE_PRIVATE);
         bgThread = new HandlerThread("guardian");
         bgThread.start();
@@ -402,11 +403,9 @@ public class GuardService extends Service {
     }
 
     private static String fmt0(double v) { return Math.abs(v - Math.rint(v)) < 1e-9 ? String.valueOf((long) Math.rint(v)) : String.format(Locale.US, "%.1f", v); }
-    private static String short$(double v) { return Math.abs(v - Math.rint(v)) < 0.005 ? "$" + String.format(Locale.US, "%,d", (long) Math.rint(v)) : money(v); }
+    private static String short$(double v) { return com.ktrsis.rotador.Engine.stake(v); }
 
-    private static String money(double v) {
-        return (v < 0 ? "−$" : "$") + String.format(Locale.US, "%,.2f", Math.abs(v));
-    }
+    private static String money(double v) { return com.ktrsis.rotador.Engine.money(v); }
 
     private void render() {
         if (panel == null) return;

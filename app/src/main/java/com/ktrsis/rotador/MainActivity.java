@@ -96,6 +96,8 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String getGoal() { return engine.getGoal(); }
         @JavascriptInterface public void setGoal(String json) { runOnUiThread(() -> engine.setGoal(json)); }
         @JavascriptInterface public String getPlan() { return engine.getPlan(); }
+        @JavascriptInterface public String getCurrency() { return Engine.curCode; }
+        @JavascriptInterface public void setCurrency(String code) { runOnUiThread(() -> engine.setCurrency(code)); }
         /** Pasa capital, riesgo y meta al Guardián y lo activa (ventana aparte que lee el saldo real). */
         @JavascriptInterface public void floatPlan(String json) {
             runOnUiThread(() -> {

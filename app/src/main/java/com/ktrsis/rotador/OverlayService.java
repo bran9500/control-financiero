@@ -315,7 +315,7 @@ public class OverlayService extends Service {
             who.setTextColor(LOSS);
             for (int k = 0; k < engine.nLots; k++) { lotTxt[k].setText("L" + (k + 1) + " ✕"); lotTxt[k].setTextColor(LOSS); lotBar[k].setBackgroundColor(0); }
             cutBtn.setVisibility(View.GONE);
-            stake.setText("$0");
+            stake.setText(Engine.curSym + "0");
             winBtn.setText("Reactivar");
             lossBtn.setBackground(rounded(DEAD, 8, 0));
             bubble.setText("✕");
@@ -390,10 +390,7 @@ public class OverlayService extends Service {
         }
     }
 
-    private static String fmtStake(double v) {
-        if (Math.abs(v - Math.rint(v)) < 1e-9) return "$" + (long) Math.rint(v);
-        return String.format(Locale.US, "$%.2f", v);
-    }
+    private static String fmtStake(double v) { return Engine.stake(v); }
 
     /** Arrastra la ventana; si casi no se movió, cuenta como toque. */
     private class DragListener implements View.OnTouchListener {

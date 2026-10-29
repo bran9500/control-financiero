@@ -45,6 +45,7 @@ public class Engine {
 
     private Engine(Context ctx) {
         prefs = ctx.getSharedPreferences("rotador", Context.MODE_PRIVATE);
+        applyCur(prefs.getString("currency", "USD"));
         load();
     }
 
@@ -54,8 +55,25 @@ public class Engine {
 
     static double r2(double x) { return Math.ceil(x * 100 - 1e-9) / 100.0; }
 
+    // ---- Moneda (la eliges en Ajustes del Rotador; la usan la pantalla, la ventana flotante y el Guardián) ----
+    public static String curCode = "USD", curSym = "$";
+    public static int curDec = 2;
+    private static final String[][] CURS = {
+        {"USD","$","2"},{"EUR","€","2"},{"COP","$","0"},{"MXN","$","2"},{"BRL","R$","2"},{"PEN","S/","2"},
+        {"ARS","$","0"},{"CLP","$","0"},{"GTQ","Q","2"},{"DOP","RD$","2"},{"VES","Bs.","2"},{"GBP","£","2"},{"USDT","₮","2"}};
+    static void applyCur(String code) {
+        for (String[] c : CURS) if (c[0].equals(code)) { curCode = c[0]; curSym = c[1]; curDec = Integer.parseInt(c[2]); return; }
+        curCode = "USD"; curSym = "$"; curDec = 2;
+    }
+    public void setCurrency(String code) { prefs.edit().putString("currency", code).apply(); applyCur(code); changed(); }
+    public static String num(double v) { return String.format(Locale.US, "%,." + curDec + "f", v); }
     public static String money(double v) {
-        return (v < 0 ? "−$" : "$") + String.format(Locale.US, "%.2f", Math.abs(v));
+        return (v < 0 ? "−" : "") + curSym + num(Math.abs(v));
+    }
+    /** Monto corto: sin decimales si es entero. */
+    public static String stake(double v) {
+        if (Math.abs(v - Math.rint(v)) < 1e-9) return curSym + String.format(Locale.US, "%,d", (long) Math.rint(v));
+        return curSym + num(v);
     }
 
     public double[] sequence() {
