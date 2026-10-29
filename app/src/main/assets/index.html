@@ -3898,7 +3898,7 @@ function renderMoreTab(c){
   const balNoFlex = balMonth + debtFlex;
   const mrow = (name, val, color, meta, strong) => `<div class="item-row"><div class="item-main"><div class="item-name" ${strong?'style="font-weight:600;"':''}>${name}</div>${meta?`<div class="item-meta">${meta}</div>`:''}</div><div class="item-amounts"><span class="item-amount" style="${color?'color:'+color+';':''}${strong?'font-weight:600;':''}">${val}</span></div></div>`;
   html += renderSection('balance', 'Balance del mes', '', `<div class="stat-list">
-    ${mrow('Lo que ganas al mes', fmtMoney(incMonth), 'var(--good)', `Promedio: ${fmtMoney(avgIncome)} ${PL().por}`)}
+    <div class="clickable" style="cursor:pointer;" onclick="sheet={type:'incomeList', from:'${statsFrom}'};render()">${mrow('Lo que ganas al mes ›', fmtMoney(incMonth), 'var(--good)', `Promedio: ${fmtMoney(avgIncome)} ${PL().por}. Toca para ver cada ingreso y su fecha.`)}</div>
     ${mrow('Gastos fijos', '−' + fmtMoney(expMonth), '', `${data.expenses.length} gasto${data.expenses.length===1?'':'s'} fijo${data.expenses.length===1?'':'s'} (renta, servicios…)`)}
     ${mrow('Pagos de deudas', '−' + fmtMoney(debtFixed), '', 'Los que no se pueden mover')}
     ${debtFlex > 0.004 ? mrow('Deudas flexibles', '−' + fmtMoney(debtFlex), '', 'Se pueden mover o saltar') : ''}
@@ -4208,6 +4208,9 @@ function renderSheet(c){
     body = `<p class="item-meta" style="margin:0 0 10px 0;">${escapeAttr(displayName(t))} · ${fmtShortDate(t.date)} · <b style="color:var(--ink);">${fmtMoney(t.amount)}</b></p>
       ${pend.length ? pend.map(l => `<button class="pick" onclick="pickLoanForRepayment('${t.id}','${l.id}')"><span>${escapeAttr(l.person)}</span><span class="item-meta" style="margin:0;">te debe ${fmtMoney(l.amount - loanRepaid(l))}</span></button>`).join('')
         : '<p class="item-meta">No tienes préstamos pendientes registrados.</p>'}`;
+  } else if(sheet.type === 'incomeList'){
+    title = 'Lo que te entró';
+    body = renderIncomeListSheet(sheet.from);
   } else if(sheet.type === 'daySpend'){
     title = 'Gasto del día a día';
     body = renderDaySpendSheet(sheet.from);
@@ -4355,6 +4358,35 @@ function renderLoansDueCard(){
 }
 
 function openMerchantSheet(dir, key){ sheet = { type:'merchant', gk: dir + '|' + key }; render(); }
+// Cada ingreso que entra al promedio, por semana, marcando los que parecen repetidos.
+function renderIncomeListSheet(fromIso){
+  const from = isoToDate(fromIso);
+  const list = allIncomes().filter(i => isoToDate(i.date) >= from).sort((a,b) => b.date.localeCompare(a.date) || b.amount - a.amount);
+  // Posible repetido: mismo monto (±$1) a 4 días o menos de otro ingreso.
+  const dupIds = new Set();
+  list.forEach((a, i) => list.slice(i + 1).forEach(b => {
+    if(Math.abs(a.amount - b.amount) <= 1 && Math.abs(isoToDate(a.date) - isoToDate(b.date)) <= 4 * 86400000){ dupIds.add(a.id); dupIds.add(b.id); }
+  }));
+  const weeks = [];
+  list.forEach(i => {
+    const ws = dayISO(periodBounds(isoToDate(i.date)).s);
+    let w = weeks.find(x => x.ws === ws);
+    if(!w){ w = { ws, items: [], total: 0 }; weeks.push(w); }
+    w.items.push(i); w.total += i.amount;
+  });
+  const total = list.reduce((s,i) => s + i.amount, 0);
+  const row = i => {
+    const t = i.bank ? bankList().find(x => x.id === i.id) : null;
+    const click = t ? `sheet={type:'merchant', gk:${escapeAttr(JSON.stringify(groupKeyOf(t)))}, back:{type:'incomeList', from:'${fromIso}'}};render()` : `sheet=null;startEdit('incomes','${i.id}')`;
+    const dup = dupIds.has(i.id);
+    return `<button class="pick" onclick="${click}" ${dup ? 'style="border-color:var(--warn);"' : ''}>
+      <span style="min-width:0;"><span style="display:block;">${escapeAttr(i.name || i.source || 'Ingreso')}</span>
+      <span class="item-meta" style="margin:0;">${WEEKDAYS[isoToDate(i.date).getDay()].slice(0,3)} ${fmtShortDate(i.date)} · ${i.bank ? 'del banco' : 'anotado a mano'}${dup ? ' · <span style="color:var(--warn);">¿repetido?</span>' : ''}</span></span>
+      <b style="font-family:var(--mono);font-weight:normal;color:var(--good);">${fmtMoney(i.amount)}</b></button>`;
+  };
+  return `<p class="item-meta" style="margin:0 0 10px 0;">Desde el ${fmtShortDate(fromIso)}: ${fmtMoney(total)} en ${list.length} ingreso${list.length===1?'':'s'}. ${dupIds.size ? `<b style="color:var(--warn);">Los marcados "¿repetido?" tienen el mismo monto a pocos días de otro</b> (por ejemplo, uno anotado a mano y el mismo del banco). Tócalo para corregirlo: "No contar" o "Movimiento propio" si es del banco, o bórralo si lo anotaste a mano.` : 'Toca uno para cambiarlo si no es un ingreso de verdad (por ejemplo, plata que te pasaste de otra cuenta).'}</p>
+    ${weeks.map(w => `<p class="sub-head" style="display:flex;justify-content:space-between;margin:12px 0 6px 0;"><span>${capFirst(PL().noun)} del ${fmtShortDate(w.ws)}</span><span style="font-family:var(--mono);">${fmtMoney(w.total)}</span></p>${w.items.map(row).join('')}`).join('') || '<p class="item-meta">No hay ingresos en ese tiempo.</p>'}`;
+}
 // Lo que la app cuenta como gasto del día a día (hormiga + otros gastos), agrupado por comercio, de mayor a menor.
 function renderDaySpendSheet(fromIso){
   const from = isoToDate(fromIso);
@@ -4672,7 +4704,7 @@ function addShotRow(){
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION='3.27';
+const APP_VERSION='3.28';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
