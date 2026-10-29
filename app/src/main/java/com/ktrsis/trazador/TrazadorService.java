@@ -204,6 +204,7 @@ public class TrazadorService extends Service {
         Trazado.Result res;
         double[] map;
         String tf = "", asset = "";
+        boolean pairGuessed;
         Trazado.Region region;
         int w, h;
     }
@@ -237,7 +238,7 @@ public class TrazadorService extends Service {
         Read rd = new Read(); rd.w = w; rd.h = h;
         List<double[]> labels = new ArrayList<>();
         int axisLeft = w, top = (int) (h * 0.16), bottom = (int) (h * 0.62);
-        boolean topFound = false;
+        boolean topFound = false, otcSeen = false;
         for (Text.TextBlock b : t.getTextBlocks()) for (Text.Line l : b.getLines()) {
             Rect r = l.getBoundingBox(); if (r == null) continue;
             String s = l.getText();
@@ -251,14 +252,18 @@ public class TrazadorService extends Service {
             }
             Matcher tm = TF.matcher(s);
             if (tm.matches()) { rd.tf = tm.group(1); continue; }
+            String su = s.toUpperCase(Locale.US).replace('0', 'O');
+            if (r.centerY() < h * 0.35 && su.matches(".*\\bOTC\\b.*")) otcSeen = true;
             Matcher am = ASSET.matcher(s.toUpperCase(Locale.US));
-            if (am.find() && r.centerY() < h * 0.35) {
-                rd.asset = am.group(1).replace(" ", "");
+            if (am.find() && r.centerY() < h * 0.35 && rd.asset.isEmpty()) {
+                String g = am.group(1).replace(" ", "");
+                rd.asset = g.substring(0, 7) + (g.endsWith("OTC") ? " OTC" : "");
                 if (!topFound || r.bottom + 12 > top) { top = Math.max(top, r.bottom + 12); topFound = true; }
                 continue;
             }
             if (PANEL.matcher(s.trim()).matches() && r.top > h * 0.35) bottom = Math.min(bottom, r.top - 12);
         }
+        if (!rd.asset.isEmpty() && otcSeen && !rd.asset.endsWith("OTC")) rd.asset += " OTC";
         int x1 = axisLeft < w ? axisLeft - 6 : (int) (w * 0.82);
         rd.region = new Trazado.Region(0, top, Math.max(10, x1), Math.max(top + 10, bottom));
         rd.map = Trazado.priceMap(labels);
@@ -269,43 +274,96 @@ public class TrazadorService extends Service {
         return rd;
     }
 
-    private String assetKey(Read rd) { return rd.asset.isEmpty() ? "_" : rd.asset; }
+    /** Par que se está viendo. Si esta vez no se leyó, usa el último leído hace poco (solo para Trazar). */
+    private String pairFor(Read rd, boolean saving) {
+        if (!rd.asset.isEmpty()) {
+            prefs.edit().putString("lastPair", rd.asset).putLong("lastPairAt", System.currentTimeMillis()).apply();
+            return rd.asset;
+        }
+        if (saving) return null;
+        String last = prefs.getString("lastPair", "");
+        long at = prefs.getLong("lastPairAt", 0);
+        if (!last.isEmpty() && System.currentTimeMillis() - at < 15 * 60_000L) { rd.pairGuessed = true; return last; }
+        return null;
+    }
 
     private JSONArray zones(String asset) {
         try { return new JSONArray(prefs.getString("z:" + asset, "[]")); } catch (Exception e) { return new JSONArray(); }
     }
 
+    private static int tfRank(String tf) {
+        if (tf == null || tf.length() < 2) return 0;
+        int n; try { n = Integer.parseInt(tf.substring(1)); } catch (Exception e) { return 0; }
+        switch (tf.charAt(0)) { case 'S': return n; case 'M': return n * 60; case 'H': return n * 3600; case 'D': return n * 86400; }
+        return 0;
+    }
+
     private void onRead(Read rd, boolean saveZone) {
         if (rd.res.error != null) { done(rd.res.error); return; }
         List<LinesView.Item> items = new ArrayList<>();
-        String asset = assetKey(rd);
-        JSONArray z = zones(asset);
+        String asset = pairFor(rd, saveZone);
         String tf = rd.tf.isEmpty() ? "?" : rd.tf;
         if (saveZone) {
+            if (asset == null) { done("No leí el par (ej. AUD/CAD OTC). Deja visible el nombre del par arriba y toca Zona otra vez, así no se mezclan las zonas entre divisas."); return; }
             if (rd.map == null) { done("No pude leer los precios del eje derecho. Deja visibles los números del eje."); return; }
-            JSONArray nz = new JSONArray();
-            for (int i = 0; i < z.length(); i++) { JSONObject o = z.optJSONObject(i); if (o != null && !tf.equals(o.optString("tf"))) nz.put(o); }
-            int saved = 0;
+            JSONArray z = zones(asset);
+            // Tolerancia en precio: lo que mide ~1.5% del alto del gráfico
+            double tolP = Math.abs(Trazado.yToPrice(rd.map, rd.region.y0) - Trazado.yToPrice(rd.map, rd.region.y0 + rd.region.h() * 0.015));
+            List<JSONObject> all = new ArrayList<>();
+            for (int i = 0; i < z.length(); i++) { JSONObject o = z.optJSONObject(i); if (o != null) all.add(o); }
+            int added = 0, updated = 0;
             for (Trazado.Level L : rd.res.levels) {
-                if (!L.strongest) continue;
+                double p = Trazado.yToPrice(rd.map, L.y);
+                JSONObject hit = null;
+                for (JSONObject o : all) if (o.optBoolean("r") == L.resistance && Math.abs(o.optDouble("p") - p) <= tolP) { hit = o; break; }
                 try {
-                    JSONObject o = new JSONObject();
-                    o.put("p", Trazado.yToPrice(rd.map, L.y)); o.put("r", L.resistance); o.put("tf", tf);
-                    o.put("t", L.touches); o.put("at", System.currentTimeMillis());
-                    nz.put(o); saved++;
+                    if (hit != null) {
+                        // misma zona: se queda con la temporalidad mayor y suma toques
+                        if (tfRank(tf) >= tfRank(hit.optString("tf"))) hit.put("tf", tf);
+                        hit.put("p", (hit.optDouble("p") + p) / 2);
+                        hit.put("t", Math.max(hit.optInt("t"), L.touches));
+                        hit.put("s", hit.optBoolean("s") || L.strongest);
+                        hit.put("at", System.currentTimeMillis());
+                        updated++;
+                    } else {
+                        JSONObject o = new JSONObject();
+                        o.put("p", p); o.put("r", L.resistance); o.put("tf", tf); o.put("t", L.touches);
+                        o.put("s", L.strongest); o.put("at", System.currentTimeMillis());
+                        all.add(o); added++;
+                    }
                 } catch (Exception ignored) {}
             }
+            // Máximo 4 resistencias y 4 soportes por par: quedan las más fuertes y recientes
+            JSONArray nz = new JSONArray();
+            for (int side = 0; side < 2; side++) {
+                List<JSONObject> l = new ArrayList<>();
+                for (JSONObject o : all) if (o.optBoolean("r") == (side == 0)) l.add(o);
+                l.sort((x, y) -> {
+                    int c = Boolean.compare(y.optBoolean("s"), x.optBoolean("s"));
+                    if (c != 0) return c;
+                    c = Integer.compare(tfRank(y.optString("tf")), tfRank(x.optString("tf")));
+                    if (c != 0) return c;
+                    c = Integer.compare(y.optInt("t"), x.optInt("t"));
+                    return c != 0 ? c : Long.compare(y.optLong("at"), x.optLong("at"));
+                });
+                for (int i = 0; i < Math.min(4, l.size()); i++) nz.put(l.get(i));
+            }
             prefs.edit().putString("z:" + asset, nz.toString()).apply();
-            z = nz;
-            String msg = saved == 0 ? "No encontré una zona clara en esta temporalidad."
-                    : "Guardé " + saved + " zona" + (saved == 1 ? "" : "s") + " de " + tf + (rd.asset.isEmpty() ? "" : " para " + rd.asset)
-                    + ". Cambia a la temporalidad en la que operas y toca Trazar.";
-            addZones(items, z, rd);
+            int nr = 0, ns = 0;
+            for (int i = 0; i < nz.length(); i++) if (nz.optJSONObject(i).optBoolean("r")) nr++; else ns++;
+            String msg = added + updated == 0 ? asset + " · no encontré una zona clara en " + tf + "."
+                    : asset + " · guardé " + (added > 0 ? added + " zona" + (added == 1 ? "" : "s") + " nueva" + (added == 1 ? "" : "s") : "")
+                    + (added > 0 && updated > 0 ? " y " : "") + (updated > 0 ? "reforcé " + updated : "") + " de " + tf
+                    + ". Tienes " + nr + " resistencia" + (nr == 1 ? "" : "s") + " y " + ns + " soporte" + (ns == 1 ? "" : "s")
+                    + " guardados. Cambia a tu temporalidad y toca Trazar.";
+            addZones(items, nz, rd, new int[3]);
             post(items, msg);
             return;
         }
         // Trazar: zonas guardadas + canal diagonal + soportes/resistencias de esta temporalidad
-        int drawn = addZones(items, z, rd);
+        JSONArray z = asset == null ? new JSONArray() : zones(asset);
+        int[] cnt = new int[3];   // dibujadas, fuera de vista, tocando
+        String near = addZones(items, z, rd, cnt);
         for (Trazado.Line L : rd.res.channel) {
             LinesView.Item it = new LinesView.Item();
             it.x1 = (float) L.x1; it.y1 = (float) L.y1; it.x2 = (float) L.x2; it.y2 = (float) L.y2;
@@ -320,27 +378,53 @@ public class TrazadorService extends Service {
                     (L.resistance ? "R " : "S ") + tf + (rd.map != null ? "  " + fmt(Trazado.yToPrice(rd.map, L.y)) : ""));
             items.add(it);
         }
-        String msg = (rd.res.downMove ? "Canal de bajada" : "Canal de subida") + " · " + rd.res.candles + " velas"
-                + (z.length() > 0 ? (drawn > 0 ? " · " + drawn + " zona" + (drawn == 1 ? "" : "s") + " guardada" + (drawn == 1 ? "" : "s")
-                : " · tus zonas quedan fuera de lo que se ve") : " · sin zonas guardadas (usa Zona en una temporalidad mayor)")
-                + (rd.map == null && z.length() > 0 ? " · no leí los precios del eje" : "");
-        post(items, msg);
+        StringBuilder msg = new StringBuilder();
+        if (near != null) msg.append("⚠ El precio está llegando a ").append(near).append("\n");
+        msg.append(asset == null ? "Par sin leer" : asset + (rd.pairGuessed ? " (el último que leí)" : ""))
+           .append(" · ").append(tf).append(" · ").append(rd.res.downMove ? "canal de bajada" : "canal de subida");
+        if (asset == null) msg.append(" · no muestro zonas para no mezclar divisas: deja visible el nombre del par");
+        else if (z.length() == 0) msg.append(" · sin zonas guardadas (toca Zona en M5 o mayor)");
+        else if (rd.map == null) msg.append(" · no leí los precios del eje, no puedo ubicar tus zonas");
+        else {
+            msg.append(" · ").append(cnt[0]).append(" zona").append(cnt[0] == 1 ? "" : "s").append(" en pantalla");
+            if (cnt[1] > 0) msg.append(", ").append(cnt[1]).append(" fuera (flechas ▲▼)");
+        }
+        post(items, msg.toString());
     }
 
-    /** Dibuja las zonas guardadas (en precio) en la posición que les toca en el gráfico de ahora. */
-    private int addZones(List<LinesView.Item> items, JSONArray z, Read rd) {
-        if (rd.map == null) return 0;
-        int n = 0;
+    /** Dibuja las zonas guardadas (en precio) donde caen en el gráfico de ahora; las que quedan fuera, como flecha en el borde. */
+    private String addZones(List<LinesView.Item> items, JSONArray z, Read rd, int[] cnt) {
+        if (rd.map == null) return null;
+        double cur = Trazado.yToPrice(rd.map, rd.res.currentY);
+        double tolP = Math.abs(Trazado.yToPrice(rd.map, rd.region.y0) - Trazado.yToPrice(rd.map, rd.region.y0 + rd.region.h() * 0.02));
+        double span = Math.abs(Trazado.yToPrice(rd.map, rd.region.y0) - Trazado.yToPrice(rd.map, rd.region.y1));
+        String near = null;
+        int upSlot = 0, downSlot = 0;
+        float dens = getResources().getDisplayMetrics().density;
         for (int i = 0; i < z.length(); i++) {
             JSONObject o = z.optJSONObject(i); if (o == null) continue;
             double p = o.optDouble("p", Double.NaN); if (Double.isNaN(p)) continue;
-            float y = (float) Trazado.priceToY(rd.map, p);
-            if (y < rd.region.y0 - 4 || y > rd.region.y1 + 4) continue;
+            // Protección: una zona a más de 10 pantallas del precio no es de este gráfico
+            if (span > 0 && Math.abs(p - cur) > span * 10) continue;
             boolean r = o.optBoolean("r");
-            items.add(hline(y, rd.w, r ? C_RES : C_SUP, 5, false, (r ? "RESISTENCIA " : "SOPORTE ") + o.optString("tf") + "  " + fmt(p)));
-            n++;
+            String name = (r ? "RESISTENCIA " : "SOPORTE ") + o.optString("tf") + (o.optBoolean("s") ? " ★" : "");
+            if (Math.abs(p - cur) <= tolP && near == null) near = name + " " + fmt(p);
+            float y = (float) Trazado.priceToY(rd.map, p);
+            if (y >= rd.region.y0 - 4 && y <= rd.region.y1 + 4) {
+                items.add(hline(y, rd.w, r ? C_RES : C_SUP, o.optBoolean("s") ? 6 : 4, false, name + "  " + fmt(p)));
+                cnt[0]++;
+            } else {
+                boolean above = y < rd.region.y0;
+                float yy = above ? rd.region.y0 + (22 + 22 * upSlot++) * dens : rd.region.y1 - (6 + 22 * downSlot++) * dens;
+                LinesView.Item it = new LinesView.Item();
+                it.x1 = rd.w - 150 * dens; it.x2 = rd.w; it.y1 = yy; it.y2 = yy;
+                it.color = r ? C_RES : C_SUP; it.width = 3; it.dashed = true;
+                it.label = (above ? "▲ " : "▼ ") + name + "  " + fmt(p);
+                items.add(it);
+                cnt[1]++;
+            }
         }
-        return n;
+        return near;
     }
 
     private LinesView.Item hline(float y, float x2, int color, float width, boolean dashed, String label) {
