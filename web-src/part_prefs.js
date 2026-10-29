@@ -3,7 +3,7 @@
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION='3.29';
+const APP_VERSION='3.30';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },

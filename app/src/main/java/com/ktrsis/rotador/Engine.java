@@ -54,6 +54,8 @@ public class Engine {
     private void changed() { save(); for (Runnable r : new ArrayList<>(listeners)) r.run(); }
 
     static double r2(double x) { return Math.ceil(x * 100 - 1e-9) / 100.0; }
+    /** Entrada redondeada hacia arriba a lo mínimo de la moneda (centavos, o enteros en COP/CLP/ARS). */
+    static double rs(double x) { double f = Math.pow(10, curDec); return Math.ceil(x * f - 1e-9) / f; }
 
     // ---- Moneda (la eliges en Ajustes del Rotador; la usan la pantalla, la ventana flotante y el Guardián) ----
     public static String curCode = "USD", curSym = "$";
@@ -82,11 +84,11 @@ public class Engine {
         for (int i = 0; i < steps; i++) {
             double s;
             if (mode.equals("double")) {
-                s = r2(base * Math.pow(2, i));
+                s = rs(base * Math.pow(2, i));
             } else if (mode.equals("quick")) {
-                s = i < steps - 1 ? r2(base * Math.pow(2, i)) : Math.ceil(lost / p / base - 1e-9) * base;
+                s = i < steps - 1 ? rs(base * Math.pow(2, i)) : Math.ceil(lost / p / base - 1e-9) * base;
             } else {
-                s = i == 0 ? r2(base) : r2((lost + base * p) / p);
+                s = i == 0 ? rs(base) : rs((lost + base * p) / p);
             }
             out[i] = s;
             lost += s;

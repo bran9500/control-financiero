@@ -374,12 +374,14 @@ function load(){try{const r=localStorage.getItem(KEY);if(r)return JSON.parse(r)}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 const r2=x=>Math.ceil(x*100-1e-9)/100;
+// Las entradas se redondean hacia arriba a lo mínimo que acepta la moneda (centavos, o pesos enteros en COP/CLP/ARS).
+const rs=x=>{const f=10**((typeof CURS!=="undefined"&&CURS[CUR])?CURS[CUR][1]:2);return Math.ceil(x*f-1e-9)/f};
 function seq(){
   const {payout,base,steps,mode}=S.cfg,p=payout/100,out=[];let lost=0;
   for(let i=0;i<steps;i++){
-    const s=mode==="double"?r2(base*2**i)
-      :mode==="quick"?(i<steps-1?r2(base*2**i):Math.ceil(lost/p/base-1e-9)*base)
-      :(i===0?r2(base):r2((lost+base*p)/p));
+    const s=mode==="double"?rs(base*2**i)
+      :mode==="quick"?(i<steps-1?rs(base*2**i):Math.ceil(lost/p/base-1e-9)*base)
+      :(i===0?rs(base):rs((lost+base*p)/p));
     out.push(s);lost+=s;
   }
   return out;
@@ -482,7 +484,7 @@ function render(){
   $("pool").innerHTML=`Te quedan <b>${left} de ${n*NL}</b> balas en ${alive} lote${alive===1?"":"s"}. Cada lote cuesta <b>${amt(budget)}</b> si se quema entero; ${NL>1?`los ${NL} juntos`:"en total"}, <b>${amt(budget*NL)}</b>. Ese es tu capital en riesgo.`;
   if(document.activeElement!==$("nLots"))$("nLots").value=NL;
   const p=S.cfg.payout/100;let lost=0;
-  $("seq").innerHTML=sq.map((s,j)=>{const net=r2(s*p-lost);lost+=s;return `<b>${amt(s)}</b>${net<0?`<span class="warn">(${money(net)})</span>`:`(+${num(net)})`}`}).join(" → ")+`<br>Total por lote: ${amt(budget)}`;
+  $("seq").innerHTML=sq.map((s,j)=>{const net=r2(s*p-lost);lost+=s;return `<b>${amt(s)}</b>${net<0?`<span class="warn">(${money(net)})</span>`:`(+${num(net)})`}`}).join(" → ")+`<br>Total por lote: ${amt(budget)}`+(dec()===0&&S.cfg.base<100?`<br><span class="warn">Tu entrada base es ${amt(S.cfg.base)}. En ${CURS[CUR][2].split(" (")[0].toLowerCase()} normalmente es de miles (por ejemplo ${amt(5000)}). Si tus montos están en dólares, deja la moneda en Dólar.</span>`:"");
   $("log").innerHTML=S.log.length?S.log.map(logRow).join(""):"<li>Aún no hay operaciones.</li>";
   for(const id of ["payout","base","steps","mode"])$(id).value=S.cfg[id];
   renderVolume();
