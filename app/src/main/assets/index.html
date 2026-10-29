@@ -3057,7 +3057,19 @@ function submitDebt(){
   const balance = document.getElementById('debt-balance').value;
   const rate = document.getElementById('debt-rate').value;
   const payment = document.getElementById('debt-payment').value;
-  const due = document.getElementById('debt-due') ? document.getElementById('debt-due').value : '';
+  // Día del mes (1–31) → próxima fecha con ese día (este mes o el siguiente).
+  const dayEl = document.getElementById('debt-day');
+  let due = '';
+  const dd = dayEl ? parseInt(dayEl.value, 10) : NaN;
+  if(dd >= 1 && dd <= 31){
+    const t = isoToDate(todayISO());
+    const mk = (y, m) => { const last = new Date(y, m + 1, 0).getDate(); return new Date(y, m, Math.min(dd, last)); };
+    let d = mk(t.getFullYear(), t.getMonth());
+    if(d < t) d = mk(t.getFullYear(), t.getMonth() + 1);
+    due = dayISO(d);
+  } else if(editingItem && editingItem.kind === 'debts'){
+    const cur = data.debts.find(x => x.id === editingItem.id); due = cur && cur.dueDate || '';
+  }
   const freq = (document.getElementById('debt-freq') || {}).value === 'week' ? 'week' : 'month';
   const extra = { payFreq: freq, weeklyPayment: (document.getElementById('debt-weekly') || {}).value || 0,
                   weekday: (document.getElementById('debt-weekday') || {}).value ?? 5, flexible: !!(document.getElementById('debt-flex') || {}).checked };
@@ -3658,7 +3670,7 @@ function debtsBody(){
         <div class="field"><label>Día</label><select id="debt-weekday">${[5,6,0,1,2,3,4].map(d => `<option value="${d}" ${((editingDebt&&editingDebt.weekday!=null)?editingDebt.weekday:5)===d?'selected':''}>${capFirst(WEEKDAYS[d])}</option>`).join('')}</select></div>
       </div><input type="hidden" id="debt-payment" value="0">` : `<div class="field-row">
         <div class="field"><label>Pago mensual (0 si no hay)</label><input type="text" inputmode="decimal" id="debt-payment" placeholder="0.00" value="${editingDebt?editingDebt.monthlyPayment:''}"></div>
-        <div class="field"><label>Próx. vencimiento</label><input type="date" id="debt-due" value="${editingDebt&&editingDebt.dueDate?editingDebt.dueDate:''}"></div>
+        <div class="field"><label>Día de pago (1 a 31)</label><input type="number" inputmode="numeric" min="1" max="31" id="debt-day" placeholder="Ej: 26" value="${editingDebt&&editingDebt.dueDate?isoToDate(editingDebt.dueDate).getDate():''}"></div>
       </div>`}
       <label class="chk-row" style="display:flex;gap:10px;align-items:center;margin:4px 0 10px 0;font-size:14px;"><input type="checkbox" id="debt-flex" ${editingDebt&&editingDebt.flexible?'checked':''} style="width:20px;height:20px;"> Flexible: se puede mover o saltar si no alcanza</label>
       <p class="item-meta">Los pagos que conectes desde el banco se restan solos del saldo.</p>
@@ -4643,7 +4655,7 @@ function addShotRow(){
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION='3.24';
+const APP_VERSION='3.25';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },

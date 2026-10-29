@@ -555,7 +555,7 @@ function debtsBody(){
         <div class="field"><label>Día</label><select id="debt-weekday">${[5,6,0,1,2,3,4].map(d => `<option value="${d}" ${((editingDebt&&editingDebt.weekday!=null)?editingDebt.weekday:5)===d?'selected':''}>${capFirst(WEEKDAYS[d])}</option>`).join('')}</select></div>
       </div><input type="hidden" id="debt-payment" value="0">` : `<div class="field-row">
         <div class="field"><label>Pago mensual (0 si no hay)</label><input type="text" inputmode="decimal" id="debt-payment" placeholder="0.00" value="${editingDebt?editingDebt.monthlyPayment:''}"></div>
-        <div class="field"><label>Próx. vencimiento</label><input type="date" id="debt-due" value="${editingDebt&&editingDebt.dueDate?editingDebt.dueDate:''}"></div>
+        <div class="field"><label>Día de pago (1 a 31)</label><input type="number" inputmode="numeric" min="1" max="31" id="debt-day" placeholder="Ej: 26" value="${editingDebt&&editingDebt.dueDate?isoToDate(editingDebt.dueDate).getDate():''}"></div>
       </div>`}
       <label class="chk-row" style="display:flex;gap:10px;align-items:center;margin:4px 0 10px 0;font-size:14px;"><input type="checkbox" id="debt-flex" ${editingDebt&&editingDebt.flexible?'checked':''} style="width:20px;height:20px;"> Flexible: se puede mover o saltar si no alcanza</label>
       <p class="item-meta">Los pagos que conectes desde el banco se restan solos del saldo.</p>

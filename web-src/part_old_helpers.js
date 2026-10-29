@@ -103,7 +103,19 @@ function submitDebt(){
   const balance = document.getElementById('debt-balance').value;
   const rate = document.getElementById('debt-rate').value;
   const payment = document.getElementById('debt-payment').value;
-  const due = document.getElementById('debt-due') ? document.getElementById('debt-due').value : '';
+  // Día del mes (1–31) → próxima fecha con ese día (este mes o el siguiente).
+  const dayEl = document.getElementById('debt-day');
+  let due = '';
+  const dd = dayEl ? parseInt(dayEl.value, 10) : NaN;
+  if(dd >= 1 && dd <= 31){
+    const t = isoToDate(todayISO());
+    const mk = (y, m) => { const last = new Date(y, m + 1, 0).getDate(); return new Date(y, m, Math.min(dd, last)); };
+    let d = mk(t.getFullYear(), t.getMonth());
+    if(d < t) d = mk(t.getFullYear(), t.getMonth() + 1);
+    due = dayISO(d);
+  } else if(editingItem && editingItem.kind === 'debts'){
+    const cur = data.debts.find(x => x.id === editingItem.id); due = cur && cur.dueDate || '';
+  }
   const freq = (document.getElementById('debt-freq') || {}).value === 'week' ? 'week' : 'month';
   const extra = { payFreq: freq, weeklyPayment: (document.getElementById('debt-weekly') || {}).value || 0,
                   weekday: (document.getElementById('debt-weekday') || {}).value ?? 5, flexible: !!(document.getElementById('debt-flex') || {}).checked };
