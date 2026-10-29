@@ -103,13 +103,16 @@ function submitDebt(){
   const balance = document.getElementById('debt-balance').value;
   const rate = document.getElementById('debt-rate').value;
   const payment = document.getElementById('debt-payment').value;
-  const due = document.getElementById('debt-due').value;
-  if(!name || !payment) return;
+  const due = document.getElementById('debt-due') ? document.getElementById('debt-due').value : '';
+  const freq = (document.getElementById('debt-freq') || {}).value === 'week' ? 'week' : 'month';
+  const extra = { payFreq: freq, weeklyPayment: (document.getElementById('debt-weekly') || {}).value || 0,
+                  weekday: (document.getElementById('debt-weekday') || {}).value ?? 5, flexible: !!(document.getElementById('debt-flex') || {}).checked };
+  if(!name || (freq === 'month' ? !payment : !parseMoney(extra.weeklyPayment))) return;
   if(editingItem && editingItem.kind==='debts'){
-    updateDebt(editingItem.id, name, balance||0, rate||0, due, payment);
+    updateDebt(editingItem.id, name, balance||0, rate||0, due, payment, extra);
     editingItem = null;
   } else {
-    addDebt(name, balance||0, rate||0, due, payment);
+    addDebt(name, balance||0, rate||0, due, payment, extra);
   }
   formOpen['debts'] = false;
 }

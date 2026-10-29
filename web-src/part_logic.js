@@ -344,13 +344,21 @@ function cancelEdit(){
 }
 
 // ---- Deudas ----
-function addDebt(name, balance, rate, dueDate, monthlyPayment){
-  data.debts.push({id:'d'+Date.now(), name, balance:parseMoney(balance), rate:parseMoney(rate)||0, dueDate, monthlyPayment:parseMoney(monthlyPayment)});
+// extra: { payFreq:'month'|'week', weeklyPayment, weekday, flexible }
+function debtExtra(extra, monthlyPayment){
+  extra = extra || {};
+  const week = extra.payFreq === 'week';
+  const wp = week ? parseMoney(extra.weeklyPayment) : 0;
+  return { payFreq: week ? 'week' : 'month', weeklyPayment: wp, weekday: extra.weekday != null ? +extra.weekday : 5, flexible: !!extra.flexible,
+           monthlyPayment: week ? Math.round(wp * 4.345 * 100) / 100 : parseMoney(monthlyPayment) };
+}
+function addDebt(name, balance, rate, dueDate, monthlyPayment, extra){
+  data.debts.push({id:'d'+Date.now(), name, balance:parseMoney(balance), rate:parseMoney(rate)||0, dueDate, ...debtExtra(extra, monthlyPayment), createdAt: todayISO()});
   saveData(); render();
 }
-function updateDebt(id, name, balance, rate, dueDate, monthlyPayment){
+function updateDebt(id, name, balance, rate, dueDate, monthlyPayment, extra){
   const idx = data.debts.findIndex(d=>d.id===id);
-  if(idx>-1) data.debts[idx] = {...data.debts[idx], name, balance:parseMoney(balance), rate:parseMoney(rate)||0, dueDate, monthlyPayment:parseMoney(monthlyPayment)};
+  if(idx>-1) data.debts[idx] = {...data.debts[idx], name, balance:parseMoney(balance), rate:parseMoney(rate)||0, dueDate, ...debtExtra(extra || data.debts[idx], monthlyPayment)};
   saveData(); render();
 }
 // ---- Gastos fijos ----

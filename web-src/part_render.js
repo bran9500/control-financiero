@@ -1,3 +1,4 @@
+let debtFormFreq = 'month', debtFormFor = null;
 
 // =====================================================================
 //  PANTALLAS
@@ -103,7 +104,7 @@ function renderHome(c){
   // Tarjeta principal + próximas semanas
   const pct = c.need > 0 ? Math.max(0, Math.min(1, c.availableThisWeek / c.need)) : 1;
   const covered = c.shortfall <= 0;
-  const next = c.weeksAhead.slice(1, 4);
+  const next = c.weeksAhead.slice(1, 5);
   html += `<div class="card hero-card" data-tour="hero">
     <p class="hero-label">${covered ? 'Vas cubierto ' + PL().art : 'Te falta ganar ' + PL().art}</p>
     <p class="hero-number ${covered?'good':'warn'}">${fmtMoney(Math.max(c.shortfall,0))}</p>
@@ -496,6 +497,9 @@ let debtOpen = {};
 function toggleDebtOpen(id){ debtOpen[id] = !debtOpen[id]; render(); }
 function debtsBody(){
   const editingDebt = editingItem && editingItem.kind==='debts' ? data.debts.find(d=>d.id===editingItem.id) : null;
+  if(editingDebt && debtFormFor !== editingDebt.id){ debtFormFor = editingDebt.id; debtFormFreq = editingDebt.payFreq === 'week' ? 'week' : 'month'; }
+  if(!editingDebt && debtFormFor){ debtFormFor = null; debtFormFreq = 'month'; }
+  const dfq = debtFormFreq;
   const row = (d, i) => {
     const pays = debtPayments(d.id);
     const paid = pays.reduce((s,p)=>s+p.amount,0);
@@ -504,12 +508,13 @@ function debtsBody(){
     return `<div class="item-row ${i===0?'list-first':''}" style="align-items:flex-start;">
         <div class="item-main clickable" onclick="startEdit('debts','${d.id}')">
           <div class="item-name">${escapeAttr(d.name)}</div>
-          <div class="item-meta">Debes ${fmtMoney(Math.max(0,d.balance||0))}${d.rate?` · ${d.rate}% interés`:''}${d.dueDate?` · vence día ${isoToDate(d.dueDate).getDate()}`:''}</div>
+          <div class="item-meta">Debes ${fmtMoney(Math.max(0,d.balance||0))}${d.rate?` · ${d.rate}% interés`:''}${d.payFreq==='week' ? ` · ${fmtMoney(d.weeklyPayment)} cada ${WEEKDAYS[d.weekday ?? 5]}` : d.dueDate?` · vence día ${isoToDate(d.dueDate).getDate()}`:''}${d.flexible?' · flexible':''}</div>
+          ${d.payFreq!=='week' && !d.dueDate && (d.monthlyPayment||0) > 0 ? `<div class="item-meta" style="color:var(--warn);">Sin fecha: no sale en las semanas. Tócala y ponle fecha, o cámbiala a abono semanal.</div>` : ''}
           ${paid > 0 ? `<div class="item-meta note-good">Pagado en la app: ${fmtMoney(paid)} (${pays.length} pago${pays.length===1?'':'s'})</div>` : ''}
         </div>
         <div class="item-amounts">
-          <div class="item-amount">${fmtMoney(d.monthlyPayment)}/mes</div>
-          <div class="item-weekly">${fmtMoney((d.monthlyPayment||0)/4.345)}/sem</div>
+          <div class="item-amount">${d.payFreq==='week' ? fmtMoney(d.weeklyPayment)+'/sem' : fmtMoney(d.monthlyPayment)+'/mes'}</div>
+          <div class="item-weekly">${d.payFreq==='week' ? fmtMoney(d.monthlyPayment)+'/mes' : fmtMoney((d.monthlyPayment||0)/4.345)+'/sem'}</div>
         </div>
         ${deleteControl('debts', d.id)}
       </div>
@@ -540,10 +545,19 @@ function debtsBody(){
         <div class="field"><label>Saldo que debes hoy</label><input type="text" inputmode="decimal" id="debt-balance" placeholder="0.00" value="${editingDebt?editingDebt.balance:''}"></div>
         <div class="field"><label>Interés % (opcional)</label><input type="text" inputmode="decimal" id="debt-rate" placeholder="0" value="${editingDebt&&editingDebt.rate?editingDebt.rate:''}"></div>
       </div>
-      <div class="field-row">
+      <div class="field"><label>¿Cada cuánto le abonas?</label>
+        <select id="debt-freq" onchange="debtFormFreq=this.value;render()">
+          <option value="month" ${dfq==='month'?'selected':''}>Cada mes, un día fijo</option>
+          <option value="week" ${dfq==='week'?'selected':''}>Cada semana (abono semanal)</option>
+        </select></div>
+      ${dfq === 'week' ? `<div class="field-row">
+        <div class="field"><label>Abono por semana</label><input type="text" inputmode="decimal" id="debt-weekly" placeholder="Ej: 100" value="${editingDebt&&editingDebt.weeklyPayment?editingDebt.weeklyPayment:''}"></div>
+        <div class="field"><label>Día</label><select id="debt-weekday">${[5,6,0,1,2,3,4].map(d => `<option value="${d}" ${((editingDebt&&editingDebt.weekday!=null)?editingDebt.weekday:5)===d?'selected':''}>${capFirst(WEEKDAYS[d])}</option>`).join('')}</select></div>
+      </div><input type="hidden" id="debt-payment" value="0">` : `<div class="field-row">
         <div class="field"><label>Pago mensual (0 si no hay)</label><input type="text" inputmode="decimal" id="debt-payment" placeholder="0.00" value="${editingDebt?editingDebt.monthlyPayment:''}"></div>
         <div class="field"><label>Próx. vencimiento</label><input type="date" id="debt-due" value="${editingDebt&&editingDebt.dueDate?editingDebt.dueDate:''}"></div>
-      </div>
+      </div>`}
+      <label class="chk-row" style="display:flex;gap:10px;align-items:center;margin:4px 0 10px 0;font-size:14px;"><input type="checkbox" id="debt-flex" ${editingDebt&&editingDebt.flexible?'checked':''} style="width:20px;height:20px;"> Flexible: se puede mover o saltar si no alcanza</label>
       <p class="item-meta">Los pagos que conectes desde el banco se restan solos del saldo.</p>
       <div class="field-row">
         <button class="btn btn-primary" onclick="submitDebt()">${editingDebt?'Guardar cambios':'Añadir deuda'}</button>
@@ -994,7 +1008,9 @@ function renderSheet(c){
     const items = w.items.slice().sort((a,b)=>a.date-b.date);
     const dupes = weekDupes(items);
     body = `${dupes.map(renderWeekDupe).join('')}
-      ${items.length ? items.map(o => `<div class="mini-row clickable" style="cursor:pointer;" onclick="goToItem('${o.kind}','${o.refId}')"><span>${fmtShortDate(dayISO(o.date))} · ${escapeAttr(o.name)}${o.shifted?' <span class="item-meta" style="display:inline;">(movido)</span>':''}</span><span style="display:flex;gap:8px;align-items:center;"><b style="${o.remaining<=0.004?'color:var(--good);':''}">${o.remaining<=0.004?'pagado ✓':fmtMoney(o.remaining)}</b><span style="color:var(--ink-dim);">›</span></span></div>`).join('') + '<p class="item-meta" style="margin:6px 0 0 0;">Toca un pago para ver dónde está guardado y corregirlo.</p>' : '<p class="item-meta">No vence nada esta semana.</p>'}
+      ${items.length ? items.map(o => `<div class="mini-row clickable" style="cursor:pointer;" onclick="goToItem('${o.kind}','${o.refId}')"><span>${fmtShortDate(dayISO(o.date))} · ${escapeAttr(o.name)}${o.shifted?' <span class="item-meta" style="display:inline;">(movido)</span>':''}${o.flexible?' <span class="item-meta" style="display:inline;color:var(--accent);">flexible</span>':''}</span><span style="display:flex;gap:8px;align-items:center;"><b style="${o.remaining<=0.004?'color:var(--good);':''}">${o.remaining<=0.004?'pagado ✓':fmtMoney(o.remaining)}</b><span style="color:var(--ink-dim);">›</span></span></div>`).join('') + '<p class="item-meta" style="margin:6px 0 0 0;">Toca un pago para ver dónde está guardado y corregirlo.</p>' : '<p class="item-meta">No vence nada esta semana.</p>'}
+      ${(() => { const flex = items.filter(o => o.flexible).reduce((s,o) => s + o.remaining, 0); return flex > 0.004 ? `<div class="total-line"><span>Fijo (no se puede mover)</span><b>${fmtMoney(w.due - flex)}</b></div><div class="total-line" style="border-top:none;margin-top:0;"><span>Flexible (se puede mover o saltar)</span><b>${fmtMoney(flex)}</b></div>` : ''; })()}
+      ${(() => { const nd = data.debts.filter(d => d.payFreq !== 'week' && !d.dueDate && (d.monthlyPayment||0) > 0 && (d.balance||0) > 0); return nd.length ? `<p class="item-meta" style="color:var(--warn);margin:8px 0 0 0;">${nd.length === 1 ? `"${escapeAttr(nd[0].name)}" no tiene fecha, por eso no sale aquí.` : `${nd.length} deudas no tienen fecha (${nd.map(d => escapeAttr(d.name)).join(', ')}), por eso no salen aquí.`} <span class="link-inline" onclick="goToItem('debt','${nd[0].id}')">Ponle fecha o abono semanal</span></p>` : ''; })()}
       <div class="total-line"><span>Vence en ese periodo</span><b>${fmtMoney(w.due)}</b></div>
       <div class="total-line" style="border-top:none;margin-top:0;"><span>Conviene ganar</span><b style="color:var(--warn);">${fmtMoney(w.need)}</b></div>
       <p class="item-meta" style="margin-top:8px;">${byDates() ? `"Conviene ganar" es lo que vence en esas fechas.` : `"Conviene ganar" es el mayor entre lo que vence en ese periodo y tu meta promedio (${fmtMoney(c.weeklyTarget)}), para ir guardando para los pagos grandes.`}</p>`;
@@ -1127,7 +1143,7 @@ function renderPaydayCard(c){
   if(due > 0){
     const ok = pay && pay.amount >= due - 0.009;
     cover = `<p class="item-meta" style="margin:10px 0 4px 0;">Con esa plata pagas lo de esta semana: <b style="color:var(--ink);">${fmtMoney(due)}</b>${pay ? (ok ? ` · alcanza y sobran ${fmtMoney(pay.amount - due)}` : ` · faltan ${fmtMoney(due - pay.amount)}`) : ''}</p>
-      ${bills.map(o => `<div class="upcoming-row"><span>${escapeAttr(o.name)} <span class="days">${WEEKDAYS[o.date.getDay()]} ${fmtShortDate(dayISO(o.date))}</span></span><span class="amt">${fmtMoney(o.remaining)}</span></div>`).join('')}`;
+      ${bills.map(o => `<div class="upcoming-row"><span>${escapeAttr(o.name)}${o.flexible?' <span class="days" style="color:var(--accent);">flexible</span>':''} <span class="days">${WEEKDAYS[o.date.getDay()]} ${fmtShortDate(dayISO(o.date))}</span></span><span class="amt">${fmtMoney(o.remaining)}</span></div>`).join('')}`;
   } else if(pay){
     cover = `<p class="item-meta" style="margin:10px 0 0 0;">No te queda nada pendiente esta semana.</p>`;
   }

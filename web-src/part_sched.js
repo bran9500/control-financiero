@@ -154,13 +154,21 @@ function occurrencesInRange(s, e, paidBefore){
     }
   });
   data.debts.forEach(dt => {
-    if(dt.dueDate && (dt.monthlyPayment||0) > 0){
+    if(dt.payFreq === 'week' && (dt.weeklyPayment||0) > 0){
+      // Abono semanal: cae cada semana el día elegido; lo pagado se cuenta por tu semana de pago.
+      const wd = dt.weekday ?? 5;
+      for(let d = addDays(from, (wd - from.getDay() + 7) % 7); d <= to; d = addDays(d, 7)){
+        const base = new Date(d); base.setHours(0,0,0,0);
+        const ws = startOfUserWeek(base), we = addDays(ws, 6); we.setHours(23,59,59,999);
+        push({ key:`d:${dt.id}:w${dayISO(ws)}`, kind:'debt', refId:dt.id, name:dt.name, amount:dt.weeklyPayment, baseDate:base, period:{ s:ws, e:we, key:'w'+dayISO(ws) }, flexible:!!dt.flexible });
+      }
+    } else if(dt.dueDate && (dt.monthlyPayment||0) > 0){
       const day = isoToDate(dt.dueDate).getDate();
       months.forEach(m => {
         const last = new Date(m.getFullYear(), m.getMonth()+1, 0).getDate();
         const base = new Date(m.getFullYear(), m.getMonth(), Math.min(day, last));
         const p = monthPeriod(base);
-        push({ key:`d:${dt.id}:${p.key}`, kind:'debt', refId:dt.id, name:dt.name, amount:dt.monthlyPayment, baseDate:base, period:p });
+        push({ key:`d:${dt.id}:${p.key}`, kind:'debt', refId:dt.id, name:dt.name, amount:dt.monthlyPayment, baseDate:base, period:p, flexible:!!dt.flexible });
       });
     }
     (dt.schedule || []).forEach(sc => {
