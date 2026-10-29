@@ -171,7 +171,10 @@ function pendingQuestions(){
 }
 
 function setGroupCategory(gk, cat){
-  const txs = groupTxs(gk);
+  // Todos los movimientos de ese comercio/persona, no solo los recientes (los viejos también cuentan en los promedios).
+  // No toca los que son un duplicado de algo anotado a mano.
+  const recent = groupTxs(gk);
+  const txs = bankList().filter(t => groupKeyOf(t) === gk && t.auto !== 'manual').sort((a,b) => (recent.includes(b) - recent.includes(a)) || b.date.localeCompare(a.date));
   if(!txs.length || !BANK_CATS[cat]) return;
   const t = txs[0];
   const key = merchantKey(t.desc);
