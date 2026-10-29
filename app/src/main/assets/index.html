@@ -3872,6 +3872,7 @@ function renderMoreTab(c){
   const gastoWeeks = [c.gastoThisWeek, ...pastWeeksForStats.map(w => w.gasto)];
   const avgGasto = gastoWeeks.reduce((s,v)=>s+v,0) / gastoWeeks.length;
   const ppm = periodsPerMonth();
+  const statsFrom = dayISO(pastWeeksForStats.length ? pastWeeksForStats[pastWeeksForStats.length-1].weekStart : periodBounds(new Date()).s);
   const incMonth = avgIncome * ppm;
   const debtFixed = data.debts.filter(d => (d.balance||0) > 0 && !d.flexible).reduce((s,d)=>s+(d.monthlyPayment||0),0);
   const debtFlex = data.debts.filter(d => (d.balance||0) > 0 && d.flexible).reduce((s,d)=>s+(d.monthlyPayment||0),0);
@@ -3887,7 +3888,7 @@ function renderMoreTab(c){
     ${mrow('Pagos de deudas', '−' + fmtMoney(debtFixed), '', 'Los que no se pueden mover')}
     ${debtFlex > 0.004 ? mrow('Deudas flexibles', '−' + fmtMoney(debtFlex), '', 'Se pueden mover o saltar') : ''}
     ${mrow('Tus responsabilidades al mes', fmtMoney(respMonth), 'var(--warn)', `${fmtMoney(respMonth/ppm)} ${PL().por}`, true)}
-    ${mrow('Gasto del día a día', '−' + fmtMoney(varMonth), '', `Hormiga y otros gastos del banco, en promedio`)}
+    <div class="clickable" style="cursor:pointer;" onclick="sheet={type:'daySpend', from:'${statsFrom}'};render()">${mrow('Gasto del día a día ›', '−' + fmtMoney(varMonth), '', `Hormiga y otros gastos del banco, en promedio. Toca para ver cuáles son y corregir los que no van aquí.`)}</div>
     ${mrow(balMonth >= 0 ? 'Te sobra al mes' : 'Te falta al mes (déficit)', fmtMoney(Math.abs(balMonth)), balMonth >= 0 ? 'var(--good)' : 'var(--warn)', `${fmtMoney(Math.abs(balMonth)/ppm)} ${PL().por}`, true)}
     ${debtFlex > 0.004 && balMonth < 0 ? `<p class="item-meta" style="margin:8px 0 0 0;">${balNoFlex >= 0 ? `Si saltas las deudas flexibles, alcanzas y te sobran ${fmtMoney(balNoFlex)} al mes.` : `Aun saltando las deudas flexibles te faltarían ${fmtMoney(-balNoFlex)} al mes.`}</p>` : ''}
     <p class="item-meta" style="margin:8px 0 0 0;">Lo que ganas es el promedio de tus últimas ${allWeeksForAvg.length} ${PL().plural} con datos. Mientras más extractos subas, más exacto queda.</p>
@@ -4192,6 +4193,9 @@ function renderSheet(c){
     body = `<p class="item-meta" style="margin:0 0 10px 0;">${escapeAttr(displayName(t))} · ${fmtShortDate(t.date)} · <b style="color:var(--ink);">${fmtMoney(t.amount)}</b></p>
       ${pend.length ? pend.map(l => `<button class="pick" onclick="pickLoanForRepayment('${t.id}','${l.id}')"><span>${escapeAttr(l.person)}</span><span class="item-meta" style="margin:0;">te debe ${fmtMoney(l.amount - loanRepaid(l))}</span></button>`).join('')
         : '<p class="item-meta">No tienes préstamos pendientes registrados.</p>'}`;
+  } else if(sheet.type === 'daySpend'){
+    title = 'Gasto del día a día';
+    body = renderDaySpendSheet(sheet.from);
   } else if(sheet.type === 'merchant'){
     const t0 = bankList().find(x => groupKeyOf(x) === sheet.gk);
     title = t0 ? escapeAttr(displayName(t0)) : '';
@@ -4336,6 +4340,24 @@ function renderLoansDueCard(){
 }
 
 function openMerchantSheet(dir, key){ sheet = { type:'merchant', gk: dir + '|' + key }; render(); }
+// Lo que la app cuenta como gasto del día a día (hormiga + otros gastos), agrupado por comercio, de mayor a menor.
+function renderDaySpendSheet(fromIso){
+  const from = isoToDate(fromIso);
+  const groups = {};
+  bankList().filter(t => t.dir === 'out' && (t.category === 'gasto' || t.category === 'hormiga') && isoToDate(t.date) >= from).forEach(t => {
+    const gk = groupKeyOf(t);
+    const g = groups[gk] || (groups[gk] = { gk, name: displayName(t), cat: t.category, total: 0, n: 0, last: t.date, desc: t.desc });
+    g.total += t.amount; g.n++; if(t.date > g.last) g.last = t.date;
+  });
+  const manual = data.hormiga.filter(h => isoToDate(h.date) >= from).reduce((s,h) => s + (h.amount||0), 0);
+  const list = Object.values(groups).sort((a,b) => b.total - a.total);
+  const total = list.reduce((s,g) => s + g.total, 0) + manual;
+  return `<p class="item-meta" style="margin:0 0 10px 0;">Desde el ${fmtShortDate(fromIso)}: ${fmtMoney(total)} en total. Primero los más grandes. Si algo no es gasto del día a día (renta, pago del carro, una deuda, plata que te pasaste a ti mismo, trading), tócalo y cámbialo.</p>
+    ${list.map(g => `<button class="pick" onclick="sheet={type:'merchant', gk:${escapeAttr(JSON.stringify(g.gk))}, back:{type:'daySpend', from:'${fromIso}'}};render()">
+      <span style="min-width:0;"><span style="display:block;">${escapeAttr(g.name)}</span><span class="item-meta" style="margin:0;">${g.n} vez${g.n===1?'':'es'} · ${BANK_CATS[g.cat] ? BANK_CATS[g.cat].label : g.cat} · último ${fmtShortDate(g.last)}</span></span>
+      <b style="font-family:var(--mono);font-weight:normal;">${fmtMoney(g.total)}</b></button>`).join('') || '<p class="item-meta">No hay gastos del banco en ese tiempo.</p>'}
+    ${manual > 0 ? `<p class="item-meta" style="margin-top:8px;">Además, ${fmtMoney(manual)} de gastos hormiga que anotaste a mano.</p>` : ''}`;
+}
 function renderMerchantSheet(){
   const gk = sheet.gk;
   const txs = bankList().filter(x => groupKeyOf(x) === gk).sort((a,b) => b.date.localeCompare(a.date));
@@ -4346,7 +4368,8 @@ function renderMerchantSheet(){
     ${t.link ? `<p class="note-good" style="font-size:13px;margin:0 0 10px 0;">${escapeAttr(assignmentOf(t).label)}</p>` : ''}
     <p class="sub-head" style="margin-top:0;">¿Qué es?</p>
     ${catChips(gk, t.dir, t.category)}
-    <button class="btn btn-block" style="margin-top:8px;" onclick="sheet=null;startSourceEdit('${t.id}');setTab('mov');setMovSeg('bank');startSourceEdit('${t.id}')">✎ Ponerle nombre</button>`;
+    <button class="btn btn-block" style="margin-top:8px;" onclick="sheet=null;startSourceEdit('${t.id}');setTab('mov');setMovSeg('bank');startSourceEdit('${t.id}')">✎ Ponerle nombre</button>
+    ${sheet.back ? `<button class="btn btn-block" style="margin-top:8px;" onclick="sheet=${escapeAttr(JSON.stringify(sheet.back))};render()">← Volver a la lista</button>` : ''}`;
 }
 
 // Cuando sale el teclado, la casilla donde escribes se acomoda a la vista (también dentro de la ventana de abajo).
@@ -4620,7 +4643,7 @@ function addShotRow(){
 // Nombre, saludo, colores, fondo, letra y tamaño. Se guardan aparte ('app-prefs')
 // para que las subapps (Inglés, Interés, Notas) también usen los mismos colores.
 const PREFS_KEY = 'app-prefs';
-const APP_VERSION='3.23';
+const APP_VERSION='3.24';
 const ACCENTS = {
   verde:    { label:'Verde',    c:'#6FA98A', on:'#0E1A14' },
   azul:     { label:'Azul',     c:'#5B9BE6', on:'#0B1626' },
