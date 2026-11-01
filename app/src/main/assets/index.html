@@ -434,7 +434,11 @@ function normalizeData(parsed){
     loans: parsed.loans || [],
     settings: {
       hormigaLimit: (parsed.settings && parsed.settings.hormigaLimit) || 50,
-      currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0
+      currentBalance: (parsed.settings && parsed.settings.currentBalance) || 0,
+      // Momento (ms) en que se fijó el saldo: lo anotado antes ya está dentro de ese saldo.
+      // Si nunca se guardó, se toma "ahora" para no volver a sumar lo que ya está en la cuenta.
+      balanceAsOf: (parsed.settings && parsed.settings.balanceAsOf) || Date.now(),
+      balanceDay: (parsed.settings && parsed.settings.balanceDay) || ''
     },
     savings: {
       emergency: { movements: (parsed.savings && parsed.savings.emergency && parsed.savings.emergency.movements) || [] },
@@ -597,7 +601,13 @@ function loadData(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
-      data = normalizeData(JSON.parse(raw));
+      const parsedRaw = JSON.parse(raw);
+      data = normalizeData(parsedRaw);
+      // Primera vez con la marca del saldo: se guarda ya para que no se mueva en cada arranque.
+      if(!(parsedRaw.settings && parsedRaw.settings.balanceAsOf)){
+        data.settings.balanceDay = todayISO();
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
+      }
     }
     loadState = 'ok';
   }catch(e){
@@ -952,7 +962,31 @@ function setHormigaLimit(val){
 }
 function setCurrentBalance(val){
   data.settings.currentBalance = parseMoney(val);
+  data.settings.balanceAsOf = Date.now();
+  data.settings.balanceDay = todayISO();
   saveData(); render();
+}
+
+// ¿Este movimiento pasó DESPUÉS de fijar el saldo? (si no, ya está dentro del saldo)
+// Cuenta si su fecha es posterior al día del saldo, o si es del mismo día y lo anotaste/subiste después.
+function itemCreatedMs(x){
+  const id = x.id || '';
+  const b36 = /^[bs]([0-9a-z]{7,9})_/.exec(id);           // movimientos del banco: 'b'/'s' + Date.now() en base 36
+  if(b36){ const n = parseInt(b36[1], 36); if(n > 1e12) return n; }
+  const m = /(\d{12,})/.exec(id);                          // anotados a mano: letra + Date.now()
+  return m ? +m[1] : 0;
+}
+function isAfterBalance(x){
+  const asOf = (data.settings && data.settings.balanceAsOf) || 0;
+  const snapDay = (data.settings && data.settings.balanceDay) || dayISO(new Date(asOf));
+  if(!x.date) return false;
+  if(x.date > snapDay) return true;
+  if(x.date < snapDay) return false;
+  return itemCreatedMs(x) > asOf;
+}
+function sumAfterBalance(list, s, e){
+  return list.filter(x => { const d = new Date(x.date+'T00:00:00'); return d >= s && d <= e && isAfterBalance(x); })
+             .reduce((a,x) => a + (x.amount||0), 0);
 }
 
 // ---- Ahorro (fondo de emergencia / inversiones) ----
@@ -1096,8 +1130,16 @@ function computeAll(){
   const shortfall = need - availableThisWeek;
 
   const currentBalance = (data.settings && data.settings.currentBalance) || 0;
-  const totalWithBalance = currentBalance + availableThisWeek;
-  const realGap = need - totalWithBalance; // positivo = aún te falta, negativo = te sobra
+  // El saldo ya incluye todo lo que pasó antes de fijarlo: solo se suma/resta lo que vino después.
+  const flowAfterBalance = sumAfterBalance(allIncomes(), weekStart, weekEnd)
+                         - sumAfterBalance(allHormiga(), weekStart, weekEnd)
+                         - sumAfterBalance(allOtherSpend(), weekStart, weekEnd)
+                         - sumAfterBalance(bankList().filter(t => t.category === 'fixed' || t.category === 'debt'), weekStart, weekEnd);
+  // Lo que vence esta semana y AÚN no pagas (lo ya pagado ya salió del saldo).
+  const stillDueThisWeek = occurrencesInRange(weekStart, weekEnd).reduce((s,o)=>s+o.remaining,0);
+  const totalWithBalance = currentBalance + flowAfterBalance;
+  const paidThisWeek = Math.max(0, dueThisWeek - stillDueThisWeek);
+  const realGap = (need - paidThisWeek) - totalWithBalance; // positivo = aún te falta, negativo = te sobra
 
   const totalDebt = data.debts.reduce((s,d)=>s+Math.max(0, d.balance||0),0);
 
@@ -1688,6 +1730,8 @@ function confirmImport(){
   if(p.fromShots) msg += ` · ${p.fromShots} de tus capturas quedaron confirmados`;
   if(p.updateBalance && p.lastBalance !== null){
     data.settings.currentBalance = p.lastBalance;
+    data.settings.balanceAsOf = Date.now() + 1;   // los movimientos de este extracto ya están en ese saldo
+    data.settings.balanceDay = p.to || todayISO(); // el saldo del extracto es al último día que trae
     msg += ` · saldo actualizado a ${fmtMoney(p.lastBalance)}`;
   }
   if(autoLinked) msg += ` · ${autoLinked} pago${autoLinked===1?'':'s'} se conectaron solos`;

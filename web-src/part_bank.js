@@ -505,6 +505,8 @@ function confirmImport(){
   if(p.fromShots) msg += ` · ${p.fromShots} de tus capturas quedaron confirmados`;
   if(p.updateBalance && p.lastBalance !== null){
     data.settings.currentBalance = p.lastBalance;
+    data.settings.balanceAsOf = Date.now() + 1;   // los movimientos de este extracto ya están en ese saldo
+    data.settings.balanceDay = p.to || todayISO(); // el saldo del extracto es al último día que trae
     msg += ` · saldo actualizado a ${fmtMoney(p.lastBalance)}`;
   }
   if(autoLinked) msg += ` · ${autoLinked} pago${autoLinked===1?'':'s'} se conectaron solos`;
