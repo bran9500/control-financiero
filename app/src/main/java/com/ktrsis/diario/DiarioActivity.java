@@ -45,6 +45,12 @@ public class DiarioActivity extends Activity {
         setContentView(root);
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (web != null) web.evaluateJavascript("window.diarioResume&&diarioResume()", null);
+    }
+
     private int sysDimen(String name) {
         int id = getResources().getIdentifier(name, "dimen", "android");
         return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
@@ -60,5 +66,16 @@ public class DiarioActivity extends Activity {
 
     private class Bridge {
         @JavascriptInterface public void goHome() { runOnUiThread(DiarioActivity.this::finish); }
+        /** Operaciones del Rotador entre dos horas (ms). */
+        @JavascriptInterface public String getRotadorOps(double from, double to) {
+            return com.ktrsis.rotador.Engine.get(DiarioActivity.this).opsBetween((long) from, (long) to).toString();
+        }
+        /** Plan de hoy para que la ventanita del Rotador muestre el escalón. */
+        @JavascriptInterface public void setPlan(String json) {
+            getSharedPreferences("diario", MODE_PRIVATE).edit().putString("plan", json).apply();
+        }
+        @JavascriptInterface public void openRotador() {
+            runOnUiThread(() -> startActivity(new android.content.Intent(DiarioActivity.this, com.ktrsis.rotador.MainActivity.class)));
+        }
     }
 }

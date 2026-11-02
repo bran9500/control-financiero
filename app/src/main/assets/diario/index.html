@@ -92,7 +92,7 @@
 <script>
 const NA = !!(window.Android && Android.goHome);
 const KEY = 'diario-data';
-const DEF = { capital: 0, goal: 9, risk: 6, steps: 9, mgLevels: 1, mult: 2, payout: 92, mode: 'target', minStake: 1 };
+const DEF = { capital: 0, goal: 9, risk: 6, steps: 9, mgLevels: 1, mult: 2, payout: 92, mode: 'target', minStake: 1, src: NA ? 'rotador' : 'manual' };
 let D = load();
 let tab = 'hoy', sheet = null, statMonth = null, stakeDraft = null;
 
@@ -143,7 +143,34 @@ function plan(d){
 }
 
 /** Repasa las operaciones del día y saca el estado de cada escalón. */
+// Con el Rotador: cada operación suma o resta; al juntar lo que vale el escalón se marca ✓ y se empieza de cero.
+// Si se pierde el riesgo del escalón, se marca ✕ y también se empieza de cero. Se puede seguir pasando de los 9.
+function calcRot(d){
+  const P = plan(d);
+  const mk = i => ({ i, ops: [], profit: 0, status: 'pending', mg: 0, mgWins: 0, burns: 0, extra: i >= d.steps });
+  const steps = [mk(0)];
+  let cur = steps[0], acc = 0;
+  const all = [];
+  (d.rops || []).forEach(r => {
+    if(r.cut) return;
+    const o = { step: cur.i, lvl: r.s || 0, stake: r.stake || 0, win: !!r.win, v: +r.v || 0, lot: r.lot || 0, burn: !!r.burn, t: r.ts };
+    all.push(o);
+    cur.ops.push(o); cur.profit += o.v;
+    if(o.lvl > 0){ cur.mg++; if(o.win) cur.mgWins++; }
+    if(o.burn) cur.burns++;
+    acc += o.v;
+    if(acc >= P.target - 0.005){ cur.status = 'won'; acc = 0; cur = mk(steps.length); steps.push(cur); }
+    else if(acc <= -P.budget + 0.005){ cur.status = 'lost'; acc = 0; cur = mk(steps.length); steps.push(cur); }
+    else cur.status = 'active';
+  });
+  while(steps.length < d.steps) steps.push(mk(steps.length));
+  if(steps.length > d.steps && !steps[steps.length - 1].ops.length) steps.pop();
+  const ci = steps.findIndex(s => s.status === 'pending' || s.status === 'active');
+  return tail(d, P, steps, all, ci < 0 ? steps.length : ci, 0, 0);
+}
+
 function calc(d){
+  if(d.src === 'rotador') return calcRot(d);
   const P = plan(d);
   const steps = Array.from({ length: d.steps }, (_, i) => ({ i, ops: [], profit: 0, status: 'pending', mg: 0, mgWins: 0 }));
   d.ops.forEach(op => {
@@ -171,16 +198,22 @@ function calc(d){
     // La martingala se calcula sobre lo que de verdad metiste en la operación anterior.
     nextStake = lvl > 0 ? Math.max(P.min, r2(last.stake * d.mult)) : P.stakes[0];
   }
+  d.ops.forEach(o => { o.v = o.win ? o.stake * d.payout / 100 : -o.stake; });
+  return tail(d, P, steps, d.ops, cur, lvl, nextStake);
+}
+function tail(d, P, steps, all, cur, lvl, nextStake){
   const profit = steps.reduce((a, s) => a + s.profit, 0);
-  const ops = d.ops.length, wins = d.ops.filter(o => o.win).length;
-  const entryOps = d.ops.filter(o => o.lvl === 0), mgOps = d.ops.filter(o => o.lvl > 0);
+  const ops = all.length, wins = all.filter(o => o.win).length;
+  const entryOps = all.filter(o => o.lvl === 0), mgOps = all.filter(o => o.lvl > 0);
   const won = steps.filter(s => s.status === 'won'), lost = steps.filter(s => s.status === 'lost');
+  const rot = d.src === 'rotador';
+  const curIdx = rot && cur >= d.steps && !(steps[cur] && steps[cur].ops.length) ? -1 : (cur >= steps.length ? -1 : cur);
   return {
-    P, steps, cur, lvl, nextStake,
+    P, steps, cur: curIdx, lvl, nextStake, all, rot, burns: all.filter(o => o.burn).length,
     profit, pctCap: d.capital ? profit / d.capital * 100 : 0, pctGoal: P.goal$ ? profit / P.goal$ * 100 : 0,
     ops, wins, entryOps: entryOps.length, entryWins: entryOps.filter(o => o.win).length,
     mgOps: mgOps.length, mgWins: mgOps.filter(o => o.win).length,
-    won: won.length, lost: lost.length, done: cur < 0,
+    won: won.length, lost: lost.length, done: rot ? won.length + lost.length >= d.steps : cur < 0,
     opsPerWon: won.length ? won.reduce((a, s) => a + s.ops.length, 0) / won.length : 0,
     first: steps[0]
   };
@@ -197,9 +230,9 @@ function startDay(){
   const cap = num(document.getElementById('cap').value);
   if(!(cap > 0)){ toast('Escribe tu capital de hoy'); return; }
   const c = D.cfg;
-  D.days[today()] = { capital: cap, goal: c.goal, risk: c.risk, steps: c.steps, mgLevels: c.mgLevels, mult: c.mult, payout: c.payout, mode: c.mode, ops: [], closed: {}, note: '', started: Date.now() };
+  D.days[today()] = { capital: cap, goal: c.goal, risk: c.risk, steps: c.steps, mgLevels: c.mgLevels, mult: c.mult, payout: c.payout, mode: c.mode, src: c.src || 'manual', ops: [], closed: {}, note: '', started: Date.now() };
   if(!D.cfg.capital) D.cfg.capital = cap;
-  save(); render();
+  syncRot(); save(); pushPlan(); render();
 }
 function addOp(win){
   const d = D.days[today()]; if(!d) return;
@@ -271,6 +304,11 @@ function renderHoy(){
     h += `<div class="card">
       <p class="card-title">Empezar el día</p>
       <label class="f">Capital de hoy ($)<input id="cap" type="text" inputmode="decimal" value="${cap ? cap.toFixed(2) : ''}" placeholder="2000" oninput="previewPlan(this.value)"></label>
+      <p class="muted" style="margin:4px 0 0 0;">¿Cómo vas a anotar las operaciones?</p>
+      <div class="seg">
+        <button class="${D.cfg.src === 'rotador' ? 'on' : ''}" onclick="D.cfg.src='rotador';save();render()">Con el Rotador (solo)</button>
+        <button class="${D.cfg.src !== 'rotador' ? 'on' : ''}" onclick="D.cfg.src='manual';save();render()">A mano aquí</button>
+      </div>
       <div id="pv">${planHtml(P)}</div>
       <button class="btn btn-solid btn-block" style="margin-top:12px;" onclick="startDay()">Empezar</button>
       <p class="faint" style="margin-top:10px;">${lastDay() ? 'El capital sale del cierre de tu último día. ' : ''}Los porcentajes se cambian en Ajustes.</p>
@@ -279,7 +317,17 @@ function renderHoy(){
   }
   const c = calc(d);
   h += `<div class="card">${summaryHtml(d, c)}${ladderHtml(c, today())}</div>`;
-  if(c.cur >= 0){
+  if(c.rot){
+    const s = c.cur >= 0 ? c.steps[c.cur] : null;
+    const prog = s ? Math.max(0, Math.min(100, s.profit / c.P.target * 100)) : 100;
+    h += `<div class="card">
+      <div class="next-op"><p class="card-title" style="margin:0;">${s ? 'Escalón ' + (c.cur + 1) + (c.cur >= d.steps ? ' (extra)' : ' de ' + d.steps) : 'Escalones completos'}</p><span class="tag mg">Rotador</span></div>
+      ${s ? `<p class="faint" style="margin:0;">Llevas <span class="num ${cls(s.profit)}">${smoney(s.profit)}</span> de ${money(c.P.target)} · si bajas a ${money(-c.P.budget)} el escalón se pierde · ${s.ops.length} op.</p>
+      <div class="progress" style="height:6px;"><span style="width:${prog}%"></span></div>` : `<p class="muted">Ya marcaste los ${d.steps} escalones de hoy. Si sigues operando con el Rotador, se cuentan como escalones extra.</p>`}
+      <p class="faint" style="margin:8px 0 10px 0;">Operas con la ventanita del Rotador: cada <b>Ganó</b> o <b>Perdió</b> se anota aquí solo. Para corregir, usa Deshacer en el Rotador.</p>
+      ${NA ? `<button class="btn btn-solid btn-block" onclick="Android.openRotador()">Abrir Rotador</button>` : ''}
+    </div>`;
+  } else if(c.cur >= 0){
     const s = c.steps[c.cur];
     const isMg = c.lvl > 0;
     const stepBar = d.mode === 'target' ? Math.max(0, Math.min(100, s.profit / c.P.target * 100)) : 0;
@@ -324,9 +372,9 @@ function previewPlan(v){
 }
 
 function dayDetailHtml(day, d, c){
-  const rows = d.ops.map((o, i) => `<tr><td>${o.step + 1}</td><td>${o.lvl ? '<span class="tag mg">MG' + (d.mgLevels > 1 ? o.lvl : '') + '</span>' : 'Entrada'}</td>
+  const rows = c.all.map((o, i) => `<tr><td>${o.step + 1}</td><td>${c.rot ? 'L' + (o.lot + 1) + ' ' + (o.lvl ? '<span class="tag mg">P' + (o.lvl + 1) + '</span>' : 'P1') : (o.lvl ? '<span class="tag mg">MG' + (d.mgLevels > 1 ? o.lvl : '') + '</span>' : 'Entrada')}${o.burn ? ' 🔥' : ''}</td>
     <td class="num">${money(o.stake)}</td><td>${o.win ? '<span class="pos">✓</span>' : '<span class="neg">✕</span>'}</td>
-    <td class="num ${o.win ? 'pos' : 'neg'}">${smoney(o.win ? o.stake * d.payout / 100 : -o.stake)}</td></tr>`).reverse().join('');
+    <td class="num ${o.win ? 'pos' : 'neg'}">${smoney(o.v)}</td></tr>`).reverse().join('');
   const f = c.first;
   return `<div class="card">
     <p class="card-title">Números del día</p>
@@ -335,9 +383,11 @@ function dayDetailHtml(day, d, c){
     <div class="kv"><span>Primer escalón</span><b>${f.status === 'won' ? '<span class="pos">Logrado</span> en ' + f.ops.length + ' op.' : f.status === 'lost' ? '<span class="neg">Perdido</span>' : 'Sin terminar'}</b></div>
     <div class="kv"><span>Operaciones por escalón logrado</span><b class="num">${c.won ? c.opsPerWon.toFixed(1) : '—'}</b></div>
     <div class="kv"><span>Capital</span><b class="num">${money(d.capital)} → ${money(d.capital + c.profit)}</b></div>
-    <div class="kv"><span>Reglas</span><b class="faint">${d.goal}% meta · ${d.risk}% riesgo · ${d.steps} escalones · ${d.mgLevels ? d.mgLevels + ' MG ×' + d.mult : 'sin MG'} · ${d.payout}%</b></div>
+    ${c.rot ? `<div class="kv"><span>Lotes quemados</span><b class="num">${c.burns}</b></div>
+    <div class="kv"><span>Reglas</span><b class="faint">${d.goal}% meta · ${d.risk}% riesgo · ${d.steps} escalones · operado con el Rotador</b></div>`
+    : `<div class="kv"><span>Reglas</span><b class="faint">${d.goal}% meta · ${d.risk}% riesgo · ${d.steps} escalones · ${d.mgLevels ? d.mgLevels + ' MG ×' + d.mult : 'sin MG'} · ${d.payout}%</b></div>`}
   </div>
-  ${d.ops.length ? `<div class="card"><p class="card-title">Operaciones</p>
+  ${c.all.length ? `<div class="card"><p class="card-title">Operaciones${c.rot ? ' <span class="faint">(del Rotador)</span>' : ''}</p>
     <table><tr><th>Esc.</th><th>Tipo</th><th>Monto</th><th></th><th>Resultado</th></tr>${rows}</table></div>` : ''}
   <div class="card"><p class="card-title">Nota del día</p>
     <textarea placeholder="Cómo te sentiste, qué par, qué salió bien o mal…" oninput="setNote('${day}', this.value)">${esc(d.note)}</textarea></div>`;
@@ -502,7 +552,13 @@ function renderAjustes(){
       ${f('payout', 'Payout %', '1')}
       ${f('minStake', 'Operación mínima ($)', '0.5')}
     </div>
-    <p class="muted" style="margin:6px 0 4px 0;">¿Cuándo se logra un escalón?</p>
+    <p class="muted" style="margin:6px 0 4px 0;">Operaciones</p>
+    <div class="seg">
+      <button class="${c.src === 'rotador' ? 'on' : ''}" onclick="setCfg('src','rotador')">Del Rotador (automático)</button>
+      <button class="${c.src !== 'rotador' ? 'on' : ''}" onclick="setCfg('src','manual')">A mano</button>
+    </div>
+    <p class="faint" style="margin:0 0 10px 0;">${c.src === 'rotador' ? `Cada vez que juntas ${money(P.target)} de ganancia con el Rotador se marca un escalón; si pierdes ${money(P.budget)} se marca perdido. Las martingalas y los lotes los pone el Rotador.` : 'Anotas cada operación con Ganada o Perdida aquí mismo.'}</p>
+    <p class="muted" style="margin:6px 0 4px 0;">¿Cuándo se logra un escalón? <span class="faint">(a mano)</span></p>
     <div class="seg">
       <button class="${c.mode === 'target' ? 'on' : ''}" onclick="setCfg('mode','target')">Al ganar lo que vale el escalón</button>
       <button class="${c.mode === 'one' ? 'on' : ''}" onclick="setCfg('mode','one')">Con 1 operación ganada</button>
@@ -519,19 +575,23 @@ function syncToday(k, n){
   d[k] = n;
 }
 function setCfg(k, v){
-  if(k === 'mode'){ D.cfg.mode = v; syncToday('mode', v); save(); render(); return; }
+  if(k === 'mode' || k === 'src'){
+    D.cfg[k] = v; syncToday(k, v);
+    if(k === 'src'){ const d = D.days[today()]; if(d && v === 'rotador' && d.ops.length){ toast('Hoy ya tiene operaciones a mano: el cambio vale desde mañana'); d.src = 'manual'; } syncRot(); }
+    save(); pushPlan(); render(); return;
+  }
   let n = num(v);
   if(k === 'steps') n = Math.max(1, Math.min(20, Math.round(n) || 1));
   if(k === 'mgLevels') n = Math.max(0, Math.min(4, Math.round(n)));
   if(k === 'mult') n = Math.max(1, n || 2);
   if(k === 'minStake') n = Math.max(0, n);
-  D.cfg[k] = n; syncToday(k, n); save();
+  D.cfg[k] = n; syncToday(k, n); save(); pushPlan();
   refreshPlan();
 }
 function setTodayCapital(v){
   const d = D.days[today()]; const n = num(v);
   if(!d || !(n > 0)) return;
-  d.capital = n; save(); refreshPlan();
+  d.capital = n; save(); pushPlan(); refreshPlan();
 }
 function refreshPlan(){
   const el = document.getElementById('pv2'); if(!el) return;
@@ -546,11 +606,53 @@ function render(){
   document.getElementById('tabs').innerHTML = [['hoy', 'Hoy'], ['hist', 'Historial'], ['stats', 'Estadísticas'], ['ajustes', 'Ajustes']]
     .map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="tab='${k}';stakeDraft=null;sheet=null;renderSheet();render();scrollTo(0,0)">${l}</button>`).join('');
 }
+// ---------- conexión con el Rotador ----------
+function dayRange(k){ const a = new Date(k + 'T00:00:00').getTime(); return [a, a + 86400000 - 1]; }
+function fetchRot(k){
+  if(!(window.Android && Android.getRotadorOps)) return null;
+  try{ const [a, b] = dayRange(k); return JSON.parse(Android.getRotadorOps(a, b) || '[]'); }catch(e){ return null; }
+}
+/** Copia las operaciones del Rotador a cada día (así quedan guardadas aunque borres sesiones en el Rotador). */
+function syncRot(){
+  let changed = false;
+  const t = today();
+  // Si hoy operaste con el Rotador y no habías empezado el día, se empieza solo con tu capital.
+  if(!D.days[t] && D.cfg.src === 'rotador'){
+    const ops = fetchRot(t);
+    const cap = suggestedCapital();
+    if(ops && ops.length && cap > 0){
+      const c = D.cfg;
+      D.days[t] = { capital: cap, goal: c.goal, risk: c.risk, steps: c.steps, mgLevels: c.mgLevels, mult: c.mult, payout: c.payout, mode: c.mode, src: 'rotador', ops: [], closed: {}, note: '', started: Date.now(), rops: ops };
+      changed = true;
+    }
+  }
+  Object.keys(D.days).forEach(k => {
+    const d = D.days[k]; if(d.src !== 'rotador') return;
+    const ops = fetchRot(k); if(!ops) return;
+    if(ops.length || k === t){
+      const before = JSON.stringify(d.rops || []), after = JSON.stringify(ops);
+      if(before !== after && (ops.length >= (d.rops || []).length || k === t)){ d.rops = ops; changed = true; }
+    }
+  });
+  if(changed) save();
+  return changed;
+}
+/** Le pasa a la ventanita del Rotador lo que vale el escalón de hoy. */
+function pushPlan(){
+  if(!(window.Android && Android.setPlan)) return;
+  const d = D.days[today()] || Object.assign({}, D.cfg, { capital: D.cfg.capital || 0 });
+  const P = plan(d);
+  try{ Android.setPlan(JSON.stringify({ date: today(), target: r2(P.target), riskStep: r2(P.budget), steps: d.steps, src: d.src || D.cfg.src })); }catch(e){}
+}
+window.diarioResume = function(){ if(syncRot() && !sheet) render(); };
+setInterval(() => { if(document.hidden) return; const d = D.days[today()]; if((d && d.src === 'rotador') || D.cfg.src === 'rotador'){ if(syncRot() && !sheet && !(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName))) render(); } }, 3000);
+
 window.diarioBack = function(){
   if(sheet){ sheet = null; renderSheet(); return true; }
   if(tab !== 'hoy'){ tab = 'hoy'; render(); return true; }
   return false;
 };
+syncRot(); pushPlan();
 render();
 </script>
 </body>

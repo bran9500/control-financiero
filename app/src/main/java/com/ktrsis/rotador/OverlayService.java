@@ -41,6 +41,8 @@ public class OverlayService extends Service {
     private final View[] lotBar = new View[Engine.MAX];
     private final View[] lotCell = new View[Engine.MAX];
     private LinearLayout[] lotRows;
+    private TextView escTxt;
+    private static final int GOLD_ESC = 0xFFD9B45A;
     private long lastPress = 0;
     private boolean cutArmed = false;
     private TextView winBtn, lossBtn;
@@ -203,6 +205,11 @@ public class OverlayService extends Service {
         sessTxt.setTypeface(Typeface.MONOSPACE);
         panel.addView(sessTxt);
 
+        // Escalón del Diario (se llena solo con estas operaciones)
+        escTxt = text("", 11, GOLD_ESC, true);
+        escTxt.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        panel.addView(escTxt);
+
         // Riesgo y meta del día: barra con el riesgo a la izquierda y la meta a la derecha
         planBox = new LinearLayout(this);
         planBox.setOrientation(LinearLayout.VERTICAL);
@@ -316,6 +323,9 @@ public class OverlayService extends Service {
         double net = engine.net();
         sessTxt.setText(String.format(Locale.US, "%d ops · %s", engine.ops, Engine.money(net)));
         sessTxt.setTextColor(net > 0 ? WIN : net < 0 ? LOSS : MUTED);
+        com.ktrsis.diario.Escalera esc = com.ktrsis.diario.Escalera.today(this);
+        escTxt.setText(esc.line());
+        escTxt.setVisibility(esc.ok ? View.VISIBLE : View.GONE);
         // renderPlan(net);
         int i = engine.turn;
         if (i < 0) {

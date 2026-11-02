@@ -303,6 +303,29 @@ public class Engine {
 
     public String sessionsJson() { return sessions.toString(); }
 
+    /** Operaciones (ganó / perdió / cortó) entre dos horas, de la sesión actual y las archivadas, de la más vieja a la más nueva. */
+    public JSONArray opsBetween(long from, long to) {
+        List<JSONObject> out = new ArrayList<>();
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        List<JSONArray> logs = new ArrayList<>();
+        logs.add(log);
+        for (int k = 0; k < sessions.length(); k++) {
+            JSONObject so = sessions.optJSONObject(k);
+            if (so != null && so.optJSONArray("log") != null) logs.add(so.optJSONArray("log"));
+        }
+        for (JSONArray lg : logs) for (int i = 0; i < lg.length(); i++) {
+            JSONObject e = lg.optJSONObject(i); if (e == null) continue;
+            long ts = e.optLong("ts", 0);
+            if (ts < from || ts > to) continue;
+            if (!seen.add(ts + ":" + e.optInt("lot") + ":" + e.optString("r"))) continue;
+            out.add(e);
+        }
+        out.sort((x, y) -> Long.compare(x.optLong("ts"), y.optLong("ts")));
+        JSONArray r = new JSONArray();
+        for (JSONObject e : out) r.put(e);
+        return r;
+    }
+
     public void deleteSession(int index) {
         if (index < 0 || index >= sessions.length()) return;
         sessions.remove(index);
