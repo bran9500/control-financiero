@@ -101,7 +101,7 @@ function liveHtml(){
 }
 function render(){
   document.getElementById('app').innerHTML = `
-    <div class="topbar"><div><p class="page-title">Guardián</p><p class="sub">Tu riesgo y tu meta, vigilados en vivo</p></div>
+    <div class="topbar"><div><p class="page-title">Guardián</p><p class="sub">Riesgo y meta en vivo + Trazador, en una sola ventanita</p></div>
       ${NA ? `<button class="icon-btn" onclick="Android.goHome()">⌂</button>` : ''}</div>
     ${liveHtml()}
     <div class="card">
@@ -126,6 +126,7 @@ function render(){
         <li>Abre tu broker con el <b>saldo visible arriba</b>. La ventanita del Guardián lee tu saldo cada 2 segundos.</li>
         <li>Al llegar a la <b>meta</b> o tocar el <b>riesgo</b>, toda la pantalla se pone verde o roja, vibra y suena.</li>
         <li>Con <b>⟳</b> en la ventanita, el saldo de ese momento pasa a ser tu nuevo capital de inicio.</li>
+        <li>Debajo están <b>Zona</b>, <b>Trazar</b> y <b>Borrar</b> del Trazador. Con <b>📐</b> los muestras u ocultas.</li>
       </ol>
     </div>
     <div class="card">
@@ -133,7 +134,7 @@ function render(){
       <label class="f">Esperar antes del aviso de riesgo (segundos)<input type="number" inputmode="numeric" step="1" min="0" value="${S.delay}" oninput="setNum('delay', this)"></label>
       <p class="muted" style="margin-top:8px;">El broker descuenta la apuesta apenas la abres. Con operaciones de 3 segundos, 6 segundos evita falsas alarmas.</p>
       <label class="chk"><input type="checkbox" ${S.sound?'checked':''} onchange="set('sound', this.checked)"> Sonido de alarma (suena aunque el teléfono esté en silencio)</label>
-      <p class="muted" style="margin-top:10px;">El Guardián y el Bot Señales usan la misma grabación de pantalla: usa uno a la vez.</p>
+      <p class="muted" style="margin-top:10px;">El Guardián ya trae el Trazador adentro. El Bot Señales usa otra grabación de pantalla: úsalo aparte.</p>
     </div>`;
 }
 load(); render();

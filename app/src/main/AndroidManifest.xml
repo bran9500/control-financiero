@@ -67,16 +67,12 @@
                 android:value="Ventana flotante de conteo de operaciones" />
         </service>
 
-        <!-- Subapp: Trazador (zonas y canal encima del gráfico del broker) -->
+        <!-- Subapp: Trazador (ahora va dentro de la ventanita del Guardián) -->
         <activity
             android:name="com.ktrsis.trazador.TrazadorActivity"
             android:label="Trazador"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-        <service
-            android:name="com.ktrsis.trazador.TrazadorService"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
 
         <!-- Subapp: Bot Señales -->
         <activity
@@ -122,6 +118,14 @@
         <activity
             android:name="com.ktrsis.interes.InterestActivity"
             android:label="Interés compuesto"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Subapp: Diario de trading (9 escalones, martingala, estadísticas) -->
+        <activity
+            android:name="com.ktrsis.diario.DiarioActivity"
+            android:label="Diario de trading"
             android:exported="false"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize" />

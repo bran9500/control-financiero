@@ -85,6 +85,11 @@ public class GuardService extends Service {
     private TextRecognizer ocr;
     private volatile boolean ocrBusy = false;
 
+    // Trazador dentro de la misma ventanita (usa esta misma grabación de pantalla)
+    private com.ktrsis.trazador.TrazadorCore traz;
+    private View trazBox;
+    private TextView trazToggle;
+
     private final Handler ui = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
 
@@ -122,6 +127,7 @@ public class GuardService extends Service {
             projection.registerCallback(new MediaProjection.Callback() {
                 @Override public void onStop() { ui.post(GuardService.this::stopSelf); }
             }, ui);
+            if (intent.getBooleanExtra("traz", false)) prefs.edit().putBoolean("traz", true).apply();
             balance = Double.NaN; state = 0; alerted = 0; riskSince = 0; goalHits = 0;
             start = "manual".equals(prefs.getString("capMode", "auto")) ? prefs.getFloat("capital", 0) : Double.NaN;
             if (!(start > 0)) start = Double.NaN;
@@ -139,6 +145,7 @@ public class GuardService extends Service {
         running = false;
         ui.removeCallbacksAndMessages(null);
         try { if (panel != null) wm.removeView(panel); } catch (Exception ignored) {}
+        if (traz != null) traz.release();
         hideAlert();
         try { if (display != null) display.release(); } catch (Exception ignored) {}
         synchronized (frameLock) { if (latest != null) { latest.close(); latest = null; } }
@@ -155,8 +162,8 @@ public class GuardService extends Service {
         PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, GuardActivity.class),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification n = new Notification.Builder(this, "guardian")
-                .setContentTitle("Guardián activo")
-                .setContentText("Vigilando tu riesgo y tu meta")
+                .setContentTitle("Guardián + Trazador activo")
+                .setContentText("Vigilando tu riesgo y tu meta · zonas en la misma ventanita")
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentIntent(pi).setOngoing(true).build();
         if (Build.VERSION.SDK_INT >= 29) startForeground(3, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
@@ -222,6 +229,26 @@ public class GuardService extends Service {
                     .addOnSuccessListener(t -> { ocrBusy = false; onText(t, cw); })
                     .addOnFailureListener(e -> ocrBusy = false);
         });
+    }
+
+    /** Cuadro completo de la pantalla para el Trazador (se llama en el hilo de fondo). */
+    private Bitmap fullFrame() {
+        synchronized (frameLock) {
+            if (latest == null) return null;
+            try {
+                Image.Plane p = latest.getPlanes()[0];
+                ByteBuffer buf = p.getBuffer();
+                int w = latest.getWidth(), h = latest.getHeight();
+                int padW = p.getRowStride() / p.getPixelStride();
+                Bitmap full = Bitmap.createBitmap(padW, h, Bitmap.Config.ARGB_8888);
+                buf.rewind();
+                full.copyPixelsFromBuffer(buf);
+                if (padW == w) return full;
+                Bitmap crop = Bitmap.createBitmap(full, 0, 0, w, h);
+                full.recycle();
+                return crop;
+            } catch (Exception e) { return null; }
+        }
     }
 
     private Bitmap topCrop(Image img, Rect hide) {
@@ -362,10 +389,14 @@ public class GuardService extends Service {
         TextView title = text("⠿ GUARDIÁN", 8, GOLD, true);
         TextView reset = text("⟳", 13, MUTED, true);
         TextView close = text("×", 15, MUTED, true);
+        trazToggle = text("📐", 11, MUTED, false);
+        trazToggle.setPadding(dp(5), 0, dp(3), 0);
         reset.setPadding(dp(5), 0, dp(5), 0); close.setPadding(dp(5), 0, 0, 0);
         top.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        top.addView(reset); top.addView(close);
-        panel.addView(top, new LinearLayout.LayoutParams(w, dp(19)));
+        top.addView(trazToggle); top.addView(reset); top.addView(close);
+        LinearLayout.LayoutParams topLp = new LinearLayout.LayoutParams(-1, dp(19));
+        top.setMinimumWidth(w);
+        panel.addView(top, topLp);
 
         balTxt = text("—", 22, FG, true);
         balTxt.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
@@ -382,13 +413,29 @@ public class GuardService extends Service {
         balTxt.setTypeface(Typeface.MONOSPACE);
         balTxt.setTextColor(MUTED);
         plTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
-        panel.addView(lvlTxt, new LinearLayout.LayoutParams(w, -2));
-        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(w, dp(6)); bl.topMargin = dp(4); bl.bottomMargin = dp(3);
+        panel.addView(lvlTxt, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, dp(6)); bl.topMargin = dp(4); bl.bottomMargin = dp(3);
         panel.addView(bar, bl);
-        panel.addView(stTxt, new LinearLayout.LayoutParams(w, -2));
-        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(w, -2); sl.topMargin = dp(2);
+        panel.addView(stTxt, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1, -2); sl.topMargin = dp(2);
         panel.addView(balTxt, sl);
         panel.addView(plTxt);
+
+        // Trazador: Zona / Trazar / Borrar debajo del Guardián, con la misma grabación de pantalla
+        traz = new com.ktrsis.trazador.TrazadorCore(this, wm, bg, new com.ktrsis.trazador.TrazadorCore.FrameSource() {
+            @Override public Bitmap frame() { return fullFrame(); }
+            @Override public Rect hide() { return panelRect(); }
+        });
+        trazBox = traz.controls();
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(dp(176), -2); tl.topMargin = dp(4);
+        View sep = new View(this); sep.setBackgroundColor(LINE);
+        LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(-1, dp(1)); sepLp.topMargin = dp(5);
+        LinearLayout tw = new LinearLayout(this); tw.setOrientation(LinearLayout.VERTICAL);
+        tw.addView(sep, sepLp); tw.addView(trazBox, tl);
+        trazBox = tw;
+        panel.addView(tw, new LinearLayout.LayoutParams(-2, -2));
+        setTrazVisible(prefs.getBoolean("traz", true));
+        trazToggle.setOnClickListener(v -> setTrazVisible(trazBox.getVisibility() != View.VISIBLE));
 
         close.setOnClickListener(v -> stopSelf());
         // ⟳: el saldo actual pasa a ser el capital de inicio (empezar de nuevo)
@@ -400,6 +447,16 @@ public class GuardService extends Service {
         panel.setOnTouchListener(drag);
         wm.addView(panel, lp);
         render();
+    }
+
+    /** Muestra u oculta la parte del Trazador (📐). Al ocultarla también se quitan las líneas. */
+    private void setTrazVisible(boolean on) {
+        prefs.edit().putBoolean("traz", on).apply();
+        trazBox.setVisibility(on ? View.VISIBLE : View.GONE);
+        trazToggle.setTextColor(on ? GOLD : MUTED);
+        trazToggle.setAlpha(on ? 1f : 0.6f);
+        if (on) traz.attachLines(); else traz.detachLines();
+        try { if (panel.isAttachedToWindow()) wm.updateViewLayout(panel, lp); } catch (Exception ignored) {}
     }
 
     private static String fmt0(double v) { return Math.abs(v - Math.rint(v)) < 1e-9 ? String.valueOf((long) Math.rint(v)) : String.format(Locale.US, "%.1f", v); }

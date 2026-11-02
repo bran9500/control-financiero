@@ -242,7 +242,7 @@ function renderOnboarding(){
 // ---------------------------------------------------------------- respaldo completo
 function fullBackupObject(){
   const extra = {};
-  ['ingles-data','interes-data','notas-data','notes-data','rotador-data'].forEach(k => { try{ const v = localStorage.getItem(k); if(v) extra[k] = v; }catch(e){} });
+  ['ingles-data','interes-data','notas-data','notes-data','rotador-data','diario-data'].forEach(k => { try{ const v = localStorage.getItem(k); if(v) extra[k] = v; }catch(e){} });
   try{ for(let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if(k && k !== STORAGE_KEY && k !== PREFS_KEY && !(k in extra)) extra[k] = localStorage.getItem(k); } }catch(e){}
   return { app:'control-financiero', version:2, date: todayISO(), ledger: data, prefs, extra };
 }

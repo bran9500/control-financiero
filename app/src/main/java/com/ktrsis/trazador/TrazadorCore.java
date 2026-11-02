@@ -1,15 +1,7 @@
 package com.ktrsis.trazador;
 
-import android.app.Activity;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.app.Service;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.DashPathEffect;
@@ -18,21 +10,11 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.IBinder;
 import android.os.Looper;
-import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
@@ -49,7 +31,6 @@ import com.ktrsis.bot.Market;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -57,141 +38,110 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Trazador: ventana flotante encima del broker.
+ * Trazador como pieza: botones Zona / Trazar / Borrar + capa de líneas encima del gráfico.
+ * No tiene su propia grabación de pantalla: le pide el cuadro a quien lo usa (el Guardián),
+ * así las dos cosas funcionan juntas en una sola ventanita flotante.
  *  - "Zona": en una temporalidad alta, encuentra la resistencia y el soporte más fuertes y los guarda en PRECIO.
  *  - "Trazar": en la temporalidad en la que operas, dibuja esas zonas guardadas y el canal diagonal del último movimiento.
- * Lee la pantalla con la misma captura que el Guardián y los precios del eje derecho con ML Kit (sin internet).
  */
-public class TrazadorService extends Service {
-    public static final String EXTRA_CODE = "code", EXTRA_DATA = "data";
-    public static volatile boolean running = false;
+public class TrazadorCore {
+    public interface FrameSource {
+        /** Cuadro completo de la pantalla (se llama en el hilo de fondo). */
+        Bitmap frame();
+        /** Zona de la propia ventanita, para taparla y no leerse a sí mismo. */
+        Rect hide();
+    }
 
-    private static final int BG = 0xEE14181F, FG = 0xFFE8EBF0, MUTED = 0xFF9AA3AE, GOLD = 0xFFD9B45A;
+    private static final int FG = 0xFFE8EBF0, MUTED = 0xFF9AA3AE;
     // Colores que el detector de velas NO confunde con velas rojas o verdes.
     static final int C_RES = 0xFFFF5AF0, C_SUP = 0xFF3FB8FF, C_CHAN = 0xFFFFE14D, C_EXT = 0xFFFFFFFF;
 
+    private final Context ctx;
+    private final WindowManager wm;
+    private final Handler bg;
     private final Handler ui = new Handler(Looper.getMainLooper());
-    private HandlerThread bgThread;
-    private Handler bg;
-    private MediaProjection projection;
-    private VirtualDisplay display;
-    private ImageReader reader;
-    private final Object frameLock = new Object();
-    private Image latest;
-    private int capW, capH, capDpi;
-    private TextRecognizer ocr;
-    private SharedPreferences prefs;
+    private final FrameSource src;
+    private final SharedPreferences prefs;
+    private final TextRecognizer ocr;
 
-    private WindowManager wm;
     private LinesView lines;
-    private WindowManager.LayoutParams lpLines, lpPanel;
-    private LinearLayout panel;
     private TextView status;
     private volatile boolean busy = false;
 
-    @Override public IBinder onBind(Intent intent) { return null; }
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        prefs = getSharedPreferences("trazador", MODE_PRIVATE);
-        bgThread = new HandlerThread("trazador");
-        bgThread.start();
-        bg = new Handler(bgThread.getLooper());
+    public TrazadorCore(Context ctx, WindowManager wm, Handler bg, FrameSource src) {
+        this.ctx = ctx; this.wm = wm; this.bg = bg; this.src = src;
+        prefs = ctx.getSharedPreferences("trazador", Context.MODE_PRIVATE);
         ocr = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
     }
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        startInForeground();
-        if (projection == null) {
-            if (intent == null || !intent.hasExtra(EXTRA_DATA)) { stopSelf(); return START_NOT_STICKY; }
-            int code = intent.getIntExtra(EXTRA_CODE, Activity.RESULT_CANCELED);
-            Intent data = intent.getParcelableExtra(EXTRA_DATA);
-            MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-            try { projection = mpm.getMediaProjection(code, data); } catch (Exception e) { projection = null; }
-            if (projection == null) { stopSelf(); return START_NOT_STICKY; }
-            projection.registerCallback(new MediaProjection.Callback() {
-                @Override public void onStop() { ui.post(TrazadorService.this::stopSelf); }
-            }, ui);
-            startCapture();
-            showOverlays();
-            running = true;
-        }
-        return START_NOT_STICKY;
+    // ---------------- vistas ----------------
+    private int dp(float v) { return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, ctx.getResources().getDisplayMetrics()); }
+    private GradientDrawable rounded(int color, float r) {
+        GradientDrawable g = new GradientDrawable(); g.setColor(color); g.setCornerRadius(dp(r)); return g;
+    }
+    private TextView btn(String s, int color) {
+        TextView t = new TextView(ctx); t.setText(s); t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12); t.setTextColor(color);
+        t.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
+        t.setGravity(Gravity.CENTER); t.setPadding(dp(8), dp(6), dp(8), dp(6));
+        t.setBackground(rounded(0xFF232A35, 8)); return t;
     }
 
-    @Override
-    public void onDestroy() {
-        running = false;
-        ui.removeCallbacksAndMessages(null);
-        try { if (panel != null) wm.removeView(panel); } catch (Exception ignored) {}
-        try { if (lines != null) wm.removeView(lines); } catch (Exception ignored) {}
-        try { if (display != null) display.release(); } catch (Exception ignored) {}
-        synchronized (frameLock) { if (latest != null) { latest.close(); latest = null; } }
-        try { if (reader != null) reader.close(); } catch (Exception ignored) {}
-        try { if (projection != null) projection.stop(); } catch (Exception ignored) {}
+    /** Botones y texto de estado, para meterlos dentro de otra ventanita. */
+    public View controls() {
+        LinearLayout box = new LinearLayout(ctx);
+        box.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout row = new LinearLayout(ctx);
+        TextView zona = btn("Zona", C_RES), trazar = btn("Trazar", C_CHAN), borrar = btn("Borrar", FG);
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, -2, 1); bp.setMargins(0, dp(4), dp(4), 0);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(0, -2, 1); bl.setMargins(0, dp(4), 0, 0);
+        row.addView(zona, bp); row.addView(trazar, bp); row.addView(borrar, bl);
+        box.addView(row, new LinearLayout.LayoutParams(-1, -2));
+
+        status = new TextView(ctx); status.setTextColor(MUTED); status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        status.setMaxWidth(dp(190)); status.setPadding(0, dp(4), 0, 0);
+        status.setText("1) En M15 o M5 toca Zona.  2) En tu temporalidad toca Trazar.");
+        box.addView(status, new LinearLayout.LayoutParams(-1, -2));
+
+        zona.setOnClickListener(v -> run(true));
+        trazar.setOnClickListener(v -> run(false));
+        borrar.setOnClickListener(v -> { clear(); setStatus("Líneas borradas. Mantén presionado Borrar para olvidar las zonas guardadas."); });
+        borrar.setOnLongClickListener(v -> {
+            SharedPreferences.Editor e = prefs.edit();
+            for (String k : prefs.getAll().keySet()) if (k.startsWith("z:")) e.remove(k);
+            e.apply(); clear();
+            Toast.makeText(ctx, "Olvidé todas las zonas guardadas", Toast.LENGTH_SHORT).show();
+            setStatus("Zonas borradas.");
+            return true;
+        });
+        return box;
+    }
+
+    /** Capa transparente de líneas (toda la pantalla, no recibe toques). */
+    public void attachLines() {
+        if (lines != null) return;
+        lines = new LinesView(ctx);
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT);
+        lp.gravity = Gravity.TOP | Gravity.START;
+        if (Build.VERSION.SDK_INT >= 28) lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        try { wm.addView(lines, lp); } catch (Exception e) { lines = null; }
+    }
+
+    public void detachLines() {
+        if (lines != null) { try { wm.removeView(lines); } catch (Exception ignored) {} lines = null; }
+    }
+
+    public void clear() { if (lines != null) lines.set(new ArrayList<>()); }
+
+    public void release() {
+        detachLines();
         try { ocr.close(); } catch (Exception ignored) {}
-        bgThread.quitSafely();
-        super.onDestroy();
     }
 
-    private void startInForeground() {
-        NotificationManager nm = getSystemService(NotificationManager.class);
-        nm.createNotificationChannel(new NotificationChannel("trazador", "Trazador de zonas", NotificationManager.IMPORTANCE_MIN));
-        PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, TrazadorActivity.class),
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification n = new Notification.Builder(this, "trazador")
-                .setContentTitle("Trazador activo")
-                .setContentText("Toca Zona o Trazar en la ventanita")
-                .setSmallIcon(android.R.drawable.ic_menu_edit)
-                .setContentIntent(pi).setOngoing(true).build();
-        if (Build.VERSION.SDK_INT >= 29) startForeground(5, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
-        else startForeground(5, n);
-    }
-
-    // ---------------- captura ----------------
-    private void startCapture() {
-        WindowManager w = (WindowManager) getSystemService(WINDOW_SERVICE);
-        if (Build.VERSION.SDK_INT >= 30) {
-            Rect r = w.getCurrentWindowMetrics().getBounds();
-            capW = r.width(); capH = r.height();
-        } else {
-            DisplayMetrics dm = new DisplayMetrics();
-            //noinspection deprecation
-            w.getDefaultDisplay().getRealMetrics(dm);
-            capW = dm.widthPixels; capH = dm.heightPixels;
-        }
-        capDpi = getResources().getDisplayMetrics().densityDpi;
-        reader = ImageReader.newInstance(capW, capH, PixelFormat.RGBA_8888, 3);
-        reader.setOnImageAvailableListener(rd -> {
-            Image img;
-            try { img = rd.acquireLatestImage(); } catch (Exception e) { return; }
-            if (img == null) return;
-            synchronized (frameLock) { if (latest != null) latest.close(); latest = img; }
-        }, bg);
-        display = projection.createVirtualDisplay("trazador", capW, capH, capDpi,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.getSurface(), null, bg);
-    }
-
-    private Bitmap frame() {
-        synchronized (frameLock) {
-            if (latest == null) return null;
-            try {
-                Image.Plane p = latest.getPlanes()[0];
-                ByteBuffer buf = p.getBuffer();
-                int w = latest.getWidth(), h = latest.getHeight();
-                int padW = p.getRowStride() / p.getPixelStride();
-                Bitmap full = Bitmap.createBitmap(padW, h, Bitmap.Config.ARGB_8888);
-                buf.rewind();
-                full.copyPixelsFromBuffer(buf);
-                if (padW == w) return full;
-                Bitmap crop = Bitmap.createBitmap(full, 0, 0, w, h);
-                full.recycle();
-                return crop;
-            } catch (Exception e) { return null; }
-        }
-    }
+    private void setStatus(String s) { if (status != null) status.setText(s); }
 
     // ---------------- lectura y análisis ----------------
     private static final Pattern PRICE = Pattern.compile("^\\s*([0-9]{1,6})[.,]([0-9]{2,6})\\s*$");
@@ -212,14 +162,17 @@ public class TrazadorService extends Service {
     private void run(boolean saveZone) {
         if (busy) return;
         busy = true;
+        attachLines();
         setStatus("Leyendo el gráfico…");
-        final Rect hide = panelRect();
+        final Rect hide = src.hide();
         bg.post(() -> {
-            Bitmap bmp = frame();
+            Bitmap bmp = src.frame();
             if (bmp == null) { done("No veo la pantalla todavía. Intenta otra vez."); return; }
             if (hide != null) {   // tapa la propia ventanita para no leerse a sí mismo
                 Paint pt = new Paint(); pt.setColor(0xFF000000);
-                Bitmap m = bmp.copy(Bitmap.Config.ARGB_8888, true); bmp.recycle(); bmp = m;
+                Bitmap m = bmp.isMutable() ? bmp : bmp.copy(Bitmap.Config.ARGB_8888, true);
+                if (m != bmp) bmp.recycle();
+                bmp = m;
                 new Canvas(bmp).drawRect(hide, pt);
             }
             final Bitmap img = bmp;
@@ -400,7 +353,7 @@ public class TrazadorService extends Service {
         double span = Math.abs(Trazado.yToPrice(rd.map, rd.region.y0) - Trazado.yToPrice(rd.map, rd.region.y1));
         String near = null;
         int upSlot = 0, downSlot = 0;
-        float dens = getResources().getDisplayMetrics().density;
+        float dens = ctx.getResources().getDisplayMetrics().density;
         for (int i = 0; i < z.length(); i++) {
             JSONObject o = z.optJSONObject(i); if (o == null) continue;
             double p = o.optDouble("p", Double.NaN); if (Double.isNaN(p)) continue;
@@ -439,136 +392,9 @@ public class TrazadorService extends Service {
     }
 
     private void post(List<LinesView.Item> items, String msg) {
-        ui.post(() -> { lines.set(items); setStatus(msg); busy = false; });
+        ui.post(() -> { if (lines != null) lines.set(items); setStatus(msg); busy = false; });
     }
     private void done(String msg) { ui.post(() -> { setStatus(msg); busy = false; }); }
-
-    // ---------------- ventanas flotantes ----------------
-    private int dp(float v) { return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()); }
-    private GradientDrawable rounded(int color, float r, int stroke) {
-        GradientDrawable g = new GradientDrawable(); g.setColor(color); g.setCornerRadius(dp(r));
-        if (stroke != 0) g.setStroke(dp(1), stroke); return g;
-    }
-    private TextView btn(String s, int color) {
-        TextView t = new TextView(this); t.setText(s); t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13); t.setTextColor(color);
-        t.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-        t.setGravity(Gravity.CENTER); t.setPadding(dp(10), dp(7), dp(10), dp(7));
-        t.setBackground(rounded(0xFF232A35, 8, 0)); return t;
-    }
-
-    private Rect panelRect() {
-        if (panel == null || lpPanel == null) return null;
-        return new Rect(lpPanel.x - dp(4), lpPanel.y - dp(4), lpPanel.x + panel.getWidth() + dp(4), lpPanel.y + panel.getHeight() + dp(4));
-    }
-
-    private void setStatus(String s) { if (status != null) status.setText(s); }
-
-    private void showOverlays() {
-        wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-        // Capa de líneas: toda la pantalla, no recibe toques
-        lines = new LinesView(this);
-        lpLines = new WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT);
-        lpLines.gravity = Gravity.TOP | Gravity.START;
-        if (Build.VERSION.SDK_INT >= 28) lpLines.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        wm.addView(lines, lpLines);
-
-        // Ventanita de botones
-        lpPanel = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
-        lpPanel.gravity = Gravity.TOP | Gravity.START;
-        lpPanel.x = prefs.getInt("x", dp(8));
-        lpPanel.y = prefs.getInt("y", (int) (getResources().getDisplayMetrics().heightPixels * 0.12f));
-        panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackground(rounded(BG, 12, 0x66D9B45A));
-        panel.setPadding(dp(8), dp(4), dp(8), dp(8));
-
-        LinearLayout head = new LinearLayout(this);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = new TextView(this); title.setText("⠿ TRAZADOR"); title.setTextColor(GOLD);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10); title.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-        TextView close = new TextView(this); close.setText("×"); close.setTextColor(MUTED); close.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        close.setPadding(dp(10), 0, 0, 0);
-        TextView mini = new TextView(this); mini.setText("—"); mini.setTextColor(MUTED); mini.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-        mini.setTypeface(Typeface.DEFAULT_BOLD); mini.setPadding(dp(14), 0, dp(4), 0);
-        head.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        head.addView(mini);
-        head.addView(close);
-        miniTitle = title; miniClose = close; miniBtn = mini;
-        panel.addView(head);
-
-        LinearLayout row = new LinearLayout(this);
-        TextView zona = btn("Zona", C_RES), trazar = btn("Trazar", C_CHAN), borrar = btn("Borrar", FG);
-        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-2, -2); bp.setMargins(0, dp(4), dp(6), 0);
-        row.addView(zona, bp); row.addView(trazar, bp);
-        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-2, -2); bl.setMargins(0, dp(4), 0, 0);
-        row.addView(borrar, bl);
-        panel.addView(row);
-        miniRow = row;
-
-        status = new TextView(this); status.setTextColor(MUTED); status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        status.setMaxWidth(dp(230)); status.setPadding(0, dp(6), 0, 0);
-        status.setText("1) En M15 o M5 toca Zona.  2) Cambia a tu temporalidad y toca Trazar.");
-        panel.addView(status);
-
-        zona.setOnClickListener(v -> run(true));
-        trazar.setOnClickListener(v -> run(false));
-        borrar.setOnClickListener(v -> { lines.set(new ArrayList<>()); setStatus("Líneas borradas. Mantén presionado Borrar para olvidar las zonas guardadas."); });
-        borrar.setOnLongClickListener(v -> {
-            SharedPreferences.Editor e = prefs.edit();
-            for (String k : prefs.getAll().keySet()) if (k.startsWith("z:")) e.remove(k);
-            e.apply(); lines.set(new ArrayList<>());
-            Toast.makeText(this, "Olvidé todas las zonas guardadas", Toast.LENGTH_SHORT).show();
-            setStatus("Zonas borradas.");
-            return true;
-        });
-        close.setOnClickListener(v -> stopSelf());
-        mini.setOnClickListener(v -> setCollapsed(true));
-        head.setOnTouchListener(new Drag());
-        title.setOnTouchListener(new Drag());
-        wm.addView(panel, lpPanel);
-        if (prefs.getBoolean("mini", false)) setCollapsed(true);
-    }
-
-    private TextView miniTitle, miniClose, miniBtn;
-    private View miniRow;
-    private boolean collapsed;
-
-    /** Oculta la ventanita: queda solo una bolita transparente que se toca para volver a abrirla. */
-    private void setCollapsed(boolean c) {
-        collapsed = c;
-        prefs.edit().putBoolean("mini", c).apply();
-        int vis = c ? View.GONE : View.VISIBLE;
-        miniRow.setVisibility(vis); status.setVisibility(vis); miniClose.setVisibility(vis); miniBtn.setVisibility(vis);
-        miniTitle.setText(c ? "⠿ T" : "⠿ TRAZADOR");
-        miniTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, c ? 13 : 10);
-        panel.setPadding(dp(c ? 10 : 8), dp(c ? 6 : 4), dp(c ? 10 : 8), dp(c ? 6 : 8));
-        panel.setAlpha(c ? 0.35f : 1f);
-        try { wm.updateViewLayout(panel, lpPanel); } catch (Exception ignored) {}
-    }
-
-    /** Arrastra la ventanita desde el título. */
-    private class Drag implements View.OnTouchListener {
-        float sx, sy; int ox, oy;
-        @Override public boolean onTouch(View v, MotionEvent e) {
-            switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN: sx = e.getRawX(); sy = e.getRawY(); ox = lpPanel.x; oy = lpPanel.y; return true;
-                case MotionEvent.ACTION_MOVE:
-                    lpPanel.x = ox + (int) (e.getRawX() - sx); lpPanel.y = oy + (int) (e.getRawY() - sy);
-                    try { wm.updateViewLayout(panel, lpPanel); } catch (Exception ignored) {}
-                    return true;
-                case MotionEvent.ACTION_UP:
-                    if (collapsed && Math.abs(e.getRawX() - sx) < dp(8) && Math.abs(e.getRawY() - sy) < dp(8)) { setCollapsed(false); return true; }
-                    prefs.edit().putInt("x", lpPanel.x).putInt("y", lpPanel.y).apply();
-                    return true;
-            }
-            return false;
-        }
-    }
 
     /** Capa transparente donde se dibujan las líneas, alineada con la pantalla capturada. */
     static class LinesView extends View {

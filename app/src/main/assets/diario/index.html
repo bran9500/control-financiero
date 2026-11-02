@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diario de trading</title>
+<style>
+  :root{
+    --bg:#12161C; --surface:#1B2129; --surface-raised:#232A35; --line:#2A313B;
+    --ink:#E8E6E0; --ink-dim:#8B93A0; --ink-faint:#5B6472; --good:#6FA98A; --warn:#C4693B;
+    --win:#2FC47A; --loss:#EF5A5A; --gold:#D9B45A;
+    --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+    --mono: ui-monospace, 'SF Mono', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{background:var(--bg);margin:0;color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:560px;margin:0 auto;padding:18px 14px 96px 14px;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 14px 2px;gap:10px;}
+  .page-title{font-family:var(--serif);font-size:26px;margin:0;}
+  .sub{font-size:12.5px;color:var(--ink-faint);margin:2px 0 0 0;}
+  .icon-btn{background:var(--surface);border:1px solid var(--line);color:var(--ink-dim);width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:18px;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;}
+  .card-title{font-family:var(--serif);font-size:17px;margin:0 0 10px 0;}
+  .muted{font-size:13px;color:var(--ink-dim);line-height:1.55;margin:0;}
+  .faint{font-size:12px;color:var(--ink-faint);}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .pos{color:var(--win);} .neg{color:var(--loss);}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center;min-width:0;}
+  .stat .n{font-family:var(--mono);font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .stat .t{font-size:11px;color:var(--ink-faint);margin-top:3px;}
+  .progress{height:8px;border-radius:4px;background:var(--surface-raised);overflow:hidden;margin:10px 0 6px 0;}
+  .progress span{display:block;height:100%;background:var(--good);border-radius:4px;}
+  .btn{background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);padding:12px 16px;border-radius:12px;font-size:15px;cursor:pointer;font-family:var(--sans);}
+  .btn-solid{background:var(--good);border-color:var(--good);color:#0E1A14;font-weight:600;}
+  .btn-block{width:100%;display:block;text-align:center;}
+  .btn-win{background:#163D2A;border-color:var(--win);color:#BFF5D8;font-weight:700;font-size:18px;padding:18px 10px;}
+  .btn-loss{background:#3D1717;border-color:var(--loss);color:#FFD0D0;font-weight:700;font-size:18px;padding:18px 10px;}
+  .link{background:none;border:none;color:var(--ink-dim);font-size:13px;padding:8px 4px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-family:var(--sans);}
+  .row{display:flex;gap:8px;}
+  .row > *{flex:1;}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:7px 0;border-top:1px solid var(--line);}
+  .kv:first-child{border-top:none;}
+  .kv span{color:var(--ink-dim);}
+  .chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;}
+  .chip{white-space:nowrap;background:var(--surface);border:1px solid var(--line);color:var(--ink-dim);border-radius:999px;padding:8px 13px;font-size:13px;cursor:pointer;font-family:var(--sans);}
+  .chip.active{border-color:var(--good);color:var(--ink);}
+  label.f{display:block;font-size:12px;color:var(--ink-faint);margin-bottom:10px;}
+  input[type=number], input[type=text], textarea{width:100%;background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:11px 12px;font-size:15px;font-family:var(--sans);margin-top:5px;}
+  textarea{min-height:70px;resize:vertical;}
+  .seg{display:flex;background:var(--surface-raised);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px;margin:6px 0 10px 0;}
+  .seg button{flex:1;background:none;border:none;color:var(--ink-dim);padding:9px 6px;border-radius:9px;font-size:13px;font-family:var(--sans);cursor:pointer;}
+  .seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line);}
+  /* escalera */
+  .ladder{display:grid;grid-template-columns:repeat(var(--n,9),1fr);gap:5px;margin:4px 0 2px 0;}
+  .rung{aspect-ratio:1/1.15;border-radius:10px;border:1px solid var(--line);background:var(--surface-raised);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;color:var(--ink-faint);cursor:pointer;padding:0;}
+  .rung b{font-size:15px;line-height:1;}
+  .rung small{font-size:9px;margin-top:3px;}
+  .rung.won{background:#143323;border-color:var(--win);color:#BFF5D8;}
+  .rung.lost{background:#3A1616;border-color:var(--loss);color:#FFC9C9;}
+  .rung.cur{border-color:var(--gold);color:var(--gold);box-shadow:0 0 0 2px rgba(217,180,90,.25);}
+  .next-op{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:2px 0 10px 0;}
+  .tag{display:inline-block;font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink-dim);}
+  .tag.mg{border-color:var(--gold);color:var(--gold);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  td,th{padding:7px 4px;border-top:1px solid var(--line);text-align:right;}
+  th{font-weight:500;color:var(--ink-faint);font-size:11px;border-top:none;}
+  td:first-child,th:first-child{text-align:left;}
+  .day{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 2px;border-top:1px solid var(--line);cursor:pointer;}
+  .day:first-of-type{border-top:none;}
+  .day .d{font-size:14px;}
+  .day .m{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
+  .tabbar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom)) 6px;z-index:5;}
+  .tabbar button{flex:1;background:none;border:none;color:var(--ink-faint);font-size:12px;padding:8px 2px;border-radius:10px;font-family:var(--sans);cursor:pointer;}
+  .tabbar button.on{color:var(--ink);background:var(--surface-raised);}
+  .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10;display:flex;align-items:flex-end;justify-content:center;}
+  .sheet{background:var(--bg);border:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:88vh;overflow:auto;padding:18px 14px 28px 14px;}
+  .toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);padding:10px 16px;border-radius:12px;font-size:13.5px;z-index:20;max-width:90%;text-align:center;}
+  .insight{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13.5px;line-height:1.5;}
+  .insight:first-child{border-top:none;}
+  .insight i{font-style:normal;flex-shrink:0;}
+  svg text{font-family:var(--sans);}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<nav class="tabbar" id="tabs"></nav>
+<div id="sheet"></div>
+<script src="../theme.js"></script>
+<script>
+const NA = !!(window.Android && Android.goHome);
+const KEY = 'diario-data';
+const DEF = { capital: 0, goal: 9, risk: 6, steps: 9, mgLevels: 1, mult: 2, payout: 92, mode: 'target' };
+let D = load();
+let tab = 'hoy', sheet = null, statMonth = null, stakeDraft = null;
+
+function load(){
+  try{
+    const o = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if(o) return { cfg: Object.assign({}, DEF, o.cfg || {}), days: o.days || {} };
+  }catch(e){}
+  return { cfg: Object.assign({}, DEF), days: {} };
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){ toast('No se pudo guardar en el teléfono'); } }
+
+// ---------- utilidades ----------
+const r2 = v => Math.round(v * 100) / 100;
+const money = v => (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const smoney = v => (v > 0.004 ? '+' : '') + money(v);
+const pct = (v, d = 1) => (isFinite(v) ? v.toFixed(d) : '0') + '%';
+const cls = v => v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : '';
+function iso(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+const today = () => iso(new Date());
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function niceDate(s, long){ const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('es-ES', long ? { weekday: 'long', day: 'numeric', month: 'long' } : { weekday: 'short', day: 'numeric', month: 'short' }); }
+function monthName(k){ const [y, m] = k.split('-'); return MESES[+m - 1].replace(/^./, c => c.toUpperCase()) + ' ' + y; }
+function esc(s){ return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function toast(msg){ const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2200); }
+function num(v){ const n = parseFloat(String(v).replace(/,/g, '')); return isFinite(n) ? n : 0; }
+
+// ---------- reglas de cada día ----------
+// Riesgo por escalón = capital × riesgo% / escalones. Ese riesgo se reparte entre la entrada y las martingalas:
+// con 1 martingala ×2 se divide en 3 → entrada = 1 parte, martingala = 2 partes.
+function plan(d){
+  const parts = Array.from({ length: d.mgLevels + 1 }, (_, k) => Math.pow(d.mult, k));
+  const div = parts.reduce((a, b) => a + b, 0);
+  const budget = d.capital * d.risk / 100 / d.steps;
+  const entry = budget / div;
+  return {
+    budget, div, entry,
+    stakes: parts.map(p => r2(entry * p)),
+    target: d.capital * d.goal / 100 / d.steps,       // ganancia que vale cada escalón
+    goal$: d.capital * d.goal / 100,
+    risk$: d.capital * d.risk / 100
+  };
+}
+
+/** Repasa las operaciones del día y saca el estado de cada escalón. */
+function calc(d){
+  const P = plan(d);
+  const steps = Array.from({ length: d.steps }, (_, i) => ({ i, ops: [], profit: 0, status: 'pending', mg: 0, mgWins: 0 }));
+  d.ops.forEach(op => {
+    const s = steps[op.step]; if(!s) return;
+    s.ops.push(op);
+    s.profit += op.win ? op.stake * d.payout / 100 : -op.stake;
+    if(op.lvl > 0){ s.mg++; if(op.win) s.mgWins++; }
+  });
+  steps.forEach(s => {
+    if(!s.ops.length) return;
+    s.status = 'active';
+    let acc = 0;
+    for(const op of s.ops){
+      acc += op.win ? op.stake * d.payout / 100 : -op.stake;
+      if(op.win && (d.mode === 'one' || acc >= P.target - 0.005)){ s.status = 'won'; break; }
+      if(!op.win && op.lvl >= d.mgLevels){ s.status = 'lost'; break; }
+    }
+  });
+  Object.keys(d.closed || {}).forEach(i => { if(steps[i]) steps[i].status = d.closed[i]; });
+  const cur = steps.findIndex(s => s.status === 'pending' || s.status === 'active');
+  let lvl = 0;
+  if(cur >= 0){
+    const last = steps[cur].ops[steps[cur].ops.length - 1];
+    if(last && !last.win && last.lvl < d.mgLevels) lvl = last.lvl + 1;
+  }
+  const profit = steps.reduce((a, s) => a + s.profit, 0);
+  const ops = d.ops.length, wins = d.ops.filter(o => o.win).length;
+  const entryOps = d.ops.filter(o => o.lvl === 0), mgOps = d.ops.filter(o => o.lvl > 0);
+  const won = steps.filter(s => s.status === 'won'), lost = steps.filter(s => s.status === 'lost');
+  return {
+    P, steps, cur, lvl, nextStake: cur >= 0 ? (P.stakes[lvl] || 0) : 0,
+    profit, pctCap: d.capital ? profit / d.capital * 100 : 0, pctGoal: P.goal$ ? profit / P.goal$ * 100 : 0,
+    ops, wins, entryOps: entryOps.length, entryWins: entryOps.filter(o => o.win).length,
+    mgOps: mgOps.length, mgWins: mgOps.filter(o => o.win).length,
+    won: won.length, lost: lost.length, done: cur < 0,
+    opsPerWon: won.length ? won.reduce((a, s) => a + s.ops.length, 0) / won.length : 0,
+    first: steps[0]
+  };
+}
+
+// ---------- acciones ----------
+function lastDay(){ const k = Object.keys(D.days).filter(x => x < today()).sort().pop(); return k ? D.days[k] : null; }
+function suggestedCapital(){
+  const l = lastDay();
+  if(l){ const c = calc(l); return r2(l.capital + c.profit); }
+  return D.cfg.capital || 0;
+}
+function startDay(){
+  const cap = num(document.getElementById('cap').value);
+  if(!(cap > 0)){ toast('Escribe tu capital de hoy'); return; }
+  const c = D.cfg;
+  D.days[today()] = { capital: cap, goal: c.goal, risk: c.risk, steps: c.steps, mgLevels: c.mgLevels, mult: c.mult, payout: c.payout, mode: c.mode, ops: [], closed: {}, note: '', started: Date.now() };
+  if(!D.cfg.capital) D.cfg.capital = cap;
+  save(); render();
+}
+function addOp(win){
+  const d = D.days[today()]; if(!d) return;
+  const c = calc(d); if(c.cur < 0) return;
+  const el = document.getElementById('stake');
+  const stake = r2(el ? num(el.value) : c.nextStake);
+  if(!(stake > 0)){ toast('Escribe el monto de la operación'); return; }
+  d.ops.push({ step: c.cur, lvl: c.lvl, stake, win, t: Date.now() });
+  stakeDraft = null;
+  save();
+  const after = calc(d), s = after.steps[c.cur];
+  if(s.status === 'won') toast('✓ Escalón ' + (c.cur + 1) + ' logrado' + (after.done ? ' · día terminado' : ''));
+  else if(s.status === 'lost') toast('✕ Escalón ' + (c.cur + 1) + ' perdido. Sigue con el ' + (c.cur + 2 <= d.steps ? c.cur + 2 : '—'));
+  else if(!win) toast('Toca martingala: ' + money(after.nextStake));
+  render();
+}
+function undo(){
+  const d = D.days[today()]; if(!d || !d.ops.length) return;
+  const op = d.ops.pop();
+  if(d.closed) delete d.closed[op.step];
+  save(); render(); toast('Se quitó la última operación');
+}
+function closeStep(status){
+  const d = D.days[today()]; if(!d) return;
+  const c = calc(d); if(c.cur < 0) return;
+  d.closed = d.closed || {}; d.closed[c.cur] = status;
+  save(); render();
+}
+function reopenStep(day, i){
+  const d = D.days[day]; if(!d || !d.closed) return;
+  delete d.closed[i]; save(); sheet = null; render();
+}
+function setNote(day, v){ const d = D.days[day]; if(d){ d.note = v; save(); } }
+function deleteDay(day){
+  if(sheet && sheet.confirm !== day){ sheet.confirm = day; renderSheet(); return; }
+  delete D.days[day]; save(); sheet = null; render(); toast('Día borrado');
+}
+
+// ---------- vistas ----------
+function ladderHtml(c, day){
+  return `<div class="ladder" style="--n:${c.steps.length}">${c.steps.map(s => {
+    const k = s.status === 'won' ? 'won' : s.status === 'lost' ? 'lost' : s.i === c.cur ? 'cur' : '';
+    const ic = s.status === 'won' ? '✓' : s.status === 'lost' ? '✕' : s.i === c.cur ? '•' : '';
+    return `<button class="rung ${k}" onclick="openStep('${day}',${s.i})"><b>${s.i + 1}</b><small>${ic || '&nbsp;'}</small></button>`;
+  }).join('')}</div>`;
+}
+
+function summaryHtml(d, c){
+  const bar = Math.max(0, Math.min(100, c.pctGoal));
+  return `
+  <div class="grid3">
+    <div class="stat"><div class="n ${cls(c.profit)}">${smoney(c.profit)}</div><div class="t">Profit · ${pct(c.pctCap, 2)}</div></div>
+    <div class="stat"><div class="n"><span class="pos">${c.won}</span> / <span class="neg">${c.lost}</span></div><div class="t">Escalones ✓ / ✕ de ${d.steps}</div></div>
+    <div class="stat"><div class="n">${pct(c.pctGoal, 0)}</div><div class="t">De la meta (${d.goal}%)</div></div>
+  </div>
+  <div class="progress"><span style="width:${bar}%;${c.pctGoal >= 100 ? '' : c.profit < 0 ? 'background:var(--loss);width:' + Math.min(100, -c.profit / c.P.risk$ * 100) + '%' : ''}"></span></div>
+  <p class="faint" style="margin:0 0 4px 0;">${c.profit >= 0 ? 'Meta del día ' + money(c.P.goal$) + (c.pctGoal >= 100 ? ' · ¡lograda!' : ' · faltan ' + money(Math.max(0, c.P.goal$ - c.profit))) : 'Riesgo usado ' + money(-c.profit) + ' de ' + money(c.P.risk$)}</p>`;
+}
+
+function renderHoy(){
+  const d = D.days[today()];
+  let h = `<div class="topbar"><div><p class="page-title">Diario de trading</p><p class="sub">${niceDate(today(), true)}</p></div>
+    ${NA ? `<button class="icon-btn" onclick="Android.goHome()">⌂</button>` : ''}</div>`;
+  if(!d){
+    const cap = suggestedCapital();
+    const P = plan(Object.assign({}, D.cfg, { capital: cap || 0 }));
+    h += `<div class="card">
+      <p class="card-title">Empezar el día</p>
+      <label class="f">Capital de hoy ($)<input id="cap" type="text" inputmode="decimal" value="${cap ? cap.toFixed(2) : ''}" placeholder="2000" oninput="previewPlan(this.value)"></label>
+      <div id="pv">${planHtml(P)}</div>
+      <button class="btn btn-solid btn-block" style="margin-top:12px;" onclick="startDay()">Empezar</button>
+      <p class="faint" style="margin-top:10px;">${lastDay() ? 'El capital sale del cierre de tu último día. ' : ''}Los porcentajes se cambian en Ajustes.</p>
+    </div>`;
+    return h;
+  }
+  const c = calc(d);
+  h += `<div class="card">${summaryHtml(d, c)}${ladderHtml(c, today())}</div>`;
+  if(c.cur >= 0){
+    const s = c.steps[c.cur];
+    const isMg = c.lvl > 0;
+    const stepBar = d.mode === 'target' ? Math.max(0, Math.min(100, s.profit / c.P.target * 100)) : 0;
+    h += `<div class="card">
+      <div class="next-op"><p class="card-title" style="margin:0;">Escalón ${c.cur + 1} de ${d.steps}</p>
+        <span class="tag ${isMg ? 'mg' : ''}">${isMg ? 'Martingala' + (d.mgLevels > 1 ? ' ' + c.lvl : '') : 'Entrada'}</span></div>
+      ${d.mode === 'target' ? `<p class="faint" style="margin:0;">Llevas <span class="num ${cls(s.profit)}">${smoney(s.profit)}</span> de ${money(c.P.target)} en este escalón · ${s.ops.length} operación${s.ops.length === 1 ? '' : 'es'}</p>
+        <div class="progress" style="height:6px;"><span style="width:${stepBar}%"></span></div>` : `<p class="faint" style="margin:0 0 8px 0;">Se logra con una operación ganada · ${s.ops.length} operación${s.ops.length === 1 ? '' : 'es'} hasta ahora</p>`}
+      <label class="f">Monto de esta operación ($)<input id="stake" type="text" inputmode="decimal" value="${stakeDraft != null ? stakeDraft : c.nextStake.toFixed(2)}" oninput="stakeDraft=this.value"></label>
+      <div class="row">
+        <button class="btn btn-win" onclick="addOp(true)">✓ Ganada</button>
+        <button class="btn btn-loss" onclick="addOp(false)">✕ Perdida</button>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <button class="link" onclick="undo()" ${d.ops.length ? '' : 'disabled style="opacity:.4"'}>↶ Deshacer última</button>
+        <button class="link" onclick="closeStep('won')">Dar por logrado</button>
+        <button class="link" onclick="closeStep('lost')">Dar por perdido</button>
+      </div>
+    </div>`;
+  } else {
+    h += `<div class="card" style="border-color:${c.profit >= 0 ? 'var(--win)' : 'var(--loss)'};">
+      <p class="card-title">Día terminado</p>
+      <p class="muted">Lograste <b>${c.won}</b> de ${d.steps} escalones${c.lost ? ' y perdiste ' + c.lost : ''}. Cerraste en <b class="${cls(c.profit)}">${smoney(c.profit)}</b> (${pct(c.pctCap, 2)}), el ${pct(c.pctGoal, 0)} de tu meta.</p>
+      <button class="link" onclick="undo()">↶ Deshacer última operación</button>
+    </div>`;
+  }
+  h += dayDetailHtml(today(), d, c);
+  return h;
+}
+
+function planHtml(P){
+  return `<div class="kv"><span>Meta del día</span><b class="num">${money(P.goal$)}</b></div>
+    <div class="kv"><span>Riesgo máximo</span><b class="num">${money(P.risk$)}</b></div>
+    <div class="kv"><span>Riesgo por escalón</span><b class="num">${money(P.budget)} <span class="faint">(÷${P.div})</span></b></div>
+    <div class="kv"><span>Entrada${P.stakes.length > 1 ? ' → martingala' : ''}</span><b class="num">${P.stakes.map(money).join(' → ')}</b></div>
+    ${D.cfg.mode === 'target' ? `<div class="kv"><span>Cada escalón vale</span><b class="num">${money(P.target)}</b></div>` : ''}`;
+}
+function previewPlan(v){
+  const el = document.getElementById('pv'); if(!el) return;
+  el.innerHTML = planHtml(plan(Object.assign({}, D.cfg, { capital: num(v) })));
+}
+
+function dayDetailHtml(day, d, c){
+  const rows = d.ops.map((o, i) => `<tr><td>${o.step + 1}</td><td>${o.lvl ? '<span class="tag mg">MG' + (d.mgLevels > 1 ? o.lvl : '') + '</span>' : 'Entrada'}</td>
+    <td class="num">${money(o.stake)}</td><td>${o.win ? '<span class="pos">✓</span>' : '<span class="neg">✕</span>'}</td>
+    <td class="num ${o.win ? 'pos' : 'neg'}">${smoney(o.win ? o.stake * d.payout / 100 : -o.stake)}</td></tr>`).reverse().join('');
+  const f = c.first;
+  return `<div class="card">
+    <p class="card-title">Números del día</p>
+    <div class="kv"><span>Operaciones</span><b class="num">${c.ops} · ${c.wins} ganadas (${pct(c.ops ? c.wins / c.ops * 100 : 0, 0)})</b></div>
+    <div class="kv"><span>Martingalas usadas</span><b class="num">${c.mgOps}${c.mgOps ? ' · ganó ' + c.mgWins : ''}</b></div>
+    <div class="kv"><span>Primer escalón</span><b>${f.status === 'won' ? '<span class="pos">Logrado</span> en ' + f.ops.length + ' op.' : f.status === 'lost' ? '<span class="neg">Perdido</span>' : 'Sin terminar'}</b></div>
+    <div class="kv"><span>Operaciones por escalón logrado</span><b class="num">${c.won ? c.opsPerWon.toFixed(1) : '—'}</b></div>
+    <div class="kv"><span>Capital</span><b class="num">${money(d.capital)} → ${money(d.capital + c.profit)}</b></div>
+    <div class="kv"><span>Reglas</span><b class="faint">${d.goal}% meta · ${d.risk}% riesgo · ${d.steps} escalones · ${d.mgLevels ? d.mgLevels + ' MG ×' + d.mult : 'sin MG'} · ${d.payout}%</b></div>
+  </div>
+  ${d.ops.length ? `<div class="card"><p class="card-title">Operaciones</p>
+    <table><tr><th>Esc.</th><th>Tipo</th><th>Monto</th><th></th><th>Resultado</th></tr>${rows}</table></div>` : ''}
+  <div class="card"><p class="card-title">Nota del día</p>
+    <textarea placeholder="Cómo te sentiste, qué par, qué salió bien o mal…" oninput="setNote('${day}', this.value)">${esc(d.note)}</textarea></div>`;
+}
+
+function openStep(day, i){ sheet = { type: 'step', day, i }; renderSheet(); }
+function openDay(day){ sheet = { type: 'day', day }; renderSheet(); }
+
+function renderSheet(){
+  const el = document.getElementById('sheet');
+  if(!sheet){ el.innerHTML = ''; return; }
+  const d = D.days[sheet.day]; if(!d){ sheet = null; el.innerHTML = ''; return; }
+  const c = calc(d);
+  let h = '';
+  if(sheet.type === 'step'){
+    const s = c.steps[sheet.i];
+    const st = s.status === 'won' ? '<span class="pos">Logrado</span>' : s.status === 'lost' ? '<span class="neg">Perdido</span>' : sheet.i === c.cur ? 'En curso' : 'Pendiente';
+    h = `<p class="card-title">Escalón ${sheet.i + 1} · ${st}</p>
+      <div class="kv"><span>Operaciones</span><b class="num">${s.ops.length}</b></div>
+      <div class="kv"><span>Martingala</span><b>${s.mg ? 'Sí (' + s.mg + ')' : 'No'}</b></div>
+      <div class="kv"><span>Resultado</span><b class="num ${cls(s.profit)}">${smoney(s.profit)}</b></div>
+      ${s.ops.length ? `<table style="margin-top:8px;"><tr><th>#</th><th>Tipo</th><th>Monto</th><th></th></tr>${s.ops.map((o, k) => `<tr><td>${k + 1}</td><td>${o.lvl ? 'Martingala' : 'Entrada'}</td><td class="num">${money(o.stake)}</td><td>${o.win ? '<span class="pos">✓</span>' : '<span class="neg">✕</span>'}</td></tr>`).join('')}</table>` : ''}
+      ${d.closed && d.closed[sheet.i] ? `<button class="link" onclick="reopenStep('${sheet.day}',${sheet.i})">Quitar "dar por ${d.closed[sheet.i] === 'won' ? 'logrado' : 'perdido'}"</button>` : ''}`;
+  } else {
+    h = `<div class="topbar" style="margin-top:0;"><p class="card-title" style="margin:0;">${niceDate(sheet.day, true)}</p></div>
+      <div class="card">${summaryHtml(d, c)}${ladderHtml(c, sheet.day)}</div>
+      ${dayDetailHtml(sheet.day, d, c)}
+      <button class="btn btn-block" style="border-color:var(--loss);color:var(--loss);" onclick="deleteDay('${sheet.day}')">${sheet.confirm === sheet.day ? 'Toca otra vez para borrar este día' : 'Borrar este día'}</button>`;
+  }
+  el.innerHTML = `<div class="sheet-bg" onclick="if(event.target===this){sheet=null;renderSheet();}"><div class="sheet">${h}
+    <button class="btn btn-block" style="margin-top:12px;" onclick="sheet=null;renderSheet();render()">Cerrar</button></div></div>`;
+}
+
+function renderHistorial(){
+  const keys = Object.keys(D.days).sort().reverse();
+  let h = `<div class="topbar"><div><p class="page-title">Historial</p><p class="sub">${keys.length} día${keys.length === 1 ? '' : 's'} anotado${keys.length === 1 ? '' : 's'}</p></div></div>`;
+  if(!keys.length) return h + `<div class="card"><p class="muted">Todavía no hay días. Empieza uno en <b>Hoy</b>.</p></div>`;
+  const byMonth = {};
+  keys.forEach(k => (byMonth[k.slice(0, 7)] = byMonth[k.slice(0, 7)] || []).push(k));
+  Object.keys(byMonth).forEach(m => {
+    const tot = byMonth[m].reduce((a, k) => a + calc(D.days[k]).profit, 0);
+    h += `<div class="card"><div class="next-op"><p class="card-title" style="margin:0;">${monthName(m)}</p><b class="num ${cls(tot)}">${smoney(tot)}</b></div>
+      ${byMonth[m].map(k => {
+        const d = D.days[k], c = calc(d);
+        return `<div class="day" onclick="openDay('${k}')"><div><div class="d">${niceDate(k)}</div>
+          <div class="m">✓ ${c.won} · ✕ ${c.lost} de ${d.steps} · ${c.ops} op. · win ${pct(c.ops ? c.wins / c.ops * 100 : 0, 0)}${c.mgOps ? ' · ' + c.mgOps + ' MG' : ''}</div></div>
+          <div style="text-align:right;"><div class="num ${cls(c.profit)}">${smoney(c.profit)}</div><div class="m">${pct(c.pctGoal, 0)} meta</div></div></div>`;
+      }).join('')}</div>`;
+  });
+  return h;
+}
+
+function monthStats(m){
+  const keys = Object.keys(D.days).filter(k => k.startsWith(m)).sort();
+  const days = keys.map(k => ({ k, d: D.days[k], c: calc(D.days[k]) })).filter(x => x.c.ops > 0);
+  const S = { days, n: days.length, profit: 0, ops: 0, wins: 0, entryOps: 0, entryWins: 0, mgOps: 0, mgWins: 0, won: 0, lost: 0, steps: 0,
+    goalDays: 0, greenDays: 0, firstWon: 0, firstDone: 0, opsWon: 0, stepsWithMg: 0, stepsWithMgWon: 0, startCap: 0 };
+  days.forEach(({ d, c }, i) => {
+    if(i === 0) S.startCap = d.capital;
+    S.profit += c.profit; S.ops += c.ops; S.wins += c.wins;
+    S.entryOps += c.entryOps; S.entryWins += c.entryWins; S.mgOps += c.mgOps; S.mgWins += c.mgWins;
+    S.won += c.won; S.lost += c.lost; S.steps += d.steps;
+    if(c.pctGoal >= 100) S.goalDays++;
+    if(c.profit > 0.004) S.greenDays++;
+    if(c.first.status === 'won' || c.first.status === 'lost'){ S.firstDone++; if(c.first.status === 'won') S.firstWon++; }
+    c.steps.forEach(s => {
+      if(s.status === 'won') S.opsWon += s.ops.length;
+      if(s.mg){ S.stepsWithMg++; if(s.status === 'won') S.stepsWithMgWon++; }
+    });
+  });
+  S.best = days.slice().sort((a, b) => b.c.profit - a.c.profit)[0];
+  S.worst = days.slice().sort((a, b) => a.c.profit - b.c.profit)[0];
+  return S;
+}
+
+function chartHtml(S){
+  if(S.days.length < 1) return '';
+  const W = 520, H = 170, pad = 26, n = S.days.length;
+  const vals = S.days.map(x => x.c.profit);
+  let cum = 0; const cums = vals.map(v => (cum += v));
+  const max = Math.max(0.01, ...vals.map(Math.abs), ...cums.map(Math.abs));
+  const y0 = H / 2, sc = (H / 2 - 14) / max, bw = Math.max(4, Math.min(28, (W - pad * 2) / n - 4));
+  const x = i => pad + (i + 0.5) * (W - pad * 2) / n;
+  const bars = vals.map((v, i) => `<rect x="${x(i) - bw / 2}" y="${v >= 0 ? y0 - v * sc : y0}" width="${bw}" height="${Math.max(1, Math.abs(v) * sc)}" rx="2" fill="${v >= 0 ? 'var(--win)' : 'var(--loss)'}" opacity=".85"/>`).join('');
+  const line = cums.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + (y0 - v * sc).toFixed(1)).join(' ');
+  const labels = S.days.map((d, i) => (n <= 12 || i % Math.ceil(n / 10) === 0) ? `<text x="${x(i)}" y="${H - 2}" font-size="10" fill="var(--ink-faint)" text-anchor="middle">${+d.k.slice(8)}</text>` : '').join('');
+  return `<div class="card"><p class="card-title">Profit por día</p>
+    <svg viewBox="0 0 ${W} ${H + 8}" style="width:100%;height:auto;display:block;">
+      <line x1="${pad}" x2="${W - pad}" y1="${y0}" y2="${y0}" stroke="var(--line)"/>
+      ${bars}<path d="${line}" fill="none" stroke="var(--gold)" stroke-width="2"/>${labels}
+    </svg>
+    <p class="faint" style="margin:6px 0 0 0;">Barras: profit de cada día · Línea dorada: acumulado del mes</p></div>`;
+}
+
+function renderStats(){
+  const months = [...new Set(Object.keys(D.days).map(k => k.slice(0, 7)))].sort().reverse();
+  let h = `<div class="topbar"><div><p class="page-title">Estadísticas</p><p class="sub">Cómo te va en el mes</p></div></div>`;
+  if(!months.length) return h + `<div class="card"><p class="muted">Cuando anotes tus primeros días, aquí verás tu profit del mes, win rate, martingalas y más.</p></div>`;
+  if(!statMonth || !months.includes(statMonth)) statMonth = months[0];
+  h += `<div class="chips">${months.map(m => `<button class="chip ${m === statMonth ? 'active' : ''}" onclick="statMonth='${m}';render()">${monthName(m)}</button>`).join('')}</div>`;
+  const S = monthStats(statMonth);
+  if(!S.n) return h + `<div class="card"><p class="muted">Sin operaciones este mes.</p></div>`;
+  const wr = S.ops ? S.wins / S.ops * 100 : 0;
+  const stepWr = (S.won + S.lost) ? S.won / (S.won + S.lost) * 100 : 0;
+  h += `<div class="grid3">
+      <div class="stat"><div class="n ${cls(S.profit)}">${smoney(S.profit)}</div><div class="t">Profit del mes${S.startCap ? ' · ' + pct(S.profit / S.startCap * 100) : ''}</div></div>
+      <div class="stat"><div class="n">${pct(wr, 0)}</div><div class="t">Win rate (${S.ops} op.)</div></div>
+      <div class="stat"><div class="n">${S.won}<span class="faint">/${S.won + S.lost}</span></div><div class="t">Escalones logrados</div></div>
+    </div>
+    <div class="grid3">
+      <div class="stat"><div class="n">${S.n}</div><div class="t">Días operados</div></div>
+      <div class="stat"><div class="n pos">${S.greenDays}</div><div class="t">Días en verde</div></div>
+      <div class="stat"><div class="n">${S.goalDays}</div><div class="t">Días con meta</div></div>
+    </div>
+    ${chartHtml(S)}
+    <div class="card"><p class="card-title">Detalle</p>
+      <div class="kv"><span>Escalones: logrados / perdidos</span><b class="num"><span class="pos">${S.won}</span> / <span class="neg">${S.lost}</span> · ${pct(stepWr, 0)}</b></div>
+      <div class="kv"><span>Win rate en entrada</span><b class="num">${pct(S.entryOps ? S.entryWins / S.entryOps * 100 : 0, 0)} <span class="faint">(${S.entryWins}/${S.entryOps})</span></b></div>
+      <div class="kv"><span>Win rate en martingala</span><b class="num">${S.mgOps ? pct(S.mgWins / S.mgOps * 100, 0) + ' <span class="faint">(' + S.mgWins + '/' + S.mgOps + ')</span>' : '—'}</b></div>
+      <div class="kv"><span>Escalones donde usaste martingala</span><b class="num">${(S.won + S.lost) ? pct(S.stepsWithMg / (S.won + S.lost) * 100, 0) : '—'}</b></div>
+      <div class="kv"><span>Primer escalón logrado</span><b class="num">${S.firstWon} de ${S.firstDone} días</b></div>
+      <div class="kv"><span>Operaciones por escalón logrado</span><b class="num">${S.won ? (S.opsWon / S.won).toFixed(1) : '—'}</b></div>
+      <div class="kv"><span>Promedio por día</span><b class="num ${cls(S.profit / S.n)}">${smoney(S.profit / S.n)}</b></div>
+      ${S.best ? `<div class="kv"><span>Mejor día</span><b class="num pos">${smoney(S.best.c.profit)} <span class="faint">${niceDate(S.best.k)}</span></b></div>` : ''}
+      ${S.worst && S.worst.c.profit < 0 ? `<div class="kv"><span>Peor día</span><b class="num neg">${smoney(S.worst.c.profit)} <span class="faint">${niceDate(S.worst.k)}</span></b></div>` : ''}
+    </div>
+    ${insightsHtml(S, wr)}`;
+  return h;
+}
+
+function insightsHtml(S, wr){
+  const out = [];
+  const ew = S.entryOps ? S.entryWins / S.entryOps * 100 : 0, mw = S.mgOps ? S.mgWins / S.mgOps * 100 : 0;
+  if(S.mgOps >= 5 && mw < 45) out.push(['⚠', `La martingala solo te sale el ${pct(mw, 0)} de las veces. Cuando pierdes la entrada, el siguiente movimiento suele ir en tu contra: vale la pena revisar si conviene seguir con ella.`]);
+  if(S.mgOps >= 5 && mw >= 55) out.push(['✓', `La martingala te salva el ${pct(mw, 0)} de las veces: está cumpliendo su función.`]);
+  if(S.firstDone >= 3 && S.firstWon / S.firstDone < 0.5) out.push(['⚠', `Pierdes el primer escalón más de la mitad de los días. Prueba esperar unos minutos y leer el mercado antes de la primera entrada.`]);
+  if(S.n >= 3 && S.greenDays / S.n >= 0.6) out.push(['✓', `Cerraste en verde ${S.greenDays} de ${S.n} días: aunque no siempre llegues al 9%, el sistema de escalones te mantiene en profit.`]);
+  if(S.ops >= 20 && wr < 52) out.push(['⚠', `Tu win rate del mes es ${pct(wr, 0)}. Con payout de ${D.cfg.payout}%, necesitas más o menos ${pct(100 / (1 + D.cfg.payout / 100), 0)} para no perder plata a la larga.`]);
+  if(S.ops >= 20 && ew - mw > 15 && S.mgOps >= 5) out.push(['•', `Ganas bastante más en la entrada (${pct(ew, 0)}) que en la martingala (${pct(mw, 0)}).`]);
+  if(!out.length) return '';
+  return `<div class="card"><p class="card-title">Lo que dicen tus números</p>${out.map(([i, t]) => `<div class="insight"><i>${i}</i><span>${t}</span></div>`).join('')}</div>`;
+}
+
+function renderAjustes(){
+  const c = D.cfg;
+  const P = plan(Object.assign({}, c, { capital: c.capital || 0 }));
+  const f = (k, label, step, help) => `<label class="f">${label}<input type="number" inputmode="decimal" step="${step}" value="${c[k]}" oninput="setCfg('${k}', this.value)">${help ? `<span class="faint">${help}</span>` : ''}</label>`;
+  return `<div class="topbar"><div><p class="page-title">Ajustes</p><p class="sub">Se aplican desde el próximo día que empieces</p></div></div>
+  <div class="card">
+    <p class="card-title">Tu sistema</p>
+    <div class="grid2">
+      ${f('capital', 'Capital base ($)', '1')}
+      ${f('steps', 'Escalones por día', '1')}
+      ${f('goal', 'Meta diaria %', '0.5')}
+      ${f('risk', 'Riesgo diario %', '0.5')}
+      ${f('mgLevels', 'Martingalas por escalón', '1')}
+      ${f('mult', 'Martingala × (multiplica)', '0.1')}
+      ${f('payout', 'Payout %', '1')}
+    </div>
+    <p class="muted" style="margin:6px 0 4px 0;">¿Cuándo se logra un escalón?</p>
+    <div class="seg">
+      <button class="${c.mode === 'target' ? 'on' : ''}" onclick="setCfg('mode','target')">Al ganar lo que vale el escalón</button>
+      <button class="${c.mode === 'one' ? 'on' : ''}" onclick="setCfg('mode','one')">Con 1 operación ganada</button>
+    </div>
+    <p class="faint">${c.mode === 'target' ? `Sigues operando en el escalón hasta sumar ${money(P.target)} (meta ÷ escalones). Si pierdes la martingala, el escalón se pierde y pasas al siguiente.` : 'Una operación ganada (entrada o martingala) cierra el escalón. Si pierdes la martingala, el escalón se pierde y pasas al siguiente.'}</p>
+  </div>
+  <div class="card"><p class="card-title">Así queda con ${money(c.capital || 0)}</p><div id="pv2">${planHtml(P)}</div></div>`;
+}
+function setCfg(k, v){
+  if(k === 'mode'){ D.cfg.mode = v; save(); render(); return; }
+  let n = num(v);
+  if(k === 'steps') n = Math.max(1, Math.min(20, Math.round(n) || 1));
+  if(k === 'mgLevels') n = Math.max(0, Math.min(4, Math.round(n)));
+  if(k === 'mult') n = Math.max(1, n || 2);
+  D.cfg[k] = n; save();
+  const el = document.getElementById('pv2');
+  if(el) el.innerHTML = planHtml(plan(Object.assign({}, D.cfg, { capital: D.cfg.capital || 0 })));
+}
+
+function render(){
+  const views = { hoy: renderHoy, hist: renderHistorial, stats: renderStats, ajustes: renderAjustes };
+  document.getElementById('app').innerHTML = views[tab]();
+  document.getElementById('tabs').innerHTML = [['hoy', 'Hoy'], ['hist', 'Historial'], ['stats', 'Estadísticas'], ['ajustes', 'Ajustes']]
+    .map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="tab='${k}';stakeDraft=null;sheet=null;renderSheet();render();scrollTo(0,0)">${l}</button>`).join('');
+}
+window.diarioBack = function(){
+  if(sheet){ sheet = null; renderSheet(); return true; }
+  if(tab !== 'hoy'){ tab = 'hoy'; render(); return true; }
+  return false;
+};
+render();
+</script>
+</body>
+</html>
