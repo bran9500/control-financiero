@@ -11,10 +11,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Lógica de los 3 lotes con martingala rotativa. Compartida por la ventana flotante y la pantalla principal. */
+/** Lógica de los lotes (los que elijas) con martingala rotativa. Compartida por la ventana flotante y la pantalla principal. */
 public class Engine {
-    public static final int MAX = 6;   // máximo de lotes
-    public int nLots = 3;              // lotes activos (1 a 6)
+    public static final int MAX = 20;  // máximo de lotes
+    public int nLots = 3;              // lotes activos (1 a 20)
 
     public double payout = 92;   // %
     public double base = 1;      // $
@@ -210,7 +210,7 @@ public class Engine {
         } catch (Exception e) { return null; }
     }
 
-    /** Cambia cuántos lotes rotan (1 a 6). Los lotes que se apagan conservan su resultado en el neto. */
+    /** Cambia cuántos lotes rotan (1 a 20). Los lotes que se apagan conservan su resultado en el neto. */
     public void setLots(int n) {
         n = Math.max(1, Math.min(MAX, n));
         if (n == nLots) return;

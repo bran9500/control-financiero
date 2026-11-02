@@ -263,7 +263,7 @@ body.vert .ministats{display:block}
       <label for="payout"><span id="payoutLbl">Payout %</span><input id="payout" type="number" min="50" max="100" step="1" value="85"></label>
       <label for="base"><span class="cursym" data-t="Entrada base">Entrada base $</span><input id="base" type="text" inputmode="decimal" value="1"></label>
       <label for="curSel">Moneda<select id="curSel"></select></label>
-      <label for="nLots">Número de lotes<select id="nLots"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
+      <label for="nLots">Número de lotes<input id="nLots" type="number" inputmode="numeric" min="1" max="20" step="1" value="3"></label>
       <label for="steps">Pasos por lote<input id="steps" type="number" min="1" max="8" step="1" value="5"></label>
       <label for="mode">Secuencia
         <select id="mode">
@@ -362,7 +362,7 @@ const NA=window.Android||null;
 const DESK=window.Desk||null;                       // programa de escritorio (Electron)
 const MINI=/[?&]mini=1/.test(location.search);       // ventana flotante de escritorio
 const KEY="rotador-lotes-v1";
-const MAXL=6;
+const MAXL=20;
 let S;
 
 function fresh(cfg,n){
@@ -837,7 +837,7 @@ function drawIntro(){
     <div class="grid2">
       <label class="field" for="obPayout">${ratio?"Ganancia por $1 (%)":"Payout %"}<input id="obPayout" type="number" inputmode="decimal" min="1" max="1000" value="${OB.payout}"></label>
       <label class="field" for="obBase"><span class="cursym" data-t="Entrada base">Entrada base ${sym()}</span><input id="obBase" type="text" inputmode="decimal" value="${OB.base}"></label>
-      <label class="field" for="obLots">Número de lotes<select id="obLots">${[1,2,3,4,5,6].map(k=>`<option ${+OB.lots===k?"selected":""}>${k}</option>`).join("")}</select></label>
+      <label class="field" for="obLots">Número de lotes<input id="obLots" type="number" inputmode="numeric" min="1" max="20" step="1" value="${+OB.lots||3}"></label>
       <label class="field" for="obSteps">Pasos por lote<input id="obSteps" type="number" inputmode="numeric" min="1" max="8" value="${OB.steps}"></label>
       <label class="field" for="obMode">Secuencia<select id="obMode">
         <option value="quick" ${OB.mode==="quick"?"selected":""}>Duplicar, último ajustado</option>

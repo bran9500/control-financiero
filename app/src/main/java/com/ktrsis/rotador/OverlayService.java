@@ -40,7 +40,7 @@ public class OverlayService extends Service {
     private final TextView[] lotTxt = new TextView[Engine.MAX];
     private final View[] lotBar = new View[Engine.MAX];
     private final View[] lotCell = new View[Engine.MAX];
-    private LinearLayout lotsRow2;
+    private LinearLayout[] lotRows;
     private long lastPress = 0;
     private boolean cutArmed = false;
     private TextView winBtn, lossBtn;
@@ -165,16 +165,20 @@ public class OverlayService extends Service {
         panel.addView(who);
 
         // Fila de lotes: el lote en juego va en dorado con una línea debajo
-        LinearLayout lotsRow = new LinearLayout(this);
-        lotsRow.setOrientation(LinearLayout.HORIZONTAL);
-        lotsRow2 = new LinearLayout(this);
-        lotsRow2.setOrientation(LinearLayout.HORIZONTAL);
+        // Filas de 3 lotes: se muestran solo las que hacen falta según cuántos lotes tengas
+        int nRows = (Engine.MAX + 2) / 3;
+        lotRows = new LinearLayout[nRows];
+        for (int r = 0; r < nRows; r++) {
+            lotRows[r] = new LinearLayout(this);
+            lotRows[r].setOrientation(LinearLayout.HORIZONTAL);
+        }
         for (int k = 0; k < Engine.MAX; k++) {
             LinearLayout cell = new LinearLayout(this);
             cell.setOrientation(LinearLayout.VERTICAL);
             cell.setGravity(Gravity.CENTER_HORIZONTAL);
             lotTxt[k] = text("", 11, MUTED, false);
             lotTxt[k].setGravity(Gravity.CENTER);
+            lotTxt[k].setSingleLine(true);
             lotBar[k] = new View(this);
             cell.addView(lotTxt[k]);
             LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(3));
@@ -182,14 +186,13 @@ public class OverlayService extends Service {
             barLp.leftMargin = dp(3); barLp.rightMargin = dp(3);
             cell.addView(lotBar[k], barLp);
             lotCell[k] = cell;
-            (k < 3 ? lotsRow : lotsRow2).addView(cell, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+            lotRows[k / 3].addView(cell, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         }
-        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rowLp.topMargin = dp(3);
-        panel.addView(lotsRow, rowLp);
-        LinearLayout.LayoutParams row2Lp = new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT);
-        row2Lp.topMargin = dp(2);
-        panel.addView(lotsRow2, row2Lp);
+        for (int r = 0; r < nRows; r++) {
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT);
+            rowLp.topMargin = dp(r == 0 ? 3 : 2);
+            panel.addView(lotRows[r], rowLp);
+        }
 
         stake = text("", 34, FG, true);
         stake.setIncludeFontPadding(false);
@@ -303,8 +306,13 @@ public class OverlayService extends Service {
 
     private void render() {
         double[] sq = engine.sequence();
-        for (int k = 0; k < Engine.MAX; k++) lotCell[k].setVisibility(k < engine.nLots ? View.VISIBLE : (k < 3 ? View.INVISIBLE : View.GONE));
-        lotsRow2.setVisibility(engine.nLots > 3 ? View.VISIBLE : View.GONE);
+        int usedRows = (engine.nLots + 2) / 3;
+        float lotSp = engine.nLots > 9 ? 10 : 11;
+        for (int r = 0; r < lotRows.length; r++) lotRows[r].setVisibility(r < Math.max(1, usedRows) ? View.VISIBLE : View.GONE);
+        for (int k = 0; k < Engine.MAX; k++) {
+            lotCell[k].setVisibility(k < engine.nLots ? View.VISIBLE : View.INVISIBLE);
+            lotTxt[k].setTextSize(TypedValue.COMPLEX_UNIT_SP, lotSp);
+        }
         double net = engine.net();
         sessTxt.setText(String.format(Locale.US, "%d ops · %s", engine.ops, Engine.money(net)));
         sessTxt.setTextColor(net > 0 ? WIN : net < 0 ? LOSS : MUTED);
