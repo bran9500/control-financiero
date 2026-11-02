@@ -133,7 +133,8 @@ function plan(d){
     stakes: parts.map(p => r2(entry * p)),
     target: d.capital * d.goal / 100 / d.steps,       // ganancia que vale cada escalón
     goal$: d.capital * d.goal / 100,
-    risk$: d.capital * d.risk / 100
+    risk$: d.capital * d.risk / 100,
+    mode: d.mode
   };
 }
 
@@ -306,7 +307,7 @@ function planHtml(P){
     <div class="kv"><span>Riesgo máximo</span><b class="num">${money(P.risk$)}</b></div>
     <div class="kv"><span>Riesgo por escalón</span><b class="num">${money(P.budget)} <span class="faint">(÷${P.div})</span></b></div>
     <div class="kv"><span>Entrada${P.stakes.length > 1 ? ' → martingala' : ''}</span><b class="num">${P.stakes.map(money).join(' → ')}</b></div>
-    ${D.cfg.mode === 'target' ? `<div class="kv"><span>Cada escalón vale</span><b class="num">${money(P.target)}</b></div>` : ''}`;
+    ${(P.mode || D.cfg.mode) === 'target' ? `<div class="kv"><span>Cada escalón vale</span><b class="num">${money(P.target)}</b></div>` : ''}`;
 }
 function previewPlan(v){
   const el = document.getElementById('pv'); if(!el) return;
@@ -473,9 +474,13 @@ function insightsHtml(S, wr){
 
 function renderAjustes(){
   const c = D.cfg;
-  const P = plan(Object.assign({}, c, { capital: c.capital || 0 }));
+  const td = D.days[today()];
+  const P = plan(td || Object.assign({}, c, { capital: c.capital || 0 }));
   const f = (k, label, step, help) => `<label class="f">${label}<input type="number" inputmode="decimal" step="${step}" value="${c[k]}" oninput="setCfg('${k}', this.value)">${help ? `<span class="faint">${help}</span>` : ''}</label>`;
-  return `<div class="topbar"><div><p class="page-title">Ajustes</p><p class="sub">Se aplican desde el próximo día que empieces</p></div></div>
+  return `<div class="topbar"><div><p class="page-title">Ajustes</p><p class="sub">Se aplican a hoy y a los próximos días</p></div></div>
+  ${td ? `<div class="card"><p class="card-title">Hoy</p>
+    <label class="f">Capital de hoy ($)<input type="text" inputmode="decimal" value="${td.capital}" oninput="setTodayCapital(this.value)"></label>
+    <p class="faint" style="margin:0;">Las operaciones que ya anotaste se quedan con el monto que tuvieron; lo nuevo usa estos números.</p></div>` : ''}
   <div class="card">
     <p class="card-title">Tu sistema</p>
     <div class="grid2">
@@ -494,17 +499,34 @@ function renderAjustes(){
     </div>
     <p class="faint">${c.mode === 'target' ? `Sigues operando en el escalón hasta sumar ${money(P.target)} (meta ÷ escalones). Si pierdes la martingala, el escalón se pierde y pasas al siguiente.` : 'Una operación ganada (entrada o martingala) cierra el escalón. Si pierdes la martingala, el escalón se pierde y pasas al siguiente.'}</p>
   </div>
-  <div class="card"><p class="card-title">Así queda con ${money(c.capital || 0)}</p><div id="pv2">${planHtml(P)}</div></div>`;
+  <div class="card"><p class="card-title" id="pv2t">Así queda ${td ? 'hoy con ' + money(td.capital) : 'con ' + money(c.capital || 0)}</p><div id="pv2">${planHtml(P)}</div></div>`;
+}
+// Los ajustes valen para hoy también (las operaciones ya anotadas quedan con el monto que tuvieron).
+function syncToday(k, n){
+  const d = D.days[today()]; if(!d) return;
+  if(k === 'capital') return;            // el capital de hoy se cambia aparte
+  if(k === 'steps'){ const used = d.ops.reduce((m, o) => Math.max(m, o.step + 1), 0); n = Math.max(n, used); }
+  d[k] = n;
 }
 function setCfg(k, v){
-  if(k === 'mode'){ D.cfg.mode = v; save(); render(); return; }
+  if(k === 'mode'){ D.cfg.mode = v; syncToday('mode', v); save(); render(); return; }
   let n = num(v);
   if(k === 'steps') n = Math.max(1, Math.min(20, Math.round(n) || 1));
   if(k === 'mgLevels') n = Math.max(0, Math.min(4, Math.round(n)));
   if(k === 'mult') n = Math.max(1, n || 2);
-  D.cfg[k] = n; save();
-  const el = document.getElementById('pv2');
-  if(el) el.innerHTML = planHtml(plan(Object.assign({}, D.cfg, { capital: D.cfg.capital || 0 })));
+  D.cfg[k] = n; syncToday(k, n); save();
+  refreshPlan();
+}
+function setTodayCapital(v){
+  const d = D.days[today()]; const n = num(v);
+  if(!d || !(n > 0)) return;
+  d.capital = n; save(); refreshPlan();
+}
+function refreshPlan(){
+  const el = document.getElementById('pv2'); if(!el) return;
+  const d = D.days[today()];
+  el.innerHTML = planHtml(plan(d || Object.assign({}, D.cfg, { capital: D.cfg.capital || 0 })));
+  const t = document.getElementById('pv2t'); if(t) t.textContent = 'Así queda hoy con ' + money(d ? d.capital : (D.cfg.capital || 0));
 }
 
 function render(){
