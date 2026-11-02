@@ -92,7 +92,7 @@
 <script>
 const NA = !!(window.Android && Android.goHome);
 const KEY = 'diario-data';
-const DEF = { capital: 0, goal: 9, risk: 6, steps: 9, mgLevels: 1, mult: 2, payout: 92, mode: 'target' };
+const DEF = { capital: 0, goal: 9, risk: 6, steps: 9, mgLevels: 1, mult: 2, payout: 92, mode: 'target', minStake: 1 };
 let D = load();
 let tab = 'hoy', sheet = null, statMonth = null, stakeDraft = null;
 
@@ -127,10 +127,14 @@ function plan(d){
   const parts = Array.from({ length: d.mgLevels + 1 }, (_, k) => Math.pow(d.mult, k));
   const div = parts.reduce((a, b) => a + b, 0);
   const budget = d.capital * d.risk / 100 / d.steps;
-  const entry = budget / div;
+  const min = d.minStake == null ? 1 : d.minStake;
+  const entry = Math.max(min, r2(budget / div));
+  // Cada martingala sale del monto anterior × multiplicador, nunca menos del mínimo del broker.
+  const stakes = [entry];
+  for(let k = 1; k < parts.length; k++) stakes.push(Math.max(min, r2(stakes[k - 1] * d.mult)));
   return {
-    budget, div, entry,
-    stakes: parts.map(p => r2(entry * p)),
+    budget, div, entry, min, raised: budget / div < min - 0.004,
+    stakes, realBudget: stakes.reduce((a, b) => a + b, 0),
     target: d.capital * d.goal / 100 / d.steps,       // ganancia que vale cada escalón
     goal$: d.capital * d.goal / 100,
     risk$: d.capital * d.risk / 100,
@@ -160,17 +164,19 @@ function calc(d){
   });
   Object.keys(d.closed || {}).forEach(i => { if(steps[i]) steps[i].status = d.closed[i]; });
   const cur = steps.findIndex(s => s.status === 'pending' || s.status === 'active');
-  let lvl = 0;
+  let lvl = 0, nextStake = 0;
   if(cur >= 0){
     const last = steps[cur].ops[steps[cur].ops.length - 1];
     if(last && !last.win && last.lvl < d.mgLevels) lvl = last.lvl + 1;
+    // La martingala se calcula sobre lo que de verdad metiste en la operación anterior.
+    nextStake = lvl > 0 ? Math.max(P.min, r2(last.stake * d.mult)) : P.stakes[0];
   }
   const profit = steps.reduce((a, s) => a + s.profit, 0);
   const ops = d.ops.length, wins = d.ops.filter(o => o.win).length;
   const entryOps = d.ops.filter(o => o.lvl === 0), mgOps = d.ops.filter(o => o.lvl > 0);
   const won = steps.filter(s => s.status === 'won'), lost = steps.filter(s => s.status === 'lost');
   return {
-    P, steps, cur, lvl, nextStake: cur >= 0 ? (P.stakes[lvl] || 0) : 0,
+    P, steps, cur, lvl, nextStake,
     profit, pctCap: d.capital ? profit / d.capital * 100 : 0, pctGoal: P.goal$ ? profit / P.goal$ * 100 : 0,
     ops, wins, entryOps: entryOps.length, entryWins: entryOps.filter(o => o.win).length,
     mgOps: mgOps.length, mgWins: mgOps.filter(o => o.win).length,
@@ -201,6 +207,8 @@ function addOp(win){
   const el = document.getElementById('stake');
   const stake = r2(el ? num(el.value) : c.nextStake);
   if(!(stake > 0)){ toast('Escribe el monto de la operación'); return; }
+  const min = d.minStake == null ? 1 : d.minStake;
+  if(stake < min - 0.004){ toast('La operación mínima es ' + money(min)); return; }
   d.ops.push({ step: c.cur, lvl: c.lvl, stake, win, t: Date.now() });
   stakeDraft = null;
   save();
@@ -305,8 +313,9 @@ function renderHoy(){
 function planHtml(P){
   return `<div class="kv"><span>Meta del día</span><b class="num">${money(P.goal$)}</b></div>
     <div class="kv"><span>Riesgo máximo</span><b class="num">${money(P.risk$)}</b></div>
-    <div class="kv"><span>Riesgo por escalón</span><b class="num">${money(P.budget)} <span class="faint">(÷${P.div})</span></b></div>
-    <div class="kv"><span>Entrada${P.stakes.length > 1 ? ' → martingala' : ''}</span><b class="num">${P.stakes.map(money).join(' → ')}</b></div>
+    <div class="kv"><span>Riesgo por escalón</span><b class="num">${money(P.budget)} <span class="faint">(÷${P.div.toFixed(P.div % 1 ? 1 : 0)})</span></b></div>
+    <div class="kv"><span>Entrada${P.stakes.length > 1 ? ' → martingala' : ''}</span><b class="num" style="text-align:right;">${P.stakes.map(money).join(' → ')}</b></div>
+    ${P.raised ? `<p class="faint" style="color:var(--gold);margin:6px 0;">La entrada daba ${money(P.budget / P.div)}, menos del mínimo de ${money(P.min)}, así que se sube a ${money(P.min)}. Si pierdes el escalón completo pierdes ${money(P.realBudget)}, no ${money(P.budget)}. Para que cuadre, sube el riesgo % o usa menos martingalas.</p>` : ''}
     ${(P.mode || D.cfg.mode) === 'target' ? `<div class="kv"><span>Cada escalón vale</span><b class="num">${money(P.target)}</b></div>` : ''}`;
 }
 function previewPlan(v){
@@ -491,6 +500,7 @@ function renderAjustes(){
       ${f('mgLevels', 'Martingalas por escalón', '1')}
       ${f('mult', 'Martingala × (multiplica)', '0.1')}
       ${f('payout', 'Payout %', '1')}
+      ${f('minStake', 'Operación mínima ($)', '0.5')}
     </div>
     <p class="muted" style="margin:6px 0 4px 0;">¿Cuándo se logra un escalón?</p>
     <div class="seg">
@@ -514,6 +524,7 @@ function setCfg(k, v){
   if(k === 'steps') n = Math.max(1, Math.min(20, Math.round(n) || 1));
   if(k === 'mgLevels') n = Math.max(0, Math.min(4, Math.round(n)));
   if(k === 'mult') n = Math.max(1, n || 2);
+  if(k === 'minStake') n = Math.max(0, n);
   D.cfg[k] = n; syncToday(k, n); save();
   refreshPlan();
 }
