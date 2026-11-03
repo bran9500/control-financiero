@@ -25,6 +25,7 @@ public class InterestActivity extends Activity {
         web.getSettings().setJavaScriptEnabled(true);
         web.getSettings().setDomStorageEnabled(true);
         web.addJavascriptInterface(new Bridge(), "Android");
+        web.addJavascriptInterface(new com.ktrsis.controlfinanciero.AppSwitch(this), "AppSwitch");
         web.setWebViewClient(new WebViewClient());
         web.loadUrl("file:///android_asset/interes/index.html");
 

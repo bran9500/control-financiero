@@ -926,4 +926,20 @@ window.addEventListener("storage",e=>{
 if((!PROFILE||!PROFILE.done)&&!MINI)openIntro();
 </script>
 
+<script>
+// Dentro de "Rotador + Diario": los ajustes y el riesgo/meta se manejan en un solo lugar (Diario → Ajustes).
+(function(){
+  if(!window.AppSwitch) return;
+  ['cfgBox','planBox'].forEach(function(id){ var e = document.getElementById(id); if(e) e.style.display = 'none'; });
+  var anchor = document.getElementById('profBox') || document.getElementById('cfgBox');
+  if(!anchor) return;
+  var btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'iconbtn gold hide-mini';
+  btn.style.cssText = 'width:100%;margin:10px 0;padding:12px;font-size:15px;';
+  btn.textContent = '⚙ Ajustes (Rotador + Diario)';
+  btn.onclick = function(){ AppSwitch.open2('rotador', 'ajustes'); };
+  anchor.parentNode.insertBefore(btn, anchor);
+})();
+</script>
+<script src="../apps.js"></script>
 </html>

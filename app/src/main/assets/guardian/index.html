@@ -141,5 +141,6 @@ load(); render();
 setInterval(() => { if(!NA) return; const prev = JSON.stringify([S.running,S.balance,S.state,S.status,S.start]); load();
   if(JSON.stringify([S.running,S.balance,S.state,S.status,S.start]) !== prev && !(document.activeElement && document.activeElement.tagName === 'INPUT')) render(); }, 1000);
 </script>
+<script src="../apps.js"></script>
 </body>
 </html>

@@ -35,6 +35,7 @@ public class MainActivity extends Activity {
         web.getSettings().setJavaScriptEnabled(true);
         web.getSettings().setDomStorageEnabled(true);
         web.addJavascriptInterface(new Bridge(), "Android");
+        web.addJavascriptInterface(new com.ktrsis.controlfinanciero.AppSwitch(this), "AppSwitch");
         web.loadUrl("file:///android_asset/bot/index.html");
 
         FrameLayout root = new FrameLayout(this);

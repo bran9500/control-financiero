@@ -416,5 +416,6 @@ function demoState(){return {tf:60,tfLabel:"M1",auto:false,strategies:[],clockOf
 render();
 setInterval(()=>{ if(tab==="sim"){ const ae=document.activeElement; if(!(ae&&ae.tagName==="INPUT"&&ae.type!=="checkbox")) render(); return; } if(tab==="sig"||tab==="cap") { if(tab==="sig") render(); else { load(); document.getElementById("status").textContent=S.status||""; if(S.last&&S.last.captureMs!==cropFor) render(); } } else load(); }, 1000);
 </script>
+<script src="../apps.js"></script>
 </body>
 </html>

@@ -316,6 +316,15 @@ function renderHoy(){
     return h;
   }
   const c = calc(d);
+  if(d.src !== 'rotador'){
+    const rops = fetchRot(today());
+    const n = rops ? rops.filter(o => !o.cut).length : 0;
+    if(n) h += `<div class="card" style="border-color:var(--gold);">
+      <p class="muted">El Rotador tiene <b>${n} operación${n === 1 ? '' : 'es'}</b> hoy, pero este día lo empezaste <b>a mano</b>, así que no se cuentan.</p>
+      <button class="btn btn-solid btn-block" style="margin-top:10px;" onclick="useRotToday()">Usar las del Rotador</button>
+      ${d.ops.length ? `<p class="faint" style="margin:8px 0 0 0;">Las ${d.ops.length} que anotaste a mano quedan guardadas por si vuelves a "A mano" en Ajustes.</p>` : ''}
+    </div>`;
+  }
   h += `<div class="card">${summaryHtml(d, c)}${ladderHtml(c, today())}</div>`;
   if(c.rot){
     const s = c.cur >= 0 ? c.steps[c.cur] : null;
@@ -531,41 +540,95 @@ function insightsHtml(S, wr){
   return `<div class="card"><p class="card-title">Lo que dicen tus números</p>${out.map(([i, t]) => `<div class="insight"><i>${i}</i><span>${t}</span></div>`).join('')}</div>`;
 }
 
+function getRot(){ try{ return window.Android && Android.getRotCfg ? JSON.parse(Android.getRotCfg()) : null; }catch(e){ return null; } }
+function setRot(k, v){
+  const R = getRot(); if(!R) return;
+  if(k === 'mode' || k === 'currency') R[k] = v;
+  else {
+    let n = num(v);
+    if(k === 'nLots') n = Math.max(1, Math.min(20, Math.round(n) || 1));
+    if(k === 'steps') n = Math.max(1, Math.min(8, Math.round(n) || 1));
+    if(k === 'payout'){ n = Math.max(1, Math.min(100, n || 92)); D.cfg.payout = n; syncToday('payout', n); save(); }
+    if(k === 'base'){ if(!(n > 0)) return; }
+    R[k] = n;
+  }
+  try{ Android.setRotCfg(JSON.stringify(R)); }catch(e){}
+  setTimeout(() => { const el = document.getElementById('rotseq'); if(el) el.innerHTML = rotSeqHtml(getRot()); }, 200);
+  if(k === 'mode' || k === 'currency') setTimeout(render, 220);
+}
+function rotSeqHtml(R){
+  if(!R || !R.seq) return '';
+  return `<div class="kv"><span>Secuencia de cada lote</span><b class="num" style="text-align:right;">${R.seq.map(v => money(v)).join(' → ')}</b></div>
+    <div class="kv"><span>Si se quema un lote</span><b class="num neg">${money(-R.lotBudget)}</b></div>
+    <div class="kv"><span>Todos los lotes (${R.nLots})</span><b class="num">${money(R.lotBudget * R.nLots)}</b></div>`;
+}
+const CURS = ['USD','EUR','COP','MXN','BRL','PEN','ARS','CLP','GTQ','DOP','VES','GBP','USDT'];
+
 function renderAjustes(){
   const c = D.cfg;
   const td = D.days[today()];
   const P = plan(td || Object.assign({}, c, { capital: c.capital || 0 }));
+  const R = getRot();
+  const rot = (td ? td.src : c.src) === 'rotador';
   const f = (k, label, step, help) => `<label class="f">${label}<input type="number" inputmode="decimal" step="${step}" value="${c[k]}" oninput="setCfg('${k}', this.value)">${help ? `<span class="faint">${help}</span>` : ''}</label>`;
-  return `<div class="topbar"><div><p class="page-title">Ajustes</p><p class="sub">Se aplican a hoy y a los próximos días</p></div></div>
+  const fr = (k, label, step, mode) => `<label class="f">${label}<input type="${mode || 'number'}" inputmode="decimal" step="${step}" value="${R[k]}" oninput="setRot('${k}', this.value)"></label>`;
+  return `<div class="topbar"><div><p class="page-title">Ajustes</p><p class="sub">Un solo lugar para el Rotador y el Diario</p></div></div>
   ${td ? `<div class="card"><p class="card-title">Hoy</p>
     <label class="f">Capital de hoy ($)<input type="text" inputmode="decimal" value="${td.capital}" oninput="setTodayCapital(this.value)"></label>
-    <p class="faint" style="margin:0;">Las operaciones que ya anotaste se quedan con el monto que tuvieron; lo nuevo usa estos números.</p></div>` : ''}
+    <p class="faint" style="margin:0;">Lo que ya operaste se queda con el monto que tuvo; lo nuevo usa estos números.</p></div>` : ''}
   <div class="card">
-    <p class="card-title">Tu sistema</p>
+    <p class="card-title">Capital y metas</p>
     <div class="grid2">
       ${f('capital', 'Capital base ($)', '1')}
       ${f('steps', 'Escalones por día', '1')}
       ${f('goal', 'Meta diaria %', '0.5')}
       ${f('risk', 'Riesgo diario %', '0.5')}
-      ${f('mgLevels', 'Martingalas por escalón', '1')}
-      ${f('mult', 'Martingala × (multiplica)', '0.1')}
-      ${f('payout', 'Payout %', '1')}
-      ${f('minStake', 'Operación mínima ($)', '0.5')}
     </div>
-    <p class="muted" style="margin:6px 0 4px 0;">Operaciones</p>
+    <p class="faint" style="margin:0;">Cada escalón vale <b>${money(P.target)}</b> (meta ÷ escalones). ${rot ? `Si pierdes <b>${money(P.budget)}</b> en un escalón, se marca perdido.` : ''} El Rotador usa este mismo capital, riesgo y meta.</p>
+  </div>
+  ${R ? `<div class="card">
+    <p class="card-title">Rotador</p>
+    <div class="grid2">
+      ${fr('payout', 'Payout %', '1')}
+      ${fr('base', 'Entrada base ($)', '0.01', 'text')}
+      ${fr('nLots', 'Número de lotes', '1')}
+      ${fr('steps', 'Pasos por lote', '1')}
+    </div>
+    <label class="f">Secuencia
+      <select onchange="setRot('mode', this.value)" style="width:100%;background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:11px 12px;font-size:15px;margin-top:5px;">
+        <option value="quick" ${R.mode === 'quick' ? 'selected' : ''}>Duplicar, último ajustado</option>
+        <option value="double" ${R.mode === 'double' ? 'selected' : ''}>Duplicar ×2</option>
+        <option value="exact" ${R.mode === 'exact' ? 'selected' : ''}>Recuperación exacta</option>
+      </select></label>
+    <label class="f">Moneda
+      <select onchange="setRot('currency', this.value)" style="width:100%;background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:11px 12px;font-size:15px;margin-top:5px;">
+        ${CURS.map(k => `<option ${R.currency === k ? 'selected' : ''}>${k}</option>`).join('')}
+      </select></label>
+    <div id="rotseq">${rotSeqHtml(R)}</div>
+  </div>` : ''}
+  <div class="card">
+    <p class="card-title">Cómo se anotan las operaciones</p>
     <div class="seg">
       <button class="${c.src === 'rotador' ? 'on' : ''}" onclick="setCfg('src','rotador')">Del Rotador (automático)</button>
       <button class="${c.src !== 'rotador' ? 'on' : ''}" onclick="setCfg('src','manual')">A mano</button>
     </div>
-    <p class="faint" style="margin:0 0 10px 0;">${c.src === 'rotador' ? `Cada vez que juntas ${money(P.target)} de ganancia con el Rotador se marca un escalón; si pierdes ${money(P.budget)} se marca perdido. Las martingalas y los lotes los pone el Rotador.` : 'Anotas cada operación con Ganada o Perdida aquí mismo.'}</p>
-    <p class="muted" style="margin:6px 0 4px 0;">¿Cuándo se logra un escalón? <span class="faint">(a mano)</span></p>
+    <p class="faint" style="margin:0;">${c.src === 'rotador' ? `Cada Ganó o Perdió del Rotador se anota solo. Cada vez que juntas ${money(P.target)} se marca un escalón.` : 'Anotas cada operación con Ganada o Perdida en la pestaña Hoy.'}</p>
+  </div>
+  ${c.src !== 'rotador' ? `<div class="card">
+    <p class="card-title">Para anotar a mano</p>
+    <div class="grid2">
+      ${f('mgLevels', 'Martingalas por escalón', '1')}
+      ${f('mult', 'Martingala × (multiplica)', '0.1')}
+      ${R ? '' : f('payout', 'Payout %', '1')}
+      ${f('minStake', 'Operación mínima ($)', '0.5')}
+    </div>
+    <p class="muted" style="margin:6px 0 4px 0;">¿Cuándo se logra un escalón?</p>
     <div class="seg">
       <button class="${c.mode === 'target' ? 'on' : ''}" onclick="setCfg('mode','target')">Al ganar lo que vale el escalón</button>
       <button class="${c.mode === 'one' ? 'on' : ''}" onclick="setCfg('mode','one')">Con 1 operación ganada</button>
     </div>
-    <p class="faint">${c.mode === 'target' ? `Sigues operando en el escalón hasta sumar ${money(P.target)} (meta ÷ escalones). Si pierdes la martingala, el escalón se pierde y pasas al siguiente.` : 'Una operación ganada (entrada o martingala) cierra el escalón. Si pierdes la martingala, el escalón se pierde y pasas al siguiente.'}</p>
-  </div>
-  <div class="card"><p class="card-title" id="pv2t">Así queda ${td ? 'hoy con ' + money(td.capital) : 'con ' + money(c.capital || 0)}</p><div id="pv2">${planHtml(P)}</div></div>`;
+    <div class="card" style="margin:10px 0 0 0;background:var(--bg);"><p class="card-title" id="pv2t">Así queda ${td ? 'hoy con ' + money(td.capital) : 'con ' + money(c.capital || 0)}</p><div id="pv2">${planHtml(P)}</div></div>
+  </div>` : ''}`;
 }
 // Los ajustes valen para hoy también (las operaciones ya anotadas quedan con el monto que tuvieron).
 function syncToday(k, n){
@@ -577,7 +640,7 @@ function syncToday(k, n){
 function setCfg(k, v){
   if(k === 'mode' || k === 'src'){
     D.cfg[k] = v; syncToday(k, v);
-    if(k === 'src'){ const d = D.days[today()]; if(d && v === 'rotador' && d.ops.length){ toast('Hoy ya tiene operaciones a mano: el cambio vale desde mañana'); d.src = 'manual'; } syncRot(); }
+    if(k === 'src') syncRot();
     save(); pushPlan(); render(); return;
   }
   let n = num(v);
@@ -607,6 +670,12 @@ function render(){
     .map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="tab='${k}';stakeDraft=null;sheet=null;renderSheet();render();scrollTo(0,0)">${l}</button>`).join('');
 }
 // ---------- conexión con el Rotador ----------
+function useRotToday(){
+  const d = D.days[today()]; if(!d) return;
+  d.src = 'rotador'; D.cfg.src = 'rotador';
+  syncRot(); save(); pushPlan(); render();
+  toast('Listo: hoy cuenta lo del Rotador');
+}
 function dayRange(k){ const a = new Date(k + 'T00:00:00').getTime(); return [a, a + 86400000 - 1]; }
 function fetchRot(k){
   if(!(window.Android && Android.getRotadorOps)) return null;
@@ -626,6 +695,11 @@ function syncRot(){
       changed = true;
     }
   }
+  const td = D.days[t];
+  if(td && td.src !== 'rotador' && D.cfg.src === 'rotador' && !(td.ops || []).length){
+    const ops = fetchRot(t);
+    if(ops && ops.length){ td.src = 'rotador'; changed = true; }
+  }
   Object.keys(D.days).forEach(k => {
     const d = D.days[k]; if(d.src !== 'rotador') return;
     const ops = fetchRot(k); if(!ops) return;
@@ -643,6 +717,7 @@ function pushPlan(){
   const d = D.days[today()] || Object.assign({}, D.cfg, { capital: D.cfg.capital || 0 });
   const P = plan(d);
   try{ Android.setPlan(JSON.stringify({ date: today(), target: r2(P.target), riskStep: r2(P.budget), steps: d.steps, src: d.src || D.cfg.src })); }catch(e){}
+  try{ if(Android.setRotPlan && d.capital > 0) Android.setRotPlan(JSON.stringify({ cap: d.capital, risk: d.risk, goal: d.goal })); }catch(e){}
 }
 window.diarioResume = function(){ if(syncRot() && !sheet) render(); };
 setInterval(() => { if(document.hidden) return; const d = D.days[today()]; if((d && d.src === 'rotador') || D.cfg.src === 'rotador'){ if(syncRot() && !sheet && !(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName))) render(); } }, 3000);
@@ -652,8 +727,11 @@ window.diarioBack = function(){
   if(tab !== 'hoy'){ tab = 'hoy'; render(); return true; }
   return false;
 };
+window.diarioTab = function(t){ if(!['hoy','hist','stats','ajustes'].includes(t)) t = 'hoy'; tab = t; sheet = null; renderSheet(); render(); scrollTo(0, 0); };
+if(location.hash === '#ajustes') tab = 'ajustes';
 syncRot(); pushPlan();
 render();
 </script>
+<script src="../apps.js"></script>
 </body>
 </html>

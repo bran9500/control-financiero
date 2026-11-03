@@ -11,12 +11,19 @@ import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
-/** Pantalla principal: la misma vista completa de la versión web, conectada a los datos de la ventana flotante. */
-public class MainActivity extends Activity {
+/**
+ * "Rotador + Diario": una sola app con dos pestañas arriba.
+ *  - Rotador: la vista completa del Rotador, conectada a la ventana flotante.
+ *  - Diario: escalones, historial, estadísticas y los ajustes de las dos.
+ */
+public class MainActivity extends Activity implements com.ktrsis.diario.DiarioBridge.Host, com.ktrsis.controlfinanciero.AppSwitch.Tabs {
     private Engine engine;
-    private WebView web;
+    private WebView web, diary;
+    private android.widget.TextView tabRot, tabDia;
+    private String shown = "rotador";
     private final Runnable refresh = () -> {
         if (web != null) web.post(() -> web.evaluateJavascript("window.onNative&&window.onNative()", null));
+        if (diary != null) diary.post(() -> diary.evaluateJavascript("window.diarioResume&&diarioResume()", null));
     };
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -32,18 +39,52 @@ public class MainActivity extends Activity {
         web.getSettings().setJavaScriptEnabled(true);
         web.getSettings().setDomStorageEnabled(true);
         web.addJavascriptInterface(new Bridge(), "Android");
+        web.addJavascriptInterface(new com.ktrsis.controlfinanciero.AppSwitch(this), "AppSwitch");
         web.loadUrl("file:///android_asset/rotador/index.html");
+
+        diary = new WebView(this);
+        diary.setBackgroundColor(0xFF12161C);
+        diary.getSettings().setJavaScriptEnabled(true);
+        diary.getSettings().setDomStorageEnabled(true);
+        diary.addJavascriptInterface(new com.ktrsis.diario.DiarioBridge(this, this), "Android");
+        diary.addJavascriptInterface(new com.ktrsis.controlfinanciero.AppSwitch(this), "AppSwitch");
+        diary.setWebViewClient(new android.webkit.WebViewClient());
+        String tab0 = getIntent() != null ? getIntent().getStringExtra("tab") : null;
+        diary.loadUrl("file:///android_asset/diario/index.html" + ("ajustes".equals(tab0) ? "#ajustes" : ""));
+
+        // Pestañas arriba: Rotador | Diario
+        android.widget.LinearLayout bar = new android.widget.LinearLayout(this);
+        bar.setBackgroundColor(0xFF0E1116);
+        bar.setPadding(dp(10), dp(6), dp(10), dp(6));
+        tabRot = tabButton("🔄  Rotador");
+        tabDia = tabButton("📒  Diario");
+        android.widget.LinearLayout.LayoutParams tl = new android.widget.LinearLayout.LayoutParams(0, dp(38), 1);
+        tl.rightMargin = dp(6);
+        bar.addView(tabRot, tl);
+        bar.addView(tabDia, new android.widget.LinearLayout.LayoutParams(0, dp(38), 1));
+        tabRot.setOnClickListener(v -> showTab("rotador"));
+        tabDia.setOnClickListener(v -> showTab("diario"));
+
+        android.widget.FrameLayout pages = new android.widget.FrameLayout(this);
+        pages.addView(web, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        pages.addView(diary, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        android.widget.LinearLayout col = new android.widget.LinearLayout(this);
+        col.setOrientation(android.widget.LinearLayout.VERTICAL);
+        col.addView(bar, new android.widget.LinearLayout.LayoutParams(-1, -2));
+        col.addView(pages, new android.widget.LinearLayout.LayoutParams(-1, 0, 1));
+
         // La página va dentro de un marco con margen arriba y abajo, para no quedar debajo
         // de la hora, los íconos ni la barra de navegación (Android 15 dibuja hasta el borde).
         android.widget.FrameLayout root = new android.widget.FrameLayout(this);
         root.setBackgroundColor(0xFF0E1116);
-        root.addView(web, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        root.addView(col, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        showTab(tab0 != null ? tab0 : getSharedPreferences("rotador", MODE_PRIVATE).getString("tabShown", "rotador"));
         int top = sysDimen("status_bar_height"), bottom = sysDimen("navigation_bar_height");
         root.setPadding(0, top, 0, bottom);
         if (Build.VERSION.SDK_INT >= 30) {
             root.setOnApplyWindowInsetsListener((v, insets) -> {
                 android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars()
-                        | android.view.WindowInsets.Type.displayCutout());
+                        | android.view.WindowInsets.Type.displayCutout() | android.view.WindowInsets.Type.ime());
                 v.setPadding(bars.left, Math.max(bars.top, top), bars.right, bars.bottom);
                 return android.view.WindowInsets.CONSUMED;
             });
@@ -51,6 +92,47 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+    }
+
+    private int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + 0.5f); }
+
+    private android.widget.TextView tabButton(String s) {
+        android.widget.TextView t = new android.widget.TextView(this);
+        t.setText(s); t.setGravity(android.view.Gravity.CENTER); t.setTextSize(14);
+        t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        return t;
+    }
+
+    private android.graphics.drawable.GradientDrawable pill(int fill, int stroke) {
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(fill); g.setCornerRadius(dp(10)); g.setStroke(dp(1), stroke); return g;
+    }
+
+    /** Cambia entre Rotador y Diario. "ajustes" abre el Diario en Ajustes (un solo lugar de ajustes). */
+    @Override public void showTab(String tab) {
+        if (tab == null) tab = "rotador";
+        boolean dia = !"rotador".equals(tab);
+        shown = dia ? "diario" : "rotador";
+        web.setVisibility(dia ? android.view.View.GONE : android.view.View.VISIBLE);
+        diary.setVisibility(dia ? android.view.View.VISIBLE : android.view.View.GONE);
+        tabRot.setBackground(dia ? pill(0xFF161B22, 0xFF262C36) : pill(0xFF2A2412, 0xFFD9B45A));
+        tabDia.setBackground(dia ? pill(0xFF2A2412, 0xFFD9B45A) : pill(0xFF161B22, 0xFF262C36));
+        tabRot.setTextColor(dia ? 0xFF8B93A1 : 0xFFD9B45A);
+        tabDia.setTextColor(dia ? 0xFFD9B45A : 0xFF8B93A1);
+        getSharedPreferences("rotador", MODE_PRIVATE).edit().putString("tabShown", shown).apply();
+        if (dia) {
+            String t = "ajustes".equals(tab) ? "ajustes" : null;
+            diary.evaluateJavascript("window.diarioResume&&diarioResume()" + (t != null ? ";window.diarioTab&&diarioTab('ajustes')" : ""), null);
+        } else refresh.run();
+    }
+
+    @Override public void goHome() { finish(); }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        String t = intent != null ? intent.getStringExtra("tab") : null;
+        if (t != null) showTab(t);
     }
 
     private int sysDimen(String name) {
@@ -61,6 +143,12 @@ public class MainActivity extends Activity {
     @SuppressWarnings("deprecation")
     @Override
     public void onBackPressed() {
+        if ("diario".equals(shown)) {
+            diary.evaluateJavascript("window.diarioBack&&diarioBack() ? 'y' : 'n'", v -> {
+                if (v == null || !v.contains("y")) showTab("rotador");
+            });
+            return;
+        }
         web.evaluateJavascript("window.onNativeBack&&window.onNativeBack()", r -> {
             if (!"true".equals(r)) MainActivity.super.onBackPressed();
         });
