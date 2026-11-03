@@ -31,19 +31,20 @@ public class AppSwitch {
     @JavascriptInterface public void open(String name) { open2(name, ""); }
 
     /** Abre una app; "tab" le dice a cuál pantalla ir (por ejemplo los Ajustes del Diario). */
-    @JavascriptInterface public void open2(String name, String tab) {
-        act.runOnUiThread(() -> {
-            Class<?> c = target(name);
-            if (c == null) return;
-            String t = tab != null && !tab.isEmpty() ? tab : ("diario".equals(name) ? "diario" : "rotador".equals(name) ? "rotador" : "");
-            if (c == act.getClass()) { if (act instanceof Tabs && !t.isEmpty()) ((Tabs) act).showTab(t); return; }
-            Intent i = new Intent(act, c);
-            tab = t;
-            if ("inicio".equals(name)) i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            else i.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            if (tab != null && !tab.isEmpty()) i.putExtra("tab", tab);
-            act.startActivity(i);
-            act.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
-        });
+    @JavascriptInterface public void open2(final String name, final String tab0) {
+        act.runOnUiThread(() -> go(name, tab0));
+    }
+
+    public void go(String name, String tab0) {
+        Class<?> c = target(name);
+        if (c == null) return;
+        String t = tab0 != null && !tab0.isEmpty() ? tab0 : ("diario".equals(name) ? "diario" : "rotador".equals(name) ? "rotador" : "");
+        if (c == act.getClass()) { if (act instanceof Tabs && !t.isEmpty()) ((Tabs) act).showTab(t); return; }
+        Intent i = new Intent(act, c);
+        if ("inicio".equals(name)) i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        else i.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        if (!t.isEmpty()) i.putExtra("tab", t);
+        act.startActivity(i);
+        act.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
     }
 }
