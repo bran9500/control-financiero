@@ -141,7 +141,17 @@ public class TrazadorCore {
         try { ocr.close(); } catch (Exception ignored) {}
     }
 
-    private void setStatus(String s) { if (status != null) status.setText(s); }
+    /** Para mostrar lo que dice el Trazador también en la barra compacta. */
+    public interface StatusListener { void onStatus(String s); }
+    private StatusListener listener;
+    public void setStatusListener(StatusListener l) { listener = l; }
+
+    private void setStatus(String s) { if (status != null) status.setText(s); if (listener != null) listener.onStatus(s); }
+
+    /** Los mismos botones, para usarlos desde otra parte de la ventanita. */
+    public void zone() { run(true); }
+    public void trace() { run(false); }
+    public void clearLines() { clear(); setStatus("Líneas borradas."); }
 
     // ---------------- lectura y análisis ----------------
     private static final Pattern PRICE = Pattern.compile("^\\s*([0-9]{1,6})[.,]([0-9]{2,6})\\s*$");

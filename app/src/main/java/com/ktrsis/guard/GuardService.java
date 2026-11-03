@@ -77,6 +77,8 @@ public class GuardService extends Service {
     private AutoTrades auto;
     private TextView bubbleTxt, whoTxt, stakeTxt, escTxt, autoTxt, autoBtn, resetBtn, undoTxt, sizeBtn;
     private View compactBox, expandBox, headRow;
+    private TextView qZona, qTrazar, qBorrar, trazMsg;
+    private final Runnable hideTrazMsg = () -> { if (trazMsg != null) trazMsg.setVisibility(View.GONE); };
     private int size = 1;              // 0 bolita · 1 compacta · 2 abierta
     private String lastAuto = "";
     private final Runnable engineChanged = () -> GuardService.this.ui.post(GuardService.this::render);
@@ -439,7 +441,16 @@ public class GuardService extends Service {
         compact.addView(head, new LinearLayout.LayoutParams(-1, dp(22)));
         stakeTxt = text("$1", 26, FG, true);
         stakeTxt.setIncludeFontPadding(false);
-        compact.addView(stakeTxt);
+        // Al lado del monto: los botones del Trazador, para usarlos sin abrir la ventanita
+        LinearLayout stakeRow = new LinearLayout(this);
+        stakeRow.setGravity(Gravity.CENTER_VERTICAL);
+        stakeRow.addView(stakeTxt, new LinearLayout.LayoutParams(0, -2, 1));
+        qZona = chip("Zona", 0xFFFF5AF0, 0xFF232A35);
+        qTrazar = chip("Trazar", 0xFFFFE14D, 0xFF232A35);
+        qBorrar = chip("Borrar", FG, 0xFF232A35);
+        LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(-2, -2); qp.leftMargin = dp(5);
+        stakeRow.addView(qZona, qp); stakeRow.addView(qTrazar, qp); stakeRow.addView(qBorrar, qp);
+        compact.addView(stakeRow, new LinearLayout.LayoutParams(-1, -2));
         escTxt = text("", 10, GOLD, true);
         escTxt.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         compact.addView(escTxt);
@@ -448,6 +459,10 @@ public class GuardService extends Service {
         compact.addView(bar, bl);
         stTxt = text("", 11, FG, true);
         compact.addView(stTxt);
+        trazMsg = text("", 10, MUTED, false);
+        trazMsg.setVisibility(View.GONE);
+        trazMsg.setMaxLines(3);
+        compact.addView(trazMsg, new LinearLayout.LayoutParams(-1, -2));
         compactBox = compact;
         compact.setMinimumWidth(dp(118));
         panel.addView(compact, new LinearLayout.LayoutParams(-1, -2));
@@ -476,6 +491,14 @@ public class GuardService extends Service {
             @Override public Bitmap frame() { return fullFrame(); }
             @Override public Rect hide() { return panelRect(); }
         });
+        traz.setStatusListener(msg -> ui.post(() -> {
+            if (size != 1 || trazMsg == null) return;   // en la abierta ya se ve abajo de sus botones
+            trazMsg.setText(msg); trazMsg.setVisibility(View.VISIBLE);
+            ui.removeCallbacks(hideTrazMsg); ui.postDelayed(hideTrazMsg, 9000);
+        }));
+        qZona.setOnClickListener(v -> { touched(); traz.zone(); });
+        qTrazar.setOnClickListener(v -> { touched(); traz.trace(); });
+        qBorrar.setOnClickListener(v -> { touched(); traz.clearLines(); });
         View sep = new View(this); sep.setBackgroundColor(LINE);
         LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(-1, dp(1)); sepLp.topMargin = dp(6);
         ex.addView(sep, sepLp);
@@ -545,6 +568,9 @@ public class GuardService extends Service {
         compactBox.setVisibility(s == 0 ? View.GONE : View.VISIBLE);
         expandBox.setVisibility(s == 2 ? View.VISIBLE : View.GONE);
         sizeBtn.setText(s == 2 ? "▴" : "▾");
+        int q = s == 1 ? View.VISIBLE : View.GONE;
+        qZona.setVisibility(q); qTrazar.setVisibility(q); qBorrar.setVisibility(q);
+        if (s != 1) trazMsg.setVisibility(View.GONE);
         if (s == 2) traz.attachLines(); else if (s == 0) traz.detachLines();
         panel.setPadding(dp(s == 0 ? 4 : 7), dp(s == 0 ? 2 : 3), dp(s == 0 ? 4 : 7), dp(s == 0 ? 2 : 6));
         touched();
