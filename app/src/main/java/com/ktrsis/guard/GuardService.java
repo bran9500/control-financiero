@@ -79,7 +79,7 @@ public class GuardService extends Service {
     private View compactBox, expandBox, headRow;
     private int size = 1;              // 0 bolita · 1 compacta · 2 abierta
     private String lastAuto = "";
-    private final Runnable engineChanged = () -> ui.post(this::render);
+    private final Runnable engineChanged = () -> GuardService.this.ui.post(GuardService.this::render);
     private final Runnable fade = () -> { if (panel != null && state == 0) panel.setAlpha(size == 0 ? 0.55f : 0.62f); };
     private View alertView;
 
