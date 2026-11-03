@@ -72,6 +72,15 @@ public class GuardService extends Service {
     private LinearLayout panel;
     private TextView balTxt, plTxt, lvlTxt, stTxt;
     private Bar bar;
+    // Rotador + Diario dentro de la misma ventanita
+    private com.ktrsis.rotador.Engine engine;
+    private AutoTrades auto;
+    private TextView bubbleTxt, whoTxt, stakeTxt, escTxt, autoTxt, autoBtn, resetBtn, undoTxt, sizeBtn;
+    private View compactBox, expandBox, headRow;
+    private int size = 1;              // 0 bolita · 1 compacta · 2 abierta
+    private String lastAuto = "";
+    private final Runnable engineChanged = () -> ui.post(this::render);
+    private final Runnable fade = () -> { if (panel != null && state == 0) panel.setAlpha(size == 0 ? 0.55f : 0.62f); };
     private View alertView;
 
     private MediaProjection projection;
@@ -129,6 +138,18 @@ public class GuardService extends Service {
             }, ui);
             if (intent.getBooleanExtra("traz", false)) prefs.edit().putBoolean("traz", true).apply();
             balance = Double.NaN; state = 0; alerted = 0; riskSince = 0; goalHits = 0;
+            engine = com.ktrsis.rotador.Engine.get(this);
+            engine.addListener(engineChanged);
+            auto = new AutoTrades(new AutoTrades.Book() {
+                @Override public int turn() { return engine.turn; }
+                @Override public int lots() { return engine.nLots; }
+                @Override public boolean alive(int lot) { return engine.alive(lot); }
+                @Override public double stakeOf(int lot) { return engine.stakeOf(lot); }
+                @Override public void apply(int lot, boolean win) { engine.resultFor(lot, win, true); }
+                @Override public void extra(double stake, boolean win, double value) { engine.extra(stake, win, value, true); }
+                @Override public void setTurn(int lot) { engine.setTurn(lot); }
+            });
+            auto.expiryMs = Math.max(1, prefs.getInt("expiry", 3)) * 1000L;
             start = "manual".equals(prefs.getString("capMode", "auto")) ? prefs.getFloat("capital", 0) : Double.NaN;
             if (!(start > 0)) start = Double.NaN;
             status = "Buscando tu saldo en la pantalla…";
@@ -144,6 +165,7 @@ public class GuardService extends Service {
     public void onDestroy() {
         running = false;
         ui.removeCallbacksAndMessages(null);
+        if (engine != null) engine.removeListener(engineChanged);
         try { if (panel != null) wm.removeView(panel); } catch (Exception ignored) {}
         if (traz != null) traz.release();
         hideAlert();
@@ -162,8 +184,8 @@ public class GuardService extends Service {
         PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, GuardActivity.class),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification n = new Notification.Builder(this, "guardian")
-                .setContentTitle("Guardián + Trazador activo")
-                .setContentText("Vigilando tu riesgo y tu meta · zonas en la misma ventanita")
+                .setContentTitle("Panel de trading activo")
+                .setContentText("Rotador, Diario, Guardián y Trazador en una ventanita")
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentIntent(pi).setOngoing(true).build();
         if (Build.VERSION.SDK_INT >= 29) startForeground(3, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
@@ -208,7 +230,11 @@ public class GuardService extends Service {
         @Override public void run() {
             if (!running) return;
             readOnce();
-            ui.postDelayed(this, 2000);
+            if (autoOn() && auto != null) {
+                auto.tick(System.currentTimeMillis());
+                if (!auto.last.equals(lastAuto)) render();
+            }
+            ui.postDelayed(this, autoOn() ? 700 : 2000);
         }
     };
 
@@ -332,8 +358,11 @@ public class GuardService extends Service {
         if (!Double.isNaN(pending) && Math.abs(v - pending) < 0.005) pendingCount++;
         else { pending = v; pendingCount = 1; }
         boolean plausible = Double.isNaN(balance) || (v > balance * 0.4 && v < balance * 2.5);
-        if (pendingCount >= 2 || (plausible && !Double.isNaN(balance) && pendingCount >= 1 && Math.abs(v - balance) < balance * 0.15)) {
+        // Con la detección automática, un saldo nuevo cuenta solo si se lee igual dos veces (evita errores de lectura).
+        if (pendingCount >= 2 || (!autoOn() && plausible && !Double.isNaN(balance) && pendingCount >= 1 && Math.abs(v - balance) < balance * 0.15)) {
+            double prev = balance;
             balance = v; lastX = x; lastY = y; pendingCount = 0; status = "";
+            if (autoOn() && auto != null && !Double.isNaN(prev) && plausible) auto.onBalance(prev, v, System.currentTimeMillis());
             if (Double.isNaN(start)) start = v;     // capital inicial = primer saldo leído
             evaluate();
         }
@@ -371,6 +400,14 @@ public class GuardService extends Service {
         return new Rect(lp.x - dp(4), lp.y - dp(4), lp.x + panel.getWidth() + dp(4), lp.y + panel.getHeight() + dp(4));
     }
 
+    boolean autoOn() { return prefs.getBoolean("auto", true); }
+
+    private TextView chip(String s, int color, int fill) {
+        TextView t = text(s, 12, color, true);
+        t.setGravity(Gravity.CENTER); t.setPadding(dp(6), dp(6), dp(6), dp(6));
+        t.setBackground(rounded(fill, 7, 0)); return t;
+    }
+
     private void showPanel() {
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         lp = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
@@ -380,83 +417,147 @@ public class GuardService extends Service {
         lp.y = prefs.getInt("y", (int) (getResources().getDisplayMetrics().heightPixels * 0.42f));
         panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackground(rounded(BG, 10, 0x66D9B45A));
-        panel.setPadding(dp(6), dp(2), dp(6), dp(5));
-        int w = dp(108);
+        panel.setPadding(dp(7), dp(3), dp(7), dp(6));
 
-        LinearLayout top = new LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = text("⠿ GUARDIÁN", 8, GOLD, true);
-        TextView reset = text("⟳", 13, MUTED, true);
-        TextView close = text("×", 15, MUTED, true);
-        trazToggle = text("📐", 11, MUTED, false);
-        trazToggle.setPadding(dp(5), 0, dp(3), 0);
-        reset.setPadding(dp(5), 0, dp(5), 0); close.setPadding(dp(5), 0, 0, 0);
-        top.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        top.addView(trazToggle); top.addView(reset); top.addView(close);
-        LinearLayout.LayoutParams topLp = new LinearLayout.LayoutParams(-1, dp(19));
-        top.setMinimumWidth(w);
-        panel.addView(top, topLp);
+        // ---- bolita: solo el monto de la siguiente operación ----
+        bubbleTxt = text("$1", 15, FG, true);
+        bubbleTxt.setGravity(Gravity.CENTER);
+        bubbleTxt.setPadding(dp(4), dp(4), dp(4), dp(4));
+        panel.addView(bubbleTxt, new LinearLayout.LayoutParams(-2, -2));
 
-        balTxt = text("—", 22, FG, true);
-        balTxt.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-        plTxt = text("", 12, MUTED, true);
+        // ---- compacta ----
+        LinearLayout compact = new LinearLayout(this);
+        compact.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        whoTxt = text("⠿ L1 · P1", 10, MUTED, true);
+        sizeBtn = text("▾", 15, GOLD, true); sizeBtn.setPadding(dp(8), 0, dp(6), 0);
+        TextView mini = text("–", 17, MUTED, true); mini.setPadding(dp(6), 0, dp(2), 0);
+        head.addView(whoTxt, new LinearLayout.LayoutParams(0, -2, 1));
+        head.addView(sizeBtn); head.addView(mini);
+        headRow = head;
+        compact.addView(head, new LinearLayout.LayoutParams(-1, dp(22)));
+        stakeTxt = text("$1", 26, FG, true);
+        stakeTxt.setIncludeFontPadding(false);
+        compact.addView(stakeTxt);
+        escTxt = text("", 10, GOLD, true);
+        escTxt.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        compact.addView(escTxt);
         bar = new Bar(this);
-        lvlTxt = text("", 10, MUTED, false);
-        lvlTxt.setTypeface(Typeface.MONOSPACE);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, dp(5)); bl.topMargin = dp(4); bl.bottomMargin = dp(2);
+        compact.addView(bar, bl);
         stTxt = text("", 11, FG, true);
-        // mismo orden que el recuadro del Rotador: −riesgo · +meta, barra, estado; abajo el saldo real
-        lvlTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        lvlTxt.setTextColor(MUTED);
-        stTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        balTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.5f);
-        balTxt.setTypeface(Typeface.MONOSPACE);
-        balTxt.setTextColor(MUTED);
-        plTxt.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
-        panel.addView(lvlTxt, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, dp(6)); bl.topMargin = dp(4); bl.bottomMargin = dp(3);
-        panel.addView(bar, bl);
-        panel.addView(stTxt, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1, -2); sl.topMargin = dp(2);
-        panel.addView(balTxt, sl);
-        panel.addView(plTxt);
+        compact.addView(stTxt);
+        compactBox = compact;
+        compact.setMinimumWidth(dp(118));
+        panel.addView(compact, new LinearLayout.LayoutParams(-1, -2));
 
-        // Trazador: Zona / Trazar / Borrar debajo del Guardián, con la misma grabación de pantalla
+        // ---- abierta ----
+        LinearLayout ex = new LinearLayout(this);
+        ex.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout rowRes = new LinearLayout(this);
+        TextView win = chip("Ganó", 0xFF0E1116, WIN), loss = chip("Perdió", 0xFFFFFFFF, LOSS), und = chip("↶", FG, 0xFF232A35);
+        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(0, -2, 1); rp.rightMargin = dp(4);
+        rowRes.addView(win, rp); rowRes.addView(loss, rp);
+        rowRes.addView(und, new LinearLayout.LayoutParams(dp(36), -2));
+        LinearLayout.LayoutParams rrl = new LinearLayout.LayoutParams(-1, -2); rrl.topMargin = dp(6);
+        ex.addView(rowRes, rrl);
+        autoTxt = text("", 10, MUTED, false);
+        autoTxt.setMaxWidth(dp(186));
+        autoTxt.setPadding(0, dp(4), 0, 0);
+        ex.addView(autoTxt);
+        undoTxt = text("Se reinició el capital · toca aquí para DESHACER", 11, GOLD, true);
+        undoTxt.setVisibility(View.GONE);
+        undoTxt.setPadding(0, dp(4), 0, 0);
+        ex.addView(undoTxt);
+
+        // Trazador: Zona / Trazar / Borrar
         traz = new com.ktrsis.trazador.TrazadorCore(this, wm, bg, new com.ktrsis.trazador.TrazadorCore.FrameSource() {
             @Override public Bitmap frame() { return fullFrame(); }
             @Override public Rect hide() { return panelRect(); }
         });
-        trazBox = traz.controls();
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(dp(176), -2); tl.topMargin = dp(4);
         View sep = new View(this); sep.setBackgroundColor(LINE);
-        LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(-1, dp(1)); sepLp.topMargin = dp(5);
-        LinearLayout tw = new LinearLayout(this); tw.setOrientation(LinearLayout.VERTICAL);
-        tw.addView(sep, sepLp); tw.addView(trazBox, tl);
-        trazBox = tw;
-        panel.addView(tw, new LinearLayout.LayoutParams(-2, -2));
-        setTrazVisible(prefs.getBoolean("traz", true));
-        trazToggle.setOnClickListener(v -> setTrazVisible(trazBox.getVisibility() != View.VISIBLE));
+        LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(-1, dp(1)); sepLp.topMargin = dp(6);
+        ex.addView(sep, sepLp);
+        trazBox = traz.controls();
+        ex.addView(trazBox, new LinearLayout.LayoutParams(dp(186), -2));
 
+        balTxt = text("", 9.5f, MUTED, false); balTxt.setTypeface(Typeface.MONOSPACE);
+        plTxt = text("", 9, MUTED, true);
+        lvlTxt = text("", 10, MUTED, false); lvlTxt.setTypeface(Typeface.MONOSPACE);
+        LinearLayout.LayoutParams bt = new LinearLayout.LayoutParams(-1, -2); bt.topMargin = dp(5);
+        ex.addView(balTxt, bt); ex.addView(plTxt); ex.addView(lvlTxt);
+
+        LinearLayout foot = new LinearLayout(this);
+        autoBtn = chip("", FG, 0xFF232A35);
+        resetBtn = chip("⟳ mantén", MUTED, 0xFF232A35);
+        TextView close = chip("× Cerrar", MUTED, 0xFF232A35);
+        LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(0, -2, 1); fp.rightMargin = dp(4);
+        foot.addView(autoBtn, fp); foot.addView(resetBtn, fp);
+        foot.addView(close, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2); fl.topMargin = dp(6);
+        ex.addView(foot, fl);
+        expandBox = ex;
+        panel.addView(ex, new LinearLayout.LayoutParams(-2, -2));
+
+        // ---- acciones ----
+        win.setOnClickListener(v -> { touched(); engine.result(true); });
+        loss.setOnClickListener(v -> { touched(); engine.result(false); });
+        und.setOnClickListener(v -> { touched(); engine.undo(); });
+        sizeBtn.setOnClickListener(v -> setSize(size == 2 ? 1 : 2));
+        mini.setOnClickListener(v -> setSize(0));
         close.setOnClickListener(v -> stopSelf());
-        // ⟳: el saldo actual pasa a ser el capital de inicio (empezar de nuevo)
-        reset.setOnClickListener(v -> {
-            if (!Double.isNaN(balance)) { start = balance; alerted = 0; state = 0; riskSince = 0; goalHits = 0; render(); }
+        autoBtn.setOnClickListener(v -> { touched(); prefs.edit().putBoolean("auto", !autoOn()).apply(); if (!autoOn()) auto.clear(); render(); });
+        // ⟳ reinicia el capital de inicio solo si lo mantienes presionado 1.5 s, y se puede deshacer
+        final Runnable doReset = () -> {
+            if (Double.isNaN(balance)) return;
+            final double before = start;
+            start = balance; alerted = 0; state = 0; riskSince = 0; goalHits = 0;
+            try { ((android.os.Vibrator) getSystemService(VIBRATOR_SERVICE)).vibrate(VibrationEffect.createOneShot(60, 120)); } catch (Exception ignored) {}
+            undoTxt.setVisibility(View.VISIBLE);
+            undoTxt.setOnClickListener(x -> { start = before; undoTxt.setVisibility(View.GONE); render(); });
+            ui.postDelayed(() -> undoTxt.setVisibility(View.GONE), 8000);
+            render();
+        };
+        resetBtn.setOnTouchListener((v, e) -> {
+            touched();
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) { resetBtn.setText("Sigue…"); ui.postDelayed(doReset, 1500); }
+            else if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) { ui.removeCallbacks(doReset); resetBtn.setText("⟳ mantén"); }
+            return true;
         });
-        View.OnTouchListener drag = new Drag();
-        title.setOnTouchListener(drag); balTxt.setOnTouchListener(drag); plTxt.setOnTouchListener(drag);
+        Drag drag = new Drag();
         panel.setOnTouchListener(drag);
+        bubbleTxt.setOnTouchListener(drag);
+        headRow.setOnTouchListener(drag);
+        whoTxt.setOnTouchListener(drag);
+        stakeTxt.setOnTouchListener(drag);
+
         wm.addView(panel, lp);
-        render();
+        size = prefs.getInt("size", 1);
+        setSize(size);
     }
 
-    /** Muestra u oculta la parte del Trazador (📐). Al ocultarla también se quitan las líneas. */
-    private void setTrazVisible(boolean on) {
-        prefs.edit().putBoolean("traz", on).apply();
-        trazBox.setVisibility(on ? View.VISIBLE : View.GONE);
-        trazToggle.setTextColor(on ? GOLD : MUTED);
-        trazToggle.setAlpha(on ? 1f : 0.6f);
-        if (on) traz.attachLines(); else traz.detachLines();
-        try { if (panel.isAttachedToWindow()) wm.updateViewLayout(panel, lp); } catch (Exception ignored) {}
+    /** 0 bolita · 1 compacta · 2 abierta (con Trazador y botones). */
+    private void setSize(int s) {
+        size = s;
+        prefs.edit().putInt("size", s).apply();
+        bubbleTxt.setVisibility(s == 0 ? View.VISIBLE : View.GONE);
+        compactBox.setVisibility(s == 0 ? View.GONE : View.VISIBLE);
+        expandBox.setVisibility(s == 2 ? View.VISIBLE : View.GONE);
+        sizeBtn.setText(s == 2 ? "▴" : "▾");
+        if (s == 2) traz.attachLines(); else if (s == 0) traz.detachLines();
+        panel.setPadding(dp(s == 0 ? 4 : 7), dp(s == 0 ? 2 : 3), dp(s == 0 ? 4 : 7), dp(s == 0 ? 2 : 6));
+        touched();
+        render();
+        try { wm.updateViewLayout(panel, lp); } catch (Exception ignored) {}
+    }
+
+    /** Al tocarla se ve completa; si no la tocas unos segundos se vuelve casi transparente. */
+    private void touched() {
+        if (panel == null) return;
+        panel.setAlpha(1f);
+        ui.removeCallbacks(fade);
+        ui.postDelayed(fade, 5000);
     }
 
     private static String fmt0(double v) { return Math.abs(v - Math.rint(v)) < 1e-9 ? String.valueOf((long) Math.rint(v)) : String.format(Locale.US, "%.1f", v); }
@@ -465,30 +566,55 @@ public class GuardService extends Service {
     private static String money(double v) { return com.ktrsis.rotador.Engine.money(v); }
 
     private void render() {
-        if (panel == null) return;
+        if (panel == null || engine == null) return;
+        // Rotador: siguiente operación
+        double[] sq = engine.sequence();
+        int t = engine.turn;
+        int open = auto != null ? auto.pending().size() : 0;
+        String stake = t < 0 ? "✕" : short$(sq[engine.step[t]]);
+        bubbleTxt.setText(stake + (open > 0 ? " ⏳" : ""));
+        stakeTxt.setText(stake);
+        stakeTxt.setTextColor(t >= 0 && engine.step[t] == sq.length - 1 ? LOSS : FG);
+        whoTxt.setText(t < 0 ? "⠿ LOTES QUEMADOS" : "⠿ L" + (t + 1) + " · P" + (engine.step[t] + 1) + "/" + sq.length + (open > 0 ? "  ⏳" + open : ""));
+        whoTxt.setTextColor(t < 0 ? LOSS : MUTED);
+        com.ktrsis.diario.Escalera esc = com.ktrsis.diario.Escalera.today(this);
+        escTxt.setText(esc.line());
+        escTxt.setVisibility(esc.ok ? View.VISIBLE : View.GONE);
+        // Detección automática
+        if (auto != null) lastAuto = auto.last;
+        autoBtn.setText(autoOn() ? "Auto ✓" : "Auto ✕");
+        autoBtn.setTextColor(autoOn() ? WIN : MUTED);
+        autoTxt.setText(autoOn() ? "Auto (prueba): " + (auto == null || auto.last.isEmpty() ? "esperando tu primera operación…" : auto.last)
+                : "Auto apagado: anota con Ganó / Perdió");
+
+        // Guardián: riesgo y meta con el saldo real
+        int frame;
         if (Double.isNaN(balance)) {
             balTxt.setText("Saldo —");
             plTxt.setText(status.isEmpty() ? "Leyendo tu saldo…" : "No veo el saldo"); plTxt.setTextColor(MUTED);
-            stTxt.setText(status.isEmpty() ? "…" : "Abre el broker"); stTxt.setTextColor(GOLD);
+            stTxt.setText(status.isEmpty() ? "Leyendo saldo…" : "Abre el broker"); stTxt.setTextColor(GOLD);
             lvlTxt.setText(Double.isNaN(start) ? "−" + fmt0(riskPct()) + "% · +" + fmt0(goalPct()) + "%"
                     : "−" + short$(start - riskLevel()) + "  ·  +" + short$(goalLevel() - start));
             bar.set(0, 1, 1.5);
-            return;
+            frame = 0x66D9B45A;
+        } else {
+            double pl = balance - start;
+            balTxt.setText("Saldo " + money(balance));
+            plTxt.setText((pl >= 0 ? "+" : "") + money(pl) + "  (" + String.format(Locale.US, "%+.1f%%", pl / start * 100) + ")");
+            plTxt.setTextColor(pl > 0.004 ? WIN : pl < -0.004 ? LOSS : MUTED);
+            double riskAmt = start - riskLevel(), goalAmt = goalLevel() - start;
+            bar.set(pl, riskAmt, goalAmt);
+            lvlTxt.setText("−" + short$(riskAmt) + "  ·  +" + short$(goalAmt));
+            if (state == 1) { stTxt.setText("✓ META · CIERRA"); stTxt.setTextColor(WIN); }
+            else if (state == -1) { stTxt.setText("✕ RIESGO · PARA"); stTxt.setTextColor(LOSS); }
+            else if (riskSince > 0) { stTxt.setText("⚠ En el límite…"); stTxt.setTextColor(GOLD); }
+            else if (pl >= 0) { stTxt.setText((pl > 0.004 ? "+" + short$(pl) + " · " : "") + "faltan " + short$(goalAmt - pl)); stTxt.setTextColor(FG); }
+            else { stTxt.setText(short$(pl) + " · margen " + short$(riskAmt + pl)); stTxt.setTextColor(GOLD); }
+            frame = state == 1 ? WIN : state == -1 ? LOSS : 0x66D9B45A;
         }
-        double pl = balance - start;
-        balTxt.setText("Saldo " + money(balance));
-        plTxt.setText((pl >= 0 ? "+" : "") + money(pl) + "  (" + String.format(Locale.US, "%+.1f%%", pl / start * 100) + ")");
-        plTxt.setTextColor(pl > 0.004 ? WIN : pl < -0.004 ? LOSS : MUTED);
-        double riskAmt = start - riskLevel(), goalAmt = goalLevel() - start;
-        bar.set(pl, riskAmt, goalAmt);
-        lvlTxt.setText("−" + short$(riskAmt) + "  ·  +" + short$(goalAmt));
-        if (state == 1) { stTxt.setText("✓ META · CIERRA"); stTxt.setTextColor(WIN); }
-        else if (state == -1) { stTxt.setText("✕ RIESGO · PARA"); stTxt.setTextColor(LOSS); }
-        else if (riskSince > 0) { stTxt.setText("⚠ En el límite…"); stTxt.setTextColor(GOLD); }
-        else if (pl >= 0) { stTxt.setText("Faltan " + short$(goalAmt - pl)); stTxt.setTextColor(FG); }
-        else { stTxt.setText("Margen " + short$(riskAmt + pl)); stTxt.setTextColor(GOLD); }
-        panel.setBackground(rounded(state == 1 ? 0xF2123A26 : state == -1 ? 0xF23A1414 : BG, 10,
-                state == 1 ? WIN : state == -1 ? LOSS : 0x66D9B45A));
+        int fill = state == 1 ? 0xF2123A26 : state == -1 ? 0xF23A1414 : BG;
+        panel.setBackground(rounded(fill, size == 0 ? 18 : 10, frame));
+        if (state != 0) panel.setAlpha(1f);
     }
 
     // ---------------- aviso grande ----------------
@@ -566,7 +692,7 @@ public class GuardService extends Service {
         int sx, sy; float dx0, dy0; boolean moved;
         @Override public boolean onTouch(View v, MotionEvent e) {
             switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN: sx = lp.x; sy = lp.y; dx0 = e.getRawX(); dy0 = e.getRawY(); moved = false; return true;
+                case MotionEvent.ACTION_DOWN: touched(); sx = lp.x; sy = lp.y; dx0 = e.getRawX(); dy0 = e.getRawY(); moved = false; return true;
                 case MotionEvent.ACTION_MOVE:
                     float dx = e.getRawX() - dx0, dy = e.getRawY() - dy0;
                     if (Math.abs(dx) > dp(6) || Math.abs(dy) > dp(6)) moved = true;
@@ -574,6 +700,7 @@ public class GuardService extends Service {
                     return true;
                 case MotionEvent.ACTION_UP:
                     if (moved) prefs.edit().putInt("x", lp.x).putInt("y", lp.y).apply();
+                    else if (size == 0) setSize(1);          // tocar la bolita la abre
                     return true;
             }
             return false;

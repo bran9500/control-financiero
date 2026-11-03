@@ -49,7 +49,7 @@
 const NA = window.Android || null;
 let S = { running:false, risk:6, goal:9, capMode:'auto', capital:0, delay:6, sound:true, overlayOk:true };
 function load(){ try{ if(NA) S = JSON.parse(NA.getState()); }catch(e){} }
-function save(){ if(NA) NA.save(JSON.stringify({risk:S.risk, goal:S.goal, capMode:S.capMode, capital:S.capital, delay:S.delay, sound:S.sound})); }
+function save(){ if(NA) NA.save(JSON.stringify({risk:S.risk, goal:S.goal, capMode:S.capMode, capital:S.capital, delay:S.delay, sound:S.sound, expiry:S.expiry||3, auto:S.auto!==false})); }
 // Moneda elegida en el Rotador (Ajustes → Moneda)
 const CURS={USD:["$",2],EUR:["€",2],COP:["$",0],MXN:["$",2],BRL:["R$",2],PEN:["S/",2],ARS:["$",0],CLP:["$",0],GTQ:["Q",2],DOP:["RD$",2],VES:["Bs.",2],GBP:["£",2],USDT:["₮",2]};
 let CUR='USD'; try{ if(NA && NA.getCurrency){ const c = NA.getCurrency(); if(CURS[c]) CUR = c; } }catch(e){}
@@ -101,7 +101,7 @@ function liveHtml(){
 }
 function render(){
   document.getElementById('app').innerHTML = `
-    <div class="topbar"><div><p class="page-title">Guardián</p><p class="sub">Riesgo y meta en vivo + Trazador, en una sola ventanita</p></div>
+    <div class="topbar"><div><p class="page-title">Guardián</p><p class="sub">Rotador, Diario, riesgo y meta y Trazador en una sola ventanita</p></div>
       ${NA ? `<button class="icon-btn" onclick="Android.goHome()">⌂</button>` : ''}</div>
     ${liveHtml()}
     <div class="card">
@@ -125,8 +125,8 @@ function render(){
         <li>Toca <b>Activar</b> y acepta grabar la pantalla (es para leer tu saldo; nada sale del teléfono).</li>
         <li>Abre tu broker con el <b>saldo visible arriba</b>. La ventanita del Guardián lee tu saldo cada 2 segundos.</li>
         <li>Al llegar a la <b>meta</b> o tocar el <b>riesgo</b>, toda la pantalla se pone verde o roja, vibra y suena.</li>
-        <li>Con <b>⟳</b> en la ventanita, el saldo de ese momento pasa a ser tu nuevo capital de inicio.</li>
-        <li>Debajo están <b>Zona</b>, <b>Trazar</b> y <b>Borrar</b> del Trazador. Con <b>📐</b> los muestras u ocultas.</li>
+        <li>Para reiniciar el capital de inicio, abre la ventanita y <b>mantén presionado ⟳</b>; si fue sin querer, toca <b>Deshacer</b>.</li>
+        <li>La ventanita tiene 3 tamaños: <b>bolita</b> (solo el monto que sigue), <b>compacta</b> y <b>abierta</b> (▾) con Ganó/Perdió, el Trazador y los ajustes rápidos.</li>
       </ol>
     </div>
     <div class="card">
@@ -134,6 +134,10 @@ function render(){
       <label class="f">Esperar antes del aviso de riesgo (segundos)<input type="number" inputmode="numeric" step="1" min="0" value="${S.delay}" oninput="setNum('delay', this)"></label>
       <p class="muted" style="margin-top:8px;">El broker descuenta la apuesta apenas la abres. Con operaciones de 3 segundos, 6 segundos evita falsas alarmas.</p>
       <label class="chk"><input type="checkbox" ${S.sound?'checked':''} onchange="set('sound', this.checked)"> Sonido de alarma (suena aunque el teléfono esté en silencio)</label>
+      <p class="card-title" style="margin-top:16px;">Anotar solo (modo prueba)</p>
+      <label class="chk"><input type="checkbox" ${S.auto!==false?'checked':''} onchange="set('auto', this.checked)"> Anotar las operaciones solo, mirando cómo cambia tu saldo</label>
+      <label class="f">Tiempo de expiración de tus operaciones (segundos)<input type="number" inputmode="numeric" step="1" min="1" value="${S.expiry||3}" oninput="setNum('expiry', this)"></label>
+      <p class="muted" style="margin-top:8px;">Si el saldo baja, abriste una operación; si sube casi el doble, la ganaste; si pasa este tiempo y no sube, la perdiste. Todo va al Rotador y al Diario. Si algo sale mal, corrígelo con Ganó / Perdió / ↶ en la ventanita abierta (▾).</p>
       <p class="muted" style="margin-top:10px;">El Guardián ya trae el Trazador adentro. El Bot Señales usa otra grabación de pantalla: úsalo aparte.</p>
     </div>`;
 }

@@ -157,7 +157,20 @@ public class MainActivity extends Activity implements com.ktrsis.diario.DiarioBr
     @Override protected void onResume() { super.onResume(); engine.addListener(refresh); refresh.run(); }
     @Override protected void onPause() { engine.removeListener(refresh); super.onPause(); }
 
+    /** La ventanita flotante ahora es una sola: Rotador + Diario + Guardián + Trazador (lee el saldo y anota solo). */
     private void toggleOverlay() {
+        if (OverlayService.running) stopService(new Intent(this, OverlayService.class));
+        if (com.ktrsis.guard.GuardService.running) {
+            stopService(new Intent(this, com.ktrsis.guard.GuardService.class));
+            web.postDelayed(refresh, 300);
+            return;
+        }
+        Intent g = new Intent(this, com.ktrsis.guard.GuardActivity.class);
+        g.putExtra("autostart", true);
+        startActivity(g);
+    }
+
+    private void toggleOldOverlay() {
         if (!Settings.canDrawOverlays(this)) {
             startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
             return;
@@ -174,8 +187,8 @@ public class MainActivity extends Activity implements com.ktrsis.diario.DiarioBr
 
     /** Lo que la página puede pedirle a la app. Todo pasa por el hilo principal. */
     private class Bridge {
-        @JavascriptInterface public String getState() { return engine.webState(OverlayService.running); }
-        @JavascriptInterface public boolean overlayRunning() { return OverlayService.running; }
+        @JavascriptInterface public String getState() { return engine.webState(OverlayService.running || com.ktrsis.guard.GuardService.running); }
+        @JavascriptInterface public boolean overlayRunning() { return OverlayService.running || com.ktrsis.guard.GuardService.running; }
         @JavascriptInterface public void result(boolean win) { runOnUiThread(() -> engine.result(win)); }
         @JavascriptInterface public void undo() { runOnUiThread(engine::undo); }
         @JavascriptInterface public void revive(int k) { runOnUiThread(() -> engine.reviveLot(k)); }

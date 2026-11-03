@@ -153,7 +153,7 @@ function calcRot(d){
   const all = [];
   (d.rops || []).forEach(r => {
     if(r.cut) return;
-    const o = { step: cur.i, lvl: r.s || 0, stake: r.stake || 0, win: !!r.win, v: +r.v || 0, lot: r.lot || 0, burn: !!r.burn, t: r.ts };
+    const o = { step: cur.i, lvl: r.s || 0, stake: r.stake || 0, win: !!r.win, v: +r.v || 0, lot: r.lot == null ? 0 : r.lot, burn: !!r.burn, auto: !!r.auto, t: r.ts };
     all.push(o);
     cur.ops.push(o); cur.profit += o.v;
     if(o.lvl > 0){ cur.mg++; if(o.win) cur.mgWins++; }
@@ -381,7 +381,7 @@ function previewPlan(v){
 }
 
 function dayDetailHtml(day, d, c){
-  const rows = c.all.map((o, i) => `<tr><td>${o.step + 1}</td><td>${c.rot ? 'L' + (o.lot + 1) + ' ' + (o.lvl ? '<span class="tag mg">P' + (o.lvl + 1) + '</span>' : 'P1') : (o.lvl ? '<span class="tag mg">MG' + (d.mgLevels > 1 ? o.lvl : '') + '</span>' : 'Entrada')}${o.burn ? ' 🔥' : ''}</td>
+  const rows = c.all.map((o, i) => `<tr><td>${o.step + 1}</td><td>${c.rot && o.lot < 0 ? '<span class="tag">Fuera del plan</span>' : c.rot ? 'L' + (o.lot + 1) + ' ' + (o.lvl ? '<span class="tag mg">P' + (o.lvl + 1) + '</span>' : 'P1') : (o.lvl ? '<span class="tag mg">MG' + (d.mgLevels > 1 ? o.lvl : '') + '</span>' : 'Entrada')}${o.burn ? ' 🔥' : ''}</td>
     <td class="num">${money(o.stake)}</td><td>${o.win ? '<span class="pos">✓</span>' : '<span class="neg">✕</span>'}</td>
     <td class="num ${o.win ? 'pos' : 'neg'}">${smoney(o.v)}</td></tr>`).reverse().join('');
   const f = c.first;

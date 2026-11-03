@@ -16,9 +16,9 @@ public class TrazadorActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        getSharedPreferences("guardian", MODE_PRIVATE).edit().putBoolean("traz", true).apply();
+        getSharedPreferences("guardian", MODE_PRIVATE).edit().putBoolean("traz", true).putInt("size", 2).apply();
         if (GuardService.running) {
-            Toast.makeText(this, "Ya está activo: usa Zona y Trazar en la ventanita del Guardián (botón 📐 para mostrarlos)", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Ya está activo: abre la ventanita con ▾ para ver Zona y Trazar", Toast.LENGTH_LONG).show();
         } else {
             Intent i = new Intent(this, GuardActivity.class);
             i.putExtra("autostart", true);

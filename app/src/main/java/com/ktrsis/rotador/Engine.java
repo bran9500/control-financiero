@@ -30,6 +30,7 @@ public class Engine {
     public long startedAt = 0;              // hora de la primera operación de la sesión
     public int burned = 0;                  // lotes quemados en la sesión
     public int cuts = 0;                    // ciclos cortados a mano para asegurar ganancia
+    public double extraPl = 0;              // resultado de operaciones fuera del plan (no mueven los lotes)
     private JSONArray sessions = new JSONArray(); // sesiones archivadas, la más reciente primero
 
     private final ArrayDeque<String> history = new ArrayDeque<>();
@@ -108,7 +109,7 @@ public class Engine {
     }
 
     public double net() {
-        double t = 0;
+        double t = extraPl;
         for (double v : pl) t += v;
         return r2(t);
     }
@@ -119,6 +120,39 @@ public class Engine {
             if (!dead[i]) return i;
         }
         return -1;
+    }
+
+    public boolean alive(int lot) { return lot >= 0 && lot < nLots && !dead[lot]; }
+    public double stakeOf(int lot) { return alive(lot) ? sequence()[step[lot]] : 0; }
+    public void setTurn(int lot) { if (alive(lot) && lot != turn) { turn = lot; changed(); } }
+
+    /** Resultado de un lote en particular (lo usa la detección automática). */
+    public void resultFor(int lot, boolean win, boolean auto) {
+        if (!alive(lot)) return;
+        turn = lot;
+        result(win);
+        if (auto) try { log.getJSONObject(0).put("auto", true); save(); } catch (Exception ignored) {}
+    }
+
+    /** Operación fuera del plan: cuenta en el resultado y en el Diario, pero no mueve los lotes. */
+    public void extra(double stake, boolean win, double value, boolean auto) {
+        pushHistory();
+        ops++;
+        if (win) wins++; else losses++;
+        long now = System.currentTimeMillis();
+        if (startedAt == 0) startedAt = now;
+        double v = win ? r2(value) : -stake;
+        extraPl = Math.round((extraPl + v) * 100) / 100.0;
+        try {
+            JSONObject e = new JSONObject();
+            e.put("t", "Fuera"); e.put("r", win ? "Ganó" : "Perdió"); e.put("v", v); e.put("stake", stake);
+            e.put("ts", now); e.put("lot", -1); e.put("s", 0); e.put("win", win); e.put("extra", true);
+            if (auto) e.put("auto", true);
+            JSONArray nl = new JSONArray(); nl.put(e);
+            for (int k = 0; k < Math.min(log.length(), 1999); k++) nl.put(log.get(k));
+            log = nl;
+        } catch (Exception ignored) {}
+        changed();
     }
 
     public void result(boolean win) {
@@ -272,6 +306,7 @@ public class Engine {
             o.put("start", startedAt); o.put("burned", burned); o.put("cuts", cuts);
             double off = 0;
             for (int i = nLots; i < MAX; i++) off += pl[i];
+            off += extraPl;
             o.put("plOff", r2(off)); o.put("nLots", nLots);
         } catch (Exception ignored) {}
         return o.toString();
@@ -336,7 +371,7 @@ public class Engine {
     public void resetSession() {
         history.clear();
         log = new JSONArray();
-        startedAt = 0; burned = 0; cuts = 0;
+        startedAt = 0; burned = 0; cuts = 0; extraPl = 0;
         step = new int[MAX]; pl = new double[MAX]; dead = new boolean[MAX];
         turn = 0; ops = 0; wins = 0; losses = 0;
         changed();
@@ -366,6 +401,7 @@ public class Engine {
             o.put("turn", turn); o.put("ops", ops); o.put("wins", wins); o.put("losses", losses);
             o.put("log", new JSONArray(log.toString()));
             o.put("start", startedAt); o.put("burned", burned); o.put("cuts", cuts);
+            o.put("extraPl", extraPl);
         } catch (Exception ignored) {}
         return o;
     }
@@ -379,6 +415,7 @@ public class Engine {
         JSONArray lg = o.optJSONArray("log");
         log = lg != null ? lg : new JSONArray();
         startedAt = o.optLong("start", 0); burned = o.optInt("burned", 0); cuts = o.optInt("cuts", 0);
+        extraPl = o.optDouble("extraPl", 0);
     }
 
     private void save() {

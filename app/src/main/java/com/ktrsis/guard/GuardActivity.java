@@ -101,6 +101,7 @@ public class GuardActivity extends Activity {
                 o.put("risk", prefs.getFloat("risk", 6)); o.put("goal", prefs.getFloat("goal", 9));
                 o.put("capMode", prefs.getString("capMode", "auto")); o.put("capital", prefs.getFloat("capital", 0));
                 o.put("delay", prefs.getInt("delay", 6)); o.put("sound", prefs.getBoolean("sound", true));
+                o.put("expiry", prefs.getInt("expiry", 3)); o.put("auto", prefs.getBoolean("auto", true));
                 o.put("overlayOk", Settings.canDrawOverlays(GuardActivity.this));
             } catch (Exception ignored) {}
             return o.toString();
@@ -110,7 +111,8 @@ public class GuardActivity extends Activity {
                 JSONObject o = new JSONObject(json);
                 prefs.edit().putFloat("risk", (float) o.optDouble("risk", 6)).putFloat("goal", (float) o.optDouble("goal", 9))
                         .putString("capMode", o.optString("capMode", "auto")).putFloat("capital", (float) o.optDouble("capital", 0))
-                        .putInt("delay", o.optInt("delay", 6)).putBoolean("sound", o.optBoolean("sound", true)).apply();
+                        .putInt("delay", o.optInt("delay", 6)).putBoolean("sound", o.optBoolean("sound", true))
+                        .putInt("expiry", Math.max(1, o.optInt("expiry", 3))).putBoolean("auto", o.optBoolean("auto", true)).apply();
             } catch (Exception ignored) {}
         }
         @JavascriptInterface public String getCurrency() { com.ktrsis.rotador.Engine.get(GuardActivity.this); return com.ktrsis.rotador.Engine.curCode; }

@@ -58,6 +58,12 @@ public class DiarioBridge {
     /** Capital, riesgo y meta: los mismos para el Rotador. */
     @JavascriptInterface public void setRotPlan(String json) {
         act.runOnUiThread(() -> Engine.get(act).setPlan(json));
+        // El Guardián usa el mismo riesgo y meta
+        try {
+            JSONObject o = new JSONObject(json);
+            act.getSharedPreferences("guardian", Context.MODE_PRIVATE).edit()
+                    .putFloat("risk", (float) o.optDouble("risk", 6)).putFloat("goal", (float) o.optDouble("goal", 9)).apply();
+        } catch (Exception ignored) {}
     }
 
     @JavascriptInterface public void openRotador() { act.runOnUiThread(() -> host.showTab("rotador")); }
