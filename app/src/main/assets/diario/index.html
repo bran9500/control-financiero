@@ -240,6 +240,61 @@ function panelHtml(){
     <button class="btn btn-block ${S.running ? '' : 'btn-solid'}" style="padding:15px;font-size:16px;${S.running ? 'border-color:var(--loss);color:var(--loss);' : ''}" onclick="Android.togglePanel()">${S.running ? '■ Cerrar la ventanita' : '▶ Empezar a operar'}</button>
   </div>`;
 }
+// ---------- sesiones (guardar, restaurar, borrar) ----------
+function curSession(){ try{ return JSON.parse(Android.currentSession()); }catch(e){ return null; } }
+function savedSessions(){ try{ return JSON.parse(Android.sessions() || '[]'); }catch(e){ return []; } }
+let armed = { k: '', t: 0 };
+function sure(key, msg){ if(armed.k === key && Date.now() - armed.t < 4000){ armed = { k: '', t: 0 }; return true; } armed = { k: key, t: Date.now() }; toast(msg || 'Toca otra vez para confirmar'); return false; }
+function hhmm(ms){ return ms ? new Date(ms).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '—'; }
+function sessionCardHtml(){
+  if(!(window.Android && Android.currentSession)) return '';
+  const c = curSession() || {}, n = savedSessions().length;
+  return `<div class="card">
+    <div class="next-op"><p class="card-title" style="margin:0;">Sesión</p><span class="faint">${c.ops || 0} op. · <span class="num ${cls(c.net || 0)}">${smoney(c.net || 0)}</span></span></div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" onclick="saveSession()">💾 Guardar y empezar otra</button>
+      <button class="btn" onclick="openSessions()">📂 Guardadas (${n})</button>
+    </div>
+    <button class="link" style="margin-top:4px;" onclick="discardSession()">Borrar esta sesión y empezar de cero</button>
+  </div>`;
+}
+function saveSession(){
+  const c = curSession() || {};
+  if(!c.ops){ toast('Esta sesión no tiene operaciones todavía'); return; }
+  Android.newSession(); toast('Sesión guardada. Empiezas una nueva'); setTimeout(() => { syncRot(); render(); }, 250);
+}
+function discardSession(){
+  if(!sure('discard', 'Toca otra vez para BORRAR la sesión actual (no se guarda)')) return;
+  Android.discardSession(); toast('Sesión borrada'); setTimeout(() => { syncRot(); render(); }, 250);
+}
+function openSessions(){ sheet = { type: 'sessions' }; renderSheet(); }
+function restoreSession(i){
+  if(!sure('restore' + i, 'Toca otra vez para restaurarla (la actual se guarda primero)')) return;
+  Android.restoreSession(i); sheet = null; renderSheet(); toast('Sesión restaurada'); setTimeout(() => { syncRot(); render(); }, 300);
+}
+function deleteSaved(i){
+  if(!sure('del' + i, 'Toca otra vez para borrar esa sesión guardada')) return;
+  Android.deleteSession(i); setTimeout(() => { syncRot(); renderSheet(); render(); }, 250);
+}
+function resetToday(){
+  if(!sure('today', 'Toca otra vez para borrar el día de hoy del diario')) return;
+  delete D.days[today()]; save(); sheet = null; renderSheet(); render(); toast('Día de hoy borrado: pon tu capital y empieza otra vez');
+}
+function sessionsSheetHtml(){
+  const list = savedSessions();
+  const rows = list.map((x, i) => `<div class="day" style="cursor:default;">
+      <div><div class="d">${x.start ? niceDate(iso(new Date(x.start))) : 'Sesión'} · ${hhmm(x.start)}–${hhmm(x.end)}</div>
+        <div class="m">${x.ops || 0} op. · ✓${x.w || 0} ✕${x.l || 0}${x.burned ? ' · ' + x.burned + ' quemado' + (x.burned === 1 ? '' : 's') : ''}</div></div>
+      <div style="text-align:right;"><div class="num ${cls(x.net || 0)}">${smoney(x.net || 0)}</div>
+        <div><button class="link" style="padding:4px;" onclick="restoreSession(${i})">Restaurar</button><button class="link" style="padding:4px;color:var(--loss);" onclick="deleteSaved(${i})">Borrar</button></div></div>
+    </div>`).join('');
+  return `<p class="card-title">Sesiones guardadas</p>
+    ${list.length ? rows : '<p class="muted">Todavía no has guardado ninguna. Usa "Guardar y empezar otra".</p>'}
+    <div class="card" style="margin-top:14px;background:var(--bg);">
+      <p class="muted">Restaurar pone esa sesión como la actual (los lotes quedan como estaban) y guarda primero la que tengas abierta.</p>
+      <button class="link" style="color:var(--loss);" onclick="resetToday()">Borrar el día de hoy del diario y empezar otra vez</button>
+    </div>`;
+}
 function startDay(open){
   const cap = num(document.getElementById('cap').value);
   if(!(cap > 0)){ toast('Escribe tu capital de hoy'); return; }
@@ -325,6 +380,7 @@ function renderHoy(){
     return h;
   }
   h += panelHtml();
+  h += sessionCardHtml();
   if(!d){
     const cap = suggestedCapital();
     const P = plan(Object.assign({}, D.cfg, { capital: cap || 0 }));
@@ -434,9 +490,14 @@ function openDay(day){ sheet = { type: 'day', day }; renderSheet(); }
 function renderSheet(){
   const el = document.getElementById('sheet');
   if(!sheet){ el.innerHTML = ''; return; }
+  let h = '';
+  if(sheet.type === 'sessions'){
+    el.innerHTML = `<div class="sheet-bg" onclick="if(event.target===this){sheet=null;renderSheet();}"><div class="sheet">${sessionsSheetHtml()}
+      <button class="btn btn-block" style="margin-top:12px;" onclick="sheet=null;renderSheet();render()">Cerrar</button></div></div>`;
+    return;
+  }
   const d = D.days[sheet.day]; if(!d){ sheet = null; el.innerHTML = ''; return; }
   const c = calc(d);
-  let h = '';
   if(sheet.type === 'step'){
     const s = c.steps[sheet.i];
     const st = s.status === 'won' ? '<span class="pos">Logrado</span>' : s.status === 'lost' ? '<span class="neg">Perdido</span>' : sheet.i === c.cur ? 'En curso' : 'Pendiente';
@@ -606,6 +667,7 @@ function renderAjustes(){
   const f = (k, label, step, help) => `<label class="f">${label}<input type="number" inputmode="decimal" step="${step}" value="${c[k]}" oninput="setCfg('${k}', this.value)">${help ? `<span class="faint">${help}</span>` : ''}</label>`;
   const fr = (k, label, step, mode) => `<label class="f">${label}<input type="${mode || 'number'}" inputmode="decimal" step="${step}" value="${R[k]}" oninput="setRot('${k}', this.value)"></label>`;
   return `<div class="topbar"><div><p class="page-title">Ajustes</p><p class="sub">Un solo lugar para el Rotador y el Diario</p></div></div>
+  ${sessionCardHtml()}
   ${td ? `<div class="card"><p class="card-title">Hoy</p>
     <label class="f">Capital de hoy ($)<input type="text" inputmode="decimal" value="${td.capital}" oninput="setTodayCapital(this.value)"></label>
     <p class="faint" style="margin:0;">Lo que ya operaste se queda con el monto que tuvo; lo nuevo usa estos números.</p></div>` : ''}
@@ -649,7 +711,7 @@ function renderAjustes(){
     <label class="f" style="display:flex;gap:10px;align-items:center;"><input type="checkbox" style="width:auto;margin:0;" ${G.sound ? 'checked' : ''} onchange="setG('sound', this.checked)"> Sonido de alarma en meta y riesgo</label>
     <div class="row" style="margin-top:6px;">
       <button class="btn" onclick="Android.reviveAll();toast('Lotes revividos')">Revivir lotes</button>
-      <button class="btn" onclick="if(confirmNew()){Android.newSession();toast('Lotes en cero')}">Lotes en cero</button>
+
     </div>
   </div>` : ''}
   <div class="card">

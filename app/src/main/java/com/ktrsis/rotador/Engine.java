@@ -338,6 +338,54 @@ public class Engine {
 
     public String sessionsJson() { return sessions.toString(); }
 
+    /**
+     * Vuelve a poner como actual una sesión guardada. La sesión actual (si tiene operaciones) se guarda primero.
+     * El paso y si el lote está quemado se reconstruyen repasando sus operaciones.
+     */
+    public void restoreSession(int index) {
+        if (index < 0 || index >= sessions.length()) return;
+        JSONObject target = sessions.optJSONObject(index);
+        if (target == null) return;
+        sessions.remove(index);
+        prefs.edit().putString("sessions", sessions.toString()).apply();
+        if (ops > 0) closeSession(); else resetSession();
+        try {
+            JSONArray lg = target.optJSONArray("log");
+            log = lg != null ? new JSONArray(lg.toString()) : new JSONArray();
+            JSONArray lp = target.optJSONArray("lots");
+            int n = lp != null ? Math.max(1, Math.min(MAX, lp.length())) : nLots;
+            nLots = Math.max(nLots, n);
+            step = new int[MAX]; pl = new double[MAX]; dead = new boolean[MAX];
+            if (lp != null) for (int i = 0; i < Math.min(MAX, lp.length()); i++) pl[i] = lp.optDouble(i, 0);
+            ops = target.optInt("ops", 0); wins = target.optInt("w", 0); losses = target.optInt("l", 0);
+            burned = target.optInt("burned", 0); cuts = target.optInt("cuts", 0); startedAt = target.optLong("start", 0);
+            extraPl = 0;
+            double lotsSum = 0;
+            for (int i = 0; i < MAX; i++) lotsSum += pl[i];
+            // repaso de operaciones (el log va de la más nueva a la más vieja)
+            int last = -1;
+            for (int k = log.length() - 1; k >= 0; k--) {
+                JSONObject e = log.optJSONObject(k); if (e == null) continue;
+                int lot = e.optInt("lot", -1);
+                if (lot < 0) { extraPl += e.optDouble("v", 0); continue; }
+                if (lot >= MAX) continue;
+                if (e.optBoolean("cut")) { step[lot] = 0; last = lot; continue; }
+                if (e.optBoolean("win")) step[lot] = 0;
+                else if (e.optBoolean("burn")) { step[lot] = 0; dead[lot] = true; }
+                else { step[lot] = e.optInt("s", 0) + 1; dead[lot] = false; }
+                last = lot;
+            }
+            extraPl = r2(target.optDouble("net", lotsSum + extraPl) - lotsSum);
+            for (int i = 0; i < MAX; i++) if (step[i] >= steps) step[i] = steps - 1;
+            turn = last >= 0 ? nextAlive(last) : 0;
+            history.clear();
+        } catch (Exception ignored) {}
+        changed();
+    }
+
+    /** Borra la sesión actual sin guardarla (para volver a empezar de cero). */
+    public void discardSession() { resetSession(); }
+
     /** Operaciones (ganó / perdió / cortó) entre dos horas, de la sesión actual y las archivadas, de la más vieja a la más nueva. */
     public JSONArray opsBetween(long from, long to) {
         List<JSONObject> out = new ArrayList<>();

@@ -90,6 +90,16 @@ public class DiarioBridge {
     @JavascriptInterface public void reviveAll() { act.runOnUiThread(() -> Engine.get(act).reviveAll()); }
     @JavascriptInterface public void newSession() { act.runOnUiThread(() -> Engine.get(act).closeSession()); }
     @JavascriptInterface public void undo() { act.runOnUiThread(() -> Engine.get(act).undo()); }
+    @JavascriptInterface public String sessions() { return Engine.get(act).sessionsJson(); }
+    @JavascriptInterface public void restoreSession(int i) { act.runOnUiThread(() -> Engine.get(act).restoreSession(i)); }
+    @JavascriptInterface public void deleteSession(int i) { act.runOnUiThread(() -> Engine.get(act).deleteSession(i)); }
+    @JavascriptInterface public void discardSession() { act.runOnUiThread(() -> Engine.get(act).discardSession()); }
+    @JavascriptInterface public String currentSession() {
+        Engine e = Engine.get(act);
+        JSONObject o = new JSONObject();
+        try { o.put("ops", e.ops); o.put("w", e.wins); o.put("l", e.losses); o.put("net", e.net()); o.put("start", e.startedAt); o.put("burned", e.burned); } catch (Exception ignored) {}
+        return o.toString();
+    }
 
     /** Ajustes de la ventanita (los que antes estaban en el Guardián). */
     @JavascriptInterface public String getGuard() {
