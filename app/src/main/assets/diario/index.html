@@ -521,8 +521,7 @@ function renderHistorial(){
   const keys = Object.keys(D.days).sort().reverse();
   let h = `<div class="topbar"><div><p class="page-title">Historial</p><p class="sub">Tu mes y cada día</p></div></div>`;
   if(!keys.length) return h + `<div class="card"><p class="muted">Todavía no hay días. Empieza uno en <b>Hoy</b>.</p></div>`;
-  h += renderStats(true);
-  h += `<p class="card-title" style="margin:18px 2px 10px 2px;">Días</p>`;
+
   const byMonth = {};
   keys.forEach(k => (byMonth[k.slice(0, 7)] = byMonth[k.slice(0, 7)] || []).push(k));
   Object.keys(byMonth).forEach(m => {
@@ -612,8 +611,31 @@ function renderStats(noHead){
       ${S.best ? `<div class="kv"><span>Mejor día</span><b class="num pos">${smoney(S.best.c.profit)} <span class="faint">${niceDate(S.best.k)}</span></b></div>` : ''}
       ${S.worst && S.worst.c.profit < 0 ? `<div class="kv"><span>Peor día</span><b class="num neg">${smoney(S.worst.c.profit)} <span class="faint">${niceDate(S.worst.k)}</span></b></div>` : ''}
     </div>
+    ${rotBreakdownHtml(S)}
     ${insightsHtml(S, wr)}`;
   return h;
+}
+
+// Con el Rotador: cómo te va en cada paso de martingala y cuánto deja cada lote.
+function rotBreakdownHtml(S){
+  const lv = {}, lots = {};
+  let any = false;
+  S.days.forEach(({ c }) => { if(!c.rot) return; c.all.forEach(o => {
+    any = true;
+    const L = lv[o.lvl] = lv[o.lvl] || { n: 0, w: 0, v: 0 }; L.n++; if(o.win) L.w++; L.v += o.v;
+    const k = o.lot < 0 ? 'fuera' : o.lot;
+    const T = lots[k] = lots[k] || { n: 0, w: 0, v: 0, burn: 0 }; T.n++; if(o.win) T.w++; T.v += o.v; if(o.burn) T.burn++;
+  }); });
+  if(!any) return '';
+  const lvRows = Object.keys(lv).sort((a, b) => a - b).map(k => { const L = lv[k];
+    return `<tr><td>P${+k + 1}${+k ? ' <span class="faint">(MG)</span>' : ''}</td><td class="num">${L.n}</td><td class="num">${pct(L.w / L.n * 100, 0)}</td><td class="num ${cls(L.v)}">${smoney(L.v)}</td></tr>`; }).join('');
+  const lotRows = Object.keys(lots).sort((a, b) => (a === 'fuera') - (b === 'fuera') || a - b).map(k => { const T = lots[k];
+    return `<tr><td>${k === 'fuera' ? 'Fuera del plan' : 'Lote ' + (+k + 1)}</td><td class="num">${T.n}</td><td class="num">${pct(T.w / T.n * 100, 0)}</td><td class="num">${T.burn || '—'}</td><td class="num ${cls(T.v)}">${smoney(T.v)}</td></tr>`; }).join('');
+  return `<div class="card"><p class="card-title">Por paso de martingala</p>
+      <table><tr><th>Paso</th><th>Op.</th><th>Ganó</th><th>Resultado</th></tr>${lvRows}</table>
+      <p class="faint" style="margin:8px 0 0 0;">P1 es la entrada; P2, P3… son las martingalas. Si un paso gana poco, ahí se te va la plata.</p></div>
+    <div class="card"><p class="card-title">Por lote</p>
+      <table><tr><th>Lote</th><th>Op.</th><th>Ganó</th><th>Quem.</th><th>Resultado</th></tr>${lotRows}</table></div>`;
 }
 
 function insightsHtml(S, wr){
@@ -772,9 +794,9 @@ function refreshPlan(){
 }
 
 function render(){
-  const views = { hoy: renderHoy, hist: renderHistorial, stats: renderHistorial, ajustes: renderAjustes };
+  const views = { hoy: renderHoy, hist: renderHistorial, stats: () => renderStats(false), ajustes: renderAjustes };
   document.getElementById('app').innerHTML = views[tab]();
-  document.getElementById('tabs').innerHTML = [['hoy', 'Hoy'], ['hist', 'Historial'], ['ajustes', 'Ajustes']]
+  document.getElementById('tabs').innerHTML = [['hoy', 'Hoy'], ['stats', 'Estadísticas'], ['hist', 'Historial'], ['ajustes', 'Ajustes']]
     .map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="tab='${k}';stakeDraft=null;sheet=null;renderSheet();render();scrollTo(0,0)">${l}</button>`).join('');
 }
 // ---------- conexión con el Rotador ----------
