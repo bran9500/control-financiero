@@ -183,7 +183,7 @@ public class GuardService extends Service {
     private void startInForeground() {
         NotificationManager nm = getSystemService(NotificationManager.class);
         nm.createNotificationChannel(new NotificationChannel("guardian", "Guardián de riesgo y meta", NotificationManager.IMPORTANCE_MIN));
-        PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, GuardActivity.class),
+        PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, com.ktrsis.rotador.MainActivity.class),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification n = new Notification.Builder(this, "guardian")
                 .setContentTitle("Panel de trading activo")

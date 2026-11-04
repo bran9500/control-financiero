@@ -2,8 +2,8 @@
 (function(){
   if(!window.AppSwitch) return;
   var APPS = [
-    ['inicio','Inicio','🏠'], ['rotador','Rotador + Diario','📒'], ['guardian','Guardián + Trazador','🛡'],
-    ['bot','Bot Señales','📈'], ['notas','Notas','🎙'], ['ingles','Inglés','🔤'], ['interes','Interés','💹']
+    ['inicio','Inicio','🏠'], ['rotador','Trading','📈'],
+    ['bot','Bot Señales','🤖'], ['notas','Notas','🎙'], ['ingles','Inglés','🔤'], ['interes','Interés','💹']
   ];
   var here = (location.pathname.match(/\/([a-z]+)\/index\.html$/) || [])[1] || '';
   if(here === 'diario') here = 'rotador';

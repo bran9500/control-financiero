@@ -11,7 +11,7 @@ import org.json.JSONObject;
 
 /** Puente de la pantalla del Diario (vive dentro de la app "Rotador + Diario"). */
 public class DiarioBridge {
-    public interface Host { void showTab(String tab); void goHome(); }
+    public interface Host { void showTab(String tab); void goHome(); void togglePanel(); }
     private final Activity act;
     private final Host host;
 
@@ -66,5 +66,48 @@ public class DiarioBridge {
         } catch (Exception ignored) {}
     }
 
-    @JavascriptInterface public void openRotador() { act.runOnUiThread(() -> host.showTab("rotador")); }
+    @JavascriptInterface public void openRotador() { act.runOnUiThread(host::togglePanel); }
+
+    // ---------- ventanita (panel de trading) ----------
+    @JavascriptInterface public void togglePanel() { act.runOnUiThread(host::togglePanel); }
+
+    /** Estado para la pantalla: si la ventanita está prendida, el lote de turno y el monto que sigue. */
+    @JavascriptInterface public String panelState() {
+        Engine e = Engine.get(act);
+        JSONObject o = new JSONObject();
+        try {
+            o.put("running", com.ktrsis.guard.GuardService.running);
+            double[] sq = e.sequence();
+            o.put("turn", e.turn); o.put("seqLen", sq.length);
+            o.put("stake", e.turn >= 0 ? sq[e.step[e.turn]] : 0);
+            JSONArray lots = new JSONArray();
+            for (int i = 0; i < e.nLots; i++) { JSONObject l = new JSONObject(); l.put("step", e.step[i]); l.put("dead", e.dead[i]); l.put("pl", e.pl[i]); lots.put(l); }
+            o.put("lots", lots); o.put("net", e.net());
+            o.put("balance", Double.isNaN(com.ktrsis.guard.GuardService.balance) ? JSONObject.NULL : com.ktrsis.guard.GuardService.balance);
+        } catch (Exception ignored) {}
+        return o.toString();
+    }
+    @JavascriptInterface public void reviveAll() { act.runOnUiThread(() -> Engine.get(act).reviveAll()); }
+    @JavascriptInterface public void newSession() { act.runOnUiThread(() -> Engine.get(act).closeSession()); }
+    @JavascriptInterface public void undo() { act.runOnUiThread(() -> Engine.get(act).undo()); }
+
+    /** Ajustes de la ventanita (los que antes estaban en el Guardián). */
+    @JavascriptInterface public String getGuard() {
+        android.content.SharedPreferences g = act.getSharedPreferences("guardian", Context.MODE_PRIVATE);
+        JSONObject o = new JSONObject();
+        try {
+            o.put("auto", g.getBoolean("auto", true)); o.put("expiry", g.getInt("expiry", 3));
+            o.put("delay", g.getInt("delay", 6)); o.put("sound", g.getBoolean("sound", true));
+        } catch (Exception ignored) {}
+        return o.toString();
+    }
+    @JavascriptInterface public void setGuard(String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            act.getSharedPreferences("guardian", Context.MODE_PRIVATE).edit()
+                    .putBoolean("auto", o.optBoolean("auto", true)).putInt("expiry", Math.max(1, o.optInt("expiry", 3)))
+                    .putInt("delay", Math.max(0, o.optInt("delay", 6))).putBoolean("sound", o.optBoolean("sound", true))
+                    .putString("capMode", "auto").apply();
+        } catch (Exception ignored) {}
+    }
 }

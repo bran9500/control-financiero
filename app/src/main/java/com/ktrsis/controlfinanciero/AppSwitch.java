@@ -19,7 +19,7 @@ public class AppSwitch {
             case "inicio": return MainActivity.class;
             case "rotador": return com.ktrsis.rotador.MainActivity.class;
             case "diario": return com.ktrsis.rotador.MainActivity.class;
-            case "guardian": return com.ktrsis.guard.GuardActivity.class;
+            case "guardian": return com.ktrsis.rotador.MainActivity.class;
             case "bot": return com.ktrsis.bot.MainActivity.class;
             case "notas": return com.ktrsis.notas.NotesActivity.class;
             case "ingles": return com.ktrsis.ingles.EnglishActivity.class;

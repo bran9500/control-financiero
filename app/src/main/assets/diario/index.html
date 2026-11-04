@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diario de trading</title>
+<title>Trading</title>
 <style>
   :root{
     --bg:#12161C; --surface:#1B2129; --surface-raised:#232A35; --line:#2A313B;
@@ -226,13 +226,28 @@ function suggestedCapital(){
   if(l){ const c = calc(l); return r2(l.capital + c.profit); }
   return D.cfg.capital || 0;
 }
-function startDay(){
+function panelState(){ try{ return window.Android && Android.panelState ? JSON.parse(Android.panelState()) : null; }catch(e){ return null; } }
+function panelHtml(){
+  const S = panelState(); if(!S) return '';
+  const lots = (S.lots || []).map((l, i) => `<span class="tag ${i === S.turn ? 'mg' : ''}" style="${l.dead ? 'border-color:var(--loss);color:var(--loss);' : ''}">L${i + 1} ${l.dead ? '✕' : 'P' + (l.step + 1)}</span>`).join(' ');
+  const dead = (S.lots || []).some(l => l.dead);
+  return `<div class="card" style="border-color:${S.running ? 'var(--win)' : 'var(--line)'};">
+    <div class="next-op"><div><p class="faint" style="margin:0;">Siguiente operación</p>
+      <p class="num" style="font-size:30px;margin:2px 0 0 0;">${S.turn < 0 ? '—' : money(S.stake)}</p></div>
+      <div style="text-align:right;"><p class="faint" style="margin:0;">${S.turn < 0 ? 'Lotes quemados' : 'Lote ' + (S.turn + 1)}</p><p class="num ${cls(S.net)}" style="margin:4px 0 0 0;">${smoney(S.net)}</p></div></div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin:8px 0 12px 0;">${lots}</div>
+    ${dead ? `<button class="link" onclick="Android.reviveAll()">Revivir lotes quemados</button>` : ''}
+    <button class="btn btn-block ${S.running ? '' : 'btn-solid'}" style="padding:15px;font-size:16px;${S.running ? 'border-color:var(--loss);color:var(--loss);' : ''}" onclick="Android.togglePanel()">${S.running ? '■ Cerrar la ventanita' : '▶ Empezar a operar'}</button>
+  </div>`;
+}
+function startDay(open){
   const cap = num(document.getElementById('cap').value);
   if(!(cap > 0)){ toast('Escribe tu capital de hoy'); return; }
   const c = D.cfg;
   D.days[today()] = { capital: cap, goal: c.goal, risk: c.risk, steps: c.steps, mgLevels: c.mgLevels, mult: c.mult, payout: c.payout, mode: c.mode, src: c.src || 'manual', ops: [], closed: {}, note: '', started: Date.now() };
   if(!D.cfg.capital) D.cfg.capital = cap;
   syncRot(); save(); pushPlan(); render();
+  if(open && window.Android && Android.togglePanel){ const S = panelState(); if(S && !S.running) Android.togglePanel(); }
 }
 function addOp(win){
   const d = D.days[today()]; if(!d) return;
@@ -296,8 +311,20 @@ function summaryHtml(d, c){
 
 function renderHoy(){
   const d = D.days[today()];
-  let h = `<div class="topbar"><div><p class="page-title">Diario de trading</p><p class="sub">${niceDate(today(), true)}</p></div>
+  let h = `<div class="topbar"><div><p class="page-title">Trading</p><p class="sub">${niceDate(today(), true)}</p></div>
     ${NA ? `<button class="icon-btn" onclick="Android.goHome()">⌂</button>` : ''}</div>`;
+  if(!d && D.cfg.src === 'rotador'){
+    const cap = suggestedCapital();
+    const P = plan(Object.assign({}, D.cfg, { capital: cap || 0 }));
+    h += `<div class="card">
+      <label class="f">Capital de hoy ($)<input id="cap" type="text" inputmode="decimal" value="${cap ? cap.toFixed(2) : ''}" placeholder="2000" oninput="previewPlan(this.value)"></label>
+      <div id="pv">${planHtml(P)}</div>
+      <button class="btn btn-solid btn-block" style="margin-top:14px;padding:16px;font-size:17px;" onclick="startDay(true)">▶ Empezar a operar</button>
+      <p class="faint" style="margin-top:10px;">Se abre la ventanita encima del broker: lee tu saldo, anota sola y te dice cuánto meter.</p>
+    </div>`;
+    return h;
+  }
+  h += panelHtml();
   if(!d){
     const cap = suggestedCapital();
     const P = plan(Object.assign({}, D.cfg, { capital: cap || 0 }));
@@ -333,8 +360,7 @@ function renderHoy(){
       <div class="next-op"><p class="card-title" style="margin:0;">${s ? 'Escalón ' + (c.cur + 1) + (c.cur >= d.steps ? ' (extra)' : ' de ' + d.steps) : 'Escalones completos'}</p><span class="tag mg">Rotador</span></div>
       ${s ? `<p class="faint" style="margin:0;">Llevas <span class="num ${cls(s.profit)}">${smoney(s.profit)}</span> de ${money(c.P.target)} · si bajas a ${money(-c.P.budget)} el escalón se pierde · ${s.ops.length} op.</p>
       <div class="progress" style="height:6px;"><span style="width:${prog}%"></span></div>` : `<p class="muted">Ya marcaste los ${d.steps} escalones de hoy. Si sigues operando con el Rotador, se cuentan como escalones extra.</p>`}
-      <p class="faint" style="margin:8px 0 10px 0;">Operas con la ventanita del Rotador: cada <b>Ganó</b> o <b>Perdió</b> se anota aquí solo. Para corregir, usa Deshacer en el Rotador.</p>
-      ${NA ? `<button class="btn btn-solid btn-block" onclick="Android.openRotador()">Abrir Rotador</button>` : ''}
+      <p class="faint" style="margin:8px 0 0 0;">Todo se anota solo desde la ventanita. Para corregir, ábrela (▾) y usa Ganó / Perdió / ↶.</p>
     </div>`;
   } else if(c.cur >= 0){
     const s = c.steps[c.cur];
@@ -432,8 +458,10 @@ function renderSheet(){
 
 function renderHistorial(){
   const keys = Object.keys(D.days).sort().reverse();
-  let h = `<div class="topbar"><div><p class="page-title">Historial</p><p class="sub">${keys.length} día${keys.length === 1 ? '' : 's'} anotado${keys.length === 1 ? '' : 's'}</p></div></div>`;
+  let h = `<div class="topbar"><div><p class="page-title">Historial</p><p class="sub">Tu mes y cada día</p></div></div>`;
   if(!keys.length) return h + `<div class="card"><p class="muted">Todavía no hay días. Empieza uno en <b>Hoy</b>.</p></div>`;
+  h += renderStats(true);
+  h += `<p class="card-title" style="margin:18px 2px 10px 2px;">Días</p>`;
   const byMonth = {};
   keys.forEach(k => (byMonth[k.slice(0, 7)] = byMonth[k.slice(0, 7)] || []).push(k));
   Object.keys(byMonth).forEach(m => {
@@ -491,9 +519,9 @@ function chartHtml(S){
     <p class="faint" style="margin:6px 0 0 0;">Barras: profit de cada día · Línea dorada: acumulado del mes</p></div>`;
 }
 
-function renderStats(){
+function renderStats(noHead){
   const months = [...new Set(Object.keys(D.days).map(k => k.slice(0, 7)))].sort().reverse();
-  let h = `<div class="topbar"><div><p class="page-title">Estadísticas</p><p class="sub">Cómo te va en el mes</p></div></div>`;
+  let h = noHead ? '' : `<div class="topbar"><div><p class="page-title">Estadísticas</p><p class="sub">Cómo te va en el mes</p></div></div>`;
   if(!months.length) return h + `<div class="card"><p class="muted">Cuando anotes tus primeros días, aquí verás tu profit del mes, win rate, martingalas y más.</p></div>`;
   if(!statMonth || !months.includes(statMonth)) statMonth = months[0];
   h += `<div class="chips">${months.map(m => `<button class="chip ${m === statMonth ? 'active' : ''}" onclick="statMonth='${m}';render()">${monthName(m)}</button>`).join('')}</div>`;
@@ -562,6 +590,10 @@ function rotSeqHtml(R){
     <div class="kv"><span>Si se quema un lote</span><b class="num neg">${money(-R.lotBudget)}</b></div>
     <div class="kv"><span>Todos los lotes (${R.nLots})</span><b class="num">${money(R.lotBudget * R.nLots)}</b></div>`;
 }
+function getG(){ try{ return window.Android && Android.getGuard ? JSON.parse(Android.getGuard()) : null; }catch(e){ return null; } }
+function setG(k, v){ const G = getG(); if(!G) return; G[k] = (k === 'auto' || k === 'sound') ? !!v : Math.max(0, Math.round(num(v))); try{ Android.setGuard(JSON.stringify(G)); }catch(e){} }
+let newArmed = 0;
+function confirmNew(){ if(Date.now() - newArmed < 4000) return true; newArmed = Date.now(); toast('Toca otra vez para poner los lotes en cero'); return false; }
 const CURS = ['USD','EUR','COP','MXN','BRL','PEN','ARS','CLP','GTQ','DOP','VES','GBP','USDT'];
 
 function renderAjustes(){
@@ -569,6 +601,7 @@ function renderAjustes(){
   const td = D.days[today()];
   const P = plan(td || Object.assign({}, c, { capital: c.capital || 0 }));
   const R = getRot();
+  const G = getG();
   const rot = (td ? td.src : c.src) === 'rotador';
   const f = (k, label, step, help) => `<label class="f">${label}<input type="number" inputmode="decimal" step="${step}" value="${c[k]}" oninput="setCfg('${k}', this.value)">${help ? `<span class="faint">${help}</span>` : ''}</label>`;
   const fr = (k, label, step, mode) => `<label class="f">${label}<input type="${mode || 'number'}" inputmode="decimal" step="${step}" value="${R[k]}" oninput="setRot('${k}', this.value)"></label>`;
@@ -605,6 +638,19 @@ function renderAjustes(){
         ${CURS.map(k => `<option ${R.currency === k ? 'selected' : ''}>${k}</option>`).join('')}
       </select></label>
     <div id="rotseq">${rotSeqHtml(R)}</div>
+  </div>` : ''}
+  ${G ? `<div class="card">
+    <p class="card-title">Ventanita</p>
+    <label class="f" style="display:flex;gap:10px;align-items:center;"><input type="checkbox" style="width:auto;margin:0;" ${G.auto ? 'checked' : ''} onchange="setG('auto', this.checked)"> Anotar sola las operaciones (lee tu saldo)</label>
+    <div class="grid2">
+      <label class="f">Expiración (segundos)<input type="number" inputmode="numeric" step="1" min="1" value="${G.expiry}" oninput="setG('expiry', this.value)"></label>
+      <label class="f">Esperar aviso de riesgo (s)<input type="number" inputmode="numeric" step="1" min="0" value="${G.delay}" oninput="setG('delay', this.value)"></label>
+    </div>
+    <label class="f" style="display:flex;gap:10px;align-items:center;"><input type="checkbox" style="width:auto;margin:0;" ${G.sound ? 'checked' : ''} onchange="setG('sound', this.checked)"> Sonido de alarma en meta y riesgo</label>
+    <div class="row" style="margin-top:6px;">
+      <button class="btn" onclick="Android.reviveAll();toast('Lotes revividos')">Revivir lotes</button>
+      <button class="btn" onclick="if(confirmNew()){Android.newSession();toast('Lotes en cero')}">Lotes en cero</button>
+    </div>
   </div>` : ''}
   <div class="card">
     <p class="card-title">Cómo se anotan las operaciones</p>
@@ -664,9 +710,9 @@ function refreshPlan(){
 }
 
 function render(){
-  const views = { hoy: renderHoy, hist: renderHistorial, stats: renderStats, ajustes: renderAjustes };
+  const views = { hoy: renderHoy, hist: renderHistorial, stats: renderHistorial, ajustes: renderAjustes };
   document.getElementById('app').innerHTML = views[tab]();
-  document.getElementById('tabs').innerHTML = [['hoy', 'Hoy'], ['hist', 'Historial'], ['stats', 'Estadísticas'], ['ajustes', 'Ajustes']]
+  document.getElementById('tabs').innerHTML = [['hoy', 'Hoy'], ['hist', 'Historial'], ['ajustes', 'Ajustes']]
     .map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="tab='${k}';stakeDraft=null;sheet=null;renderSheet();render();scrollTo(0,0)">${l}</button>`).join('');
 }
 // ---------- conexión con el Rotador ----------
@@ -719,8 +765,14 @@ function pushPlan(){
   try{ Android.setPlan(JSON.stringify({ date: today(), target: r2(P.target), riskStep: r2(P.budget), steps: d.steps, src: d.src || D.cfg.src })); }catch(e){}
   try{ if(Android.setRotPlan && d.capital > 0) Android.setRotPlan(JSON.stringify({ cap: d.capital, risk: d.risk, goal: d.goal })); }catch(e){}
 }
-window.diarioResume = function(){ if(syncRot() && !sheet) render(); };
-setInterval(() => { if(document.hidden) return; const d = D.days[today()]; if((d && d.src === 'rotador') || D.cfg.src === 'rotador'){ if(syncRot() && !sheet && !(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName))) render(); } }, 3000);
+let lastPanel = '';
+window.diarioResume = function(){
+  const ps = window.Android && Android.panelState ? Android.panelState() : '';
+  const changed = syncRot() || ps !== lastPanel;
+  lastPanel = ps;
+  if(changed && !sheet && tab === 'hoy' && !(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName))) render();
+};
+setInterval(() => { if(!document.hidden) window.diarioResume(); }, 2500);
 
 window.diarioBack = function(){
   if(sheet){ sheet = null; renderSheet(); return true; }

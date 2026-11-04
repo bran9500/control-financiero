@@ -116,8 +116,7 @@ const HELP_GO = [
   { t:'Respaldo y restaurar', k:'respaldo backup restaurar otro telefono copia', go:"settingsOpen.datos=true;openSettings()" },
   { t:'App de Inglés', k:'ingles palabras aprender frases', go:"openSubApp('ingles')" },
   { t:'Interés compuesto', k:'interes compuesto victorias plan crecer', go:"openSubApp('interes')" },
-  { t:'Guardián + Trazador: riesgo, meta y zonas en vivo', k:'guardian trazador zonas soporte resistencia canal riesgo meta capital trading broker saldo alerta stop', go:"openSubApp('guardian')" },
-  { t:'Diario de trading: escalones y estadísticas', k:'diario trading escalones martingala estadisticas win rate operaciones bitacora', go:"openSubApp('diario')" },
+  { t:'Trading: ventanita, escalones y estadísticas', k:'trading rotador lotes diario guardian trazador zonas riesgo meta escalones martingala estadisticas broker', go:"openSubApp('rotador')" },
   { t:'Notas por voz', k:'notas voz dictar apuntar', go:"openSubApp('notas')" }
 ];
 const FAQ = [
