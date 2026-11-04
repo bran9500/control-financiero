@@ -14,6 +14,8 @@
     --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{overflow-x:hidden;max-width:100%;}
+  .card,details.fold{min-width:0;max-width:100%;overflow:hidden;}
   html,body{background:var(--bg);margin:0;color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;}
   .wrap{max-width:560px;margin:0 auto;padding:18px 14px 96px 14px;}
   .topbar{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 14px 2px;gap:10px;}
@@ -78,6 +80,13 @@
   .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10;display:flex;align-items:flex-end;justify-content:center;}
   .sheet{background:var(--bg);border:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:88vh;overflow:auto;padding:18px 14px 28px 14px;}
   .toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--surface-raised);border:1px solid var(--line);color:var(--ink);padding:10px 16px;border-radius:12px;font-size:13.5px;z-index:20;max-width:90%;text-align:center;}
+  details.fold{background:var(--surface);border:1px solid var(--line);border-radius:16px;margin-bottom:12px;}
+  details.fold > summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  details.fold > summary::-webkit-details-marker{display:none;}
+  details.fold > summary .t{font-family:var(--serif);font-size:16px;}
+  details.fold > summary .arr{color:var(--ink-faint);transition:transform .15s;}
+  details.fold[open] > summary .arr{transform:rotate(90deg);}
+  details.fold > .in{padding:0 16px 14px 16px;}
   .insight{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13.5px;line-height:1.5;}
   .insight:first-child{border-top:none;}
   .insight i{font-style:normal;flex-shrink:0;}
@@ -240,6 +249,27 @@ function panelHtml(){
     <button class="btn btn-block ${S.running ? '' : 'btn-solid'}" style="padding:15px;font-size:16px;${S.running ? 'border-color:var(--loss);color:var(--loss);' : ''}" onclick="Android.togglePanel()">${S.running ? '■ Cerrar la ventanita' : '▶ Empezar a operar'}</button>
   </div>`;
 }
+// Tarjeta siempre visible con capital, meta y riesgo, editables aquí mismo.
+function planCardHtml(d){
+  const src = d || Object.assign({}, D.cfg, { capital: D.cfg.capital || 0 });
+  const P = plan(src);
+  return `<div class="card">
+    <div class="next-op"><p class="card-title" style="margin:0;">Capital, meta y riesgo</p><button class="link" onclick="diarioTab('ajustes')">Más ajustes ⚙</button></div>
+    <div class="grid3" style="margin:8px 0 0 0;">
+      <label class="f" style="margin:0;">Capital $<input type="text" inputmode="decimal" value="${src.capital || ''}" placeholder="2000" onchange="quickSet('capital', this.value)"></label>
+      <label class="f" style="margin:0;">Meta %<input type="number" inputmode="decimal" step="0.5" value="${src.goal}" onchange="quickSet('goal', this.value)"></label>
+      <label class="f" style="margin:0;">Riesgo %<input type="number" inputmode="decimal" step="0.5" value="${src.risk}" onchange="quickSet('risk', this.value)"></label>
+    </div>
+    <p class="faint" style="margin:8px 0 0 0;">Meta ${money(P.goal$)} · riesgo ${money(P.risk$)} · cada escalón vale ${money(P.target)}</p>
+  </div>`;
+}
+function quickSet(k, v){
+  const n = num(v); if(!(n > 0)) return;
+  if(k === 'capital'){ const d = D.days[today()]; if(d) setTodayCapital(n); D.cfg.capital = n; save(); pushPlan(); }
+  else setCfg(k, n);
+  render(); toast('Guardado');
+}
+
 // ---------- sesiones (guardar, restaurar, borrar) ----------
 function curSession(){ try{ return JSON.parse(Android.currentSession()); }catch(e){ return null; } }
 function savedSessions(){ try{ return JSON.parse(Android.sessions() || '[]'); }catch(e){ return []; } }
@@ -274,11 +304,22 @@ function restoreSession(i){
 }
 function deleteSaved(i){
   if(!sure('del' + i, 'Toca otra vez para borrar esa sesión guardada')) return;
-  Android.deleteSession(i); setTimeout(() => { syncRot(); renderSheet(); render(); }, 250);
+  Android.deleteSession(i); setTimeout(() => { syncRot(); if(sheet) renderSheet(); render(); }, 250);
 }
 function resetToday(){
   if(!sure('today', 'Toca otra vez para borrar el día de hoy del diario')) return;
   delete D.days[today()]; save(); sheet = null; renderSheet(); render(); toast('Día de hoy borrado: pon tu capital y empieza otra vez');
+}
+function sessionsListHtml(){
+  const list = savedSessions();
+  if(!list.length) return '<p class="muted">Todavía no has guardado ninguna. En <b>Hoy</b> usa "Guardar y empezar otra".</p>';
+  const tot = list.reduce((a, x) => a + (x.net || 0), 0);
+  return `<p class="faint" style="margin:0 0 4px 0;">Total de las guardadas: <b class="num ${cls(tot)}">${smoney(tot)}</b></p>` + list.map((x, i) => `<div class="day" style="cursor:default;">
+      <div><div class="d">${x.start ? niceDate(iso(new Date(x.start))) : 'Sesión'} · ${hhmm(x.start)}–${hhmm(x.end)}</div>
+        <div class="m">${x.ops || 0} op. · ✓${x.w || 0} ✕${x.l || 0}${x.burned ? ' · ' + x.burned + ' quemado' + (x.burned === 1 ? '' : 's') : ''}</div></div>
+      <div style="text-align:right;"><div class="num ${cls(x.net || 0)}">${smoney(x.net || 0)}</div>
+        <div><button class="link" style="padding:4px;" onclick="restoreSession(${i})">Restaurar</button><button class="link" style="padding:4px;color:var(--loss);" onclick="deleteSaved(${i})">Borrar</button></div></div>
+    </div>`).join('');
 }
 function sessionsSheetHtml(){
   const list = savedSessions();
@@ -344,12 +385,18 @@ function deleteDay(day){
 }
 
 // ---------- vistas ----------
+function d0(c){ return Math.min(9, c.steps.length); }
 function ladderHtml(c, day){
-  return `<div class="ladder" style="--n:${c.steps.length}">${c.steps.map(s => {
+  // Máximo 9 por fila; si hay muchos escalones extra, se muestran los últimos y un contador.
+  const MAXC = 27;
+  const all = c.steps, hidden = Math.max(0, all.length - MAXC);
+  const shown = hidden ? all.slice(0, d0(c)).concat(all.slice(all.length - (MAXC - d0(c)))) : all;
+  const more = hidden ? `<p class="faint" style="margin:4px 0 0 0;">… y ${hidden} escalones más (✓ ${c.won} · ✕ ${c.lost} en total)</p>` : '';
+  return `<div class="ladder" style="--n:${Math.min(9, Math.max(1, all.length))}">${shown.map(s => {
     const k = s.status === 'won' ? 'won' : s.status === 'lost' ? 'lost' : s.i === c.cur ? 'cur' : '';
     const ic = s.status === 'won' ? '✓' : s.status === 'lost' ? '✕' : s.i === c.cur ? '•' : '';
     return `<button class="rung ${k}" onclick="openStep('${day}',${s.i})"><b>${s.i + 1}</b><small>${ic || '&nbsp;'}</small></button>`;
-  }).join('')}</div>`;
+  }).join('')}</div>${more}`;
 }
 
 function summaryHtml(d, c){
@@ -367,7 +414,8 @@ function summaryHtml(d, c){
 function renderHoy(){
   const d = D.days[today()];
   let h = `<div class="topbar"><div><p class="page-title">Trading</p><p class="sub">${niceDate(today(), true)}</p></div>
-    ${NA ? `<button class="icon-btn" onclick="Android.goHome()">⌂</button>` : ''}</div>`;
+    <div style="display:flex;gap:8px;"><button class="icon-btn" onclick="diarioTab('ajustes')" aria-label="Ajustes">⚙</button>
+    ${NA ? `<button class="icon-btn" onclick="Android.goHome()">⌂</button>` : ''}</div></div>`;
   if(!d && D.cfg.src === 'rotador'){
     const cap = suggestedCapital();
     const P = plan(Object.assign({}, D.cfg, { capital: cap || 0 }));
@@ -380,6 +428,7 @@ function renderHoy(){
     return h;
   }
   h += panelHtml();
+  h += planCardHtml(d);
   h += sessionCardHtml();
   if(!d){
     const cap = suggestedCapital();
@@ -467,8 +516,7 @@ function dayDetailHtml(day, d, c){
     <td class="num">${money(o.stake)}</td><td>${o.win ? '<span class="pos">✓</span>' : '<span class="neg">✕</span>'}</td>
     <td class="num ${o.win ? 'pos' : 'neg'}">${smoney(o.v)}</td></tr>`).reverse().join('');
   const f = c.first;
-  return `<div class="card">
-    <p class="card-title">Números del día</p>
+  return `<details class="fold" data-k="num-${day}"><summary><span class="t">Números del día</span><span class="arr">▸</span></summary><div class="in">
     <div class="kv"><span>Operaciones</span><b class="num">${c.ops} · ${c.wins} ganadas (${pct(c.ops ? c.wins / c.ops * 100 : 0, 0)})</b></div>
     <div class="kv"><span>Martingalas usadas</span><b class="num">${c.mgOps}${c.mgOps ? ' · ganó ' + c.mgWins : ''}</b></div>
     <div class="kv"><span>Primer escalón</span><b>${f.status === 'won' ? '<span class="pos">Logrado</span> en ' + f.ops.length + ' op.' : f.status === 'lost' ? '<span class="neg">Perdido</span>' : 'Sin terminar'}</b></div>
@@ -477,11 +525,11 @@ function dayDetailHtml(day, d, c){
     ${c.rot ? `<div class="kv"><span>Lotes quemados</span><b class="num">${c.burns}</b></div>
     <div class="kv"><span>Reglas</span><b class="faint">${d.goal}% meta · ${d.risk}% riesgo · ${d.steps} escalones · operado con el Rotador</b></div>`
     : `<div class="kv"><span>Reglas</span><b class="faint">${d.goal}% meta · ${d.risk}% riesgo · ${d.steps} escalones · ${d.mgLevels ? d.mgLevels + ' MG ×' + d.mult : 'sin MG'} · ${d.payout}%</b></div>`}
-  </div>
-  ${c.all.length ? `<div class="card"><p class="card-title">Operaciones${c.rot ? ' <span class="faint">(del Rotador)</span>' : ''}</p>
-    <table><tr><th>Esc.</th><th>Tipo</th><th>Monto</th><th></th><th>Resultado</th></tr>${rows}</table></div>` : ''}
-  <div class="card"><p class="card-title">Nota del día</p>
-    <textarea placeholder="Cómo te sentiste, qué par, qué salió bien o mal…" oninput="setNote('${day}', this.value)">${esc(d.note)}</textarea></div>`;
+  </div></details>
+  ${c.all.length ? `<details class="fold" data-k="ops-${day}"><summary><span class="t">Operaciones (${c.all.length})</span><span class="arr">▸</span></summary><div class="in">
+    <table><tr><th>Esc.</th><th>Tipo</th><th>Monto</th><th></th><th>Resultado</th></tr>${rows}</table></div></details>` : ''}
+  <details class="fold" data-k="note-${day}" ${d.note ? 'open' : ''}><summary><span class="t">Nota del día</span><span class="arr">▸</span></summary><div class="in">
+    <textarea placeholder="Cómo te sentiste, qué par, qué salió bien o mal…" oninput="setNote('${day}', this.value)">${esc(d.note)}</textarea></div></details>`;
 }
 
 function openStep(day, i){ sheet = { type: 'step', day, i }; renderSheet(); }
@@ -513,26 +561,32 @@ function renderSheet(){
       ${dayDetailHtml(sheet.day, d, c)}
       <button class="btn btn-block" style="border-color:var(--loss);color:var(--loss);" onclick="deleteDay('${sheet.day}')">${sheet.confirm === sheet.day ? 'Toca otra vez para borrar este día' : 'Borrar este día'}</button>`;
   }
+  setTimeout(() => restoreFolds(el), 0);
   el.innerHTML = `<div class="sheet-bg" onclick="if(event.target===this){sheet=null;renderSheet();}"><div class="sheet">${h}
     <button class="btn btn-block" style="margin-top:12px;" onclick="sheet=null;renderSheet();render()">Cerrar</button></div></div>`;
 }
 
 function renderHistorial(){
   const keys = Object.keys(D.days).sort().reverse();
-  let h = `<div class="topbar"><div><p class="page-title">Historial</p><p class="sub">Tu mes y cada día</p></div></div>`;
+  let h = `<div class="topbar"><div><p class="page-title">Historial</p><p class="sub">Tus sesiones y tus días</p></div></div>`;
+  if(window.Android && Android.sessions){
+    const n = savedSessions().length;
+    h += `<details class="fold" data-k="ses" open><summary><span class="t">Sesiones guardadas (${n})</span><span class="arr">▸</span></summary><div class="in">${sessionsListHtml()}</div></details>`;
+  }
   if(!keys.length) return h + `<div class="card"><p class="muted">Todavía no hay días. Empieza uno en <b>Hoy</b>.</p></div>`;
+  const curM = today().slice(0, 7);
 
   const byMonth = {};
   keys.forEach(k => (byMonth[k.slice(0, 7)] = byMonth[k.slice(0, 7)] || []).push(k));
   Object.keys(byMonth).forEach(m => {
     const tot = byMonth[m].reduce((a, k) => a + calc(D.days[k]).profit, 0);
-    h += `<div class="card"><div class="next-op"><p class="card-title" style="margin:0;">${monthName(m)}</p><b class="num ${cls(tot)}">${smoney(tot)}</b></div>
+    h += `<details class="fold" data-k="m-${m}" ${m === curM ? 'open' : ''}><summary><span class="t">${monthName(m)} · ${byMonth[m].length} día${byMonth[m].length === 1 ? '' : 's'}</span><span><b class="num ${cls(tot)}">${smoney(tot)}</b> <span class="arr">▸</span></span></summary><div class="in">
       ${byMonth[m].map(k => {
         const d = D.days[k], c = calc(d);
         return `<div class="day" onclick="openDay('${k}')"><div><div class="d">${niceDate(k)}</div>
           <div class="m">✓ ${c.won} · ✕ ${c.lost} de ${d.steps} · ${c.ops} op. · win ${pct(c.ops ? c.wins / c.ops * 100 : 0, 0)}${c.mgOps ? ' · ' + c.mgOps + ' MG' : ''}</div></div>
           <div style="text-align:right;"><div class="num ${cls(c.profit)}">${smoney(c.profit)}</div><div class="m">${pct(c.pctGoal, 0)} meta</div></div></div>`;
-      }).join('')}</div>`;
+      }).join('')}</div></details>`;
   });
   return h;
 }
@@ -793,11 +847,16 @@ function refreshPlan(){
   const t = document.getElementById('pv2t'); if(t) t.textContent = 'Así queda hoy con ' + money(d ? d.capital : (D.cfg.capital || 0));
 }
 
+// Lo que abriste o cerraste se queda así aunque la pantalla se actualice sola.
+const FOLD = {};
+document.addEventListener('toggle', e => { const el = e.target; if(el.matches && el.matches('details.fold[data-k]')) FOLD[el.dataset.k] = el.open; }, true);
+function restoreFolds(root){ (root || document).querySelectorAll('details.fold[data-k]').forEach(el => { const v = FOLD[el.dataset.k]; if(v !== undefined) el.open = v; }); }
 function render(){
   const views = { hoy: renderHoy, hist: renderHistorial, stats: () => renderStats(false), ajustes: renderAjustes };
   document.getElementById('app').innerHTML = views[tab]();
   document.getElementById('tabs').innerHTML = [['hoy', 'Hoy'], ['stats', 'Estadísticas'], ['hist', 'Historial'], ['ajustes', 'Ajustes']]
     .map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="tab='${k}';stakeDraft=null;sheet=null;renderSheet();render();scrollTo(0,0)">${l}</button>`).join('');
+  restoreFolds();
 }
 // ---------- conexión con el Rotador ----------
 function useRotToday(){

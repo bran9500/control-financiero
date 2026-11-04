@@ -515,8 +515,17 @@ public class GuardService extends Service {
         autoBtn = chip("", FG, 0xFF232A35);
         resetBtn = chip("⟳ mantén", MUTED, 0xFF232A35);
         TextView close = chip("× Cerrar", MUTED, 0xFF232A35);
+        TextView gear = chip("⚙", GOLD, 0xFF232A35);
         LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(0, -2, 1); fp.rightMargin = dp(4);
+        LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(dp(34), -2); gp.rightMargin = dp(4);
+        foot.addView(gear, gp);
         foot.addView(autoBtn, fp); foot.addView(resetBtn, fp);
+        gear.setOnClickListener(v -> {
+            Intent i = new Intent(this, com.ktrsis.rotador.MainActivity.class);
+            i.putExtra("tab", "ajustes");
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(i);
+        });
         foot.addView(close, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2); fl.topMargin = dp(6);
         ex.addView(foot, fl);
