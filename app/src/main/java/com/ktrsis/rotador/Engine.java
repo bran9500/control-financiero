@@ -386,6 +386,16 @@ public class Engine {
     /** Borra la sesión actual sin guardarla (para volver a empezar de cero). */
     public void discardSession() { resetSession(); }
 
+    /** Operaciones de la sesión actual desde una hora, de la más vieja a la más nueva (Hoy cuenta solo la sesión actual). */
+    public JSONArray currentOps(long from) {
+        JSONArray r = new JSONArray();
+        for (int i = log.length() - 1; i >= 0; i--) {
+            JSONObject e = log.optJSONObject(i);
+            if (e != null && e.optLong("ts", 0) >= from) r.put(e);
+        }
+        return r;
+    }
+
     /** Operaciones (ganó / perdió / cortó) entre dos horas, de la sesión actual y las archivadas, de la más vieja a la más nueva. */
     public JSONArray opsBetween(long from, long to) {
         List<JSONObject> out = new ArrayList<>();

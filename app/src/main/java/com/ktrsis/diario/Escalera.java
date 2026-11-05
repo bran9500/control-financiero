@@ -39,7 +39,7 @@ public class Escalera {
         Calendar c = Calendar.getInstance();
         c.set(Calendar.HOUR_OF_DAY, 0); c.set(Calendar.MINUTE, 0); c.set(Calendar.SECOND, 0); c.set(Calendar.MILLISECOND, 0);
         long from = c.getTimeInMillis();
-        JSONArray ops = Engine.get(ctx).opsBetween(from, from + 86_400_000L - 1);
+        JSONArray ops = Engine.get(ctx).currentOps(from);   // solo la sesión actual
         for (int i = 0; i < ops.length(); i++) {
             JSONObject op = ops.optJSONObject(i); if (op == null || op.optBoolean("cut")) continue;
             e.acc += op.optDouble("v", 0);

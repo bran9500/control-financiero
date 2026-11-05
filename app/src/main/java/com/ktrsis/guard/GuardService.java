@@ -67,6 +67,52 @@ public class GuardService extends Service {
     public static volatile long lastReadAt = 0;
     public static volatile int state = 0;  // 1 meta, -1 riesgo, 0 en juego
 
+    // ---- diagnóstico: últimos eventos (lecturas del saldo, operaciones anotadas, alarmas) ----
+    private static final java.util.ArrayDeque<String> TRACE = new java.util.ArrayDeque<>();
+    public static void trace(String msg) {
+        String line = new java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(new java.util.Date()) + "  " + msg;
+        synchronized (TRACE) { TRACE.addLast(line); while (TRACE.size() > 400) TRACE.pollFirst(); }
+    }
+    private static GuardService self;
+    /** Reinicia el capital de inicio con el saldo actual y olvida las operaciones abiertas (botón Reiniciar todo). */
+    public static void resetAll() {
+        GuardService g = self; if (g == null) return;
+        g.ui.post(() -> {
+            if (!Double.isNaN(balance)) start = balance;
+            g.alerted = 0; state = 0; g.riskSince = 0; g.goalHits = 0;
+            if (g.auto != null) g.auto.clear();
+            trace("REINICIO TODO · inicio=" + start);
+            g.render();
+        });
+    }
+    /** Todo lo que sirve para entender qué pasó (lo guarda el botón Diagnóstico). */
+    public static org.json.JSONObject diag(android.content.Context ctx) {
+        org.json.JSONObject o = new org.json.JSONObject();
+        try {
+            SharedPreferences p = ctx.getSharedPreferences("guardian", MODE_PRIVATE);
+            float risk = p.getFloat("risk", 6), goal = p.getFloat("goal", 9);
+            o.put("running", running);
+            o.put("saldo", Double.isNaN(balance) ? org.json.JSONObject.NULL : balance);
+            o.put("inicio", Double.isNaN(start) ? org.json.JSONObject.NULL : start);
+            o.put("riesgoPct", risk); o.put("metaPct", goal);
+            o.put("riesgoMonto", p.getFloat("riskAmt", 0)); o.put("metaMonto", p.getFloat("goalAmt", 0));
+            GuardService gs = self;
+            if (gs != null && !Double.isNaN(start)) { o.put("limiteRiesgo", gs.riskLevel()); o.put("nivelMeta", gs.goalLevel()); }
+            o.put("estado", state == 1 ? "META" : state == -1 ? "RIESGO" : "en juego");
+            o.put("ultimaLectura", lastRead); o.put("aviso", status);
+            o.put("auto", p.getBoolean("auto", true)); o.put("expiracion", p.getInt("expiry", 3));
+            o.put("esperaRiesgo", p.getInt("delay", 6)); o.put("capMode", p.getString("capMode", "auto"));
+            GuardService g = self;
+            if (g != null && g.auto != null) {
+                o.put("autoUltimo", g.auto.last); o.put("autoAbiertas", g.auto.pending().size()); o.put("autoAnotadas", g.auto.count);
+            }
+            org.json.JSONArray t = new org.json.JSONArray();
+            synchronized (TRACE) { for (String x : TRACE) t.put(x); }
+            o.put("eventos", t);
+        } catch (Exception ignored) {}
+        return o;
+    }
+
     private WindowManager wm;
     private WindowManager.LayoutParams lp;
     private LinearLayout panel;
@@ -122,6 +168,7 @@ public class GuardService extends Service {
         bgThread = new HandlerThread("guardian");
         bgThread.start();
         bg = new Handler(bgThread.getLooper());
+        self = this;
         ocr = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
     }
 
@@ -152,8 +199,10 @@ public class GuardService extends Service {
                 @Override public void setTurn(int lot) { engine.setTurn(lot); }
             });
             auto.expiryMs = Math.max(1, prefs.getInt("expiry", 3)) * 1000L;
-            start = "manual".equals(prefs.getString("capMode", "auto")) ? prefs.getFloat("capital", 0) : Double.NaN;
-            if (!(start > 0)) start = Double.NaN;
+            // El capital de inicio siempre es el saldo real que se lee al abrir la ventanita.
+            start = Double.NaN;
+            prefs.edit().putString("capMode", "auto").apply();
+            trace("ventanita abierta · riesgo " + riskPct() + "% · meta " + goalPct() + "% · auto " + autoOn() + " · exp " + prefs.getInt("expiry", 3) + "s");
             status = "Buscando tu saldo en la pantalla…";
             startCapture();
             showPanel();
@@ -166,6 +215,8 @@ public class GuardService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        if (self == this) self = null;
+        trace("ventanita cerrada");
         ui.removeCallbacksAndMessages(null);
         if (engine != null) engine.removeListener(engineChanged);
         try { if (panel != null) wm.removeView(panel); } catch (Exception ignored) {}
@@ -197,8 +248,11 @@ public class GuardService extends Service {
     // ---------------- niveles ----------------
     double riskPct() { return prefs.getFloat("risk", 6); }
     double goalPct() { return prefs.getFloat("goal", 9); }
-    double riskLevel() { return start * (1 - riskPct() / 100.0); }
-    double goalLevel() { return start * (1 + goalPct() / 100.0); }
+    // Montos de riesgo y meta: los que configuras en Trading (capital × %); si no hay, % del saldo de inicio.
+    double riskAmt() { float a = prefs.getFloat("riskAmt", 0); return a > 0 ? a : start * riskPct() / 100.0; }
+    double goalAmt() { float a = prefs.getFloat("goalAmt", 0); return a > 0 ? a : start * goalPct() / 100.0; }
+    double riskLevel() { return start - riskAmt(); }
+    double goalLevel() { return start + goalAmt(); }
 
     // ---------------- captura ----------------
     private void readMetrics() {
@@ -234,7 +288,7 @@ public class GuardService extends Service {
             readOnce();
             if (autoOn() && auto != null) {
                 auto.tick(System.currentTimeMillis());
-                if (!auto.last.equals(lastAuto)) render();
+                if (!auto.last.equals(lastAuto)) { trace("auto: " + auto.last); render(); }
             }
             ui.postDelayed(this, autoOn() ? 700 : 2000);
         }
@@ -354,7 +408,8 @@ public class GuardService extends Service {
     /** Filtra lecturas raras: un valor nuevo cuenta cuando se lee igual dos veces seguidas. */
     private void accept(double v, String txt, float x, float y) {
         lastReadAt = System.currentTimeMillis();
-        if (Double.isNaN(v)) { status = "No veo el saldo. Abre la app del broker con el saldo visible arriba."; render(); return; }
+        if (Double.isNaN(v)) { if (!status.startsWith("No veo")) trace("no veo el saldo"); status = "No veo el saldo. Abre la app del broker con el saldo visible arriba."; render(); return; }
+        if (!txt.equals(lastRead)) trace("leí \"" + txt + "\" = " + v);
         lastRead = txt;
         if (!Double.isNaN(balance) && Math.abs(v - balance) < 0.005) { pendingCount = 0; status = ""; evaluate(); render(); return; }
         if (!Double.isNaN(pending) && Math.abs(v - pending) < 0.005) pendingCount++;
@@ -364,8 +419,9 @@ public class GuardService extends Service {
         if (pendingCount >= 2 || (!autoOn() && plausible && !Double.isNaN(balance) && pendingCount >= 1 && Math.abs(v - balance) < balance * 0.15)) {
             double prev = balance;
             balance = v; lastX = x; lastY = y; pendingCount = 0; status = "";
-            if (autoOn() && auto != null && !Double.isNaN(prev) && plausible) auto.onBalance(prev, v, System.currentTimeMillis());
-            if (Double.isNaN(start)) start = v;     // capital inicial = primer saldo leído
+            trace("saldo confirmado " + v + (Double.isNaN(prev) ? " (primero)" : " (antes " + prev + ")"));
+            if (autoOn() && auto != null && !Double.isNaN(prev) && plausible) { auto.onBalance(prev, v, System.currentTimeMillis()); trace("auto: " + auto.last); }
+            if (Double.isNaN(start)) { start = v; trace("capital de inicio = " + v + " · límite riesgo " + riskLevel() + " · meta " + goalLevel()); }
             evaluate();
         }
         render();
@@ -382,7 +438,11 @@ public class GuardService extends Service {
             if (now - riskSince >= prefs.getInt("delay", 6) * 1000L) st = -1;
         } else riskSince = 0;
         state = st;
-        if (st != 0 && st != alerted) { alerted = st; showAlert(st); }
+        if (st != 0 && st != alerted) {
+            alerted = st;
+            trace("ALARMA " + (st == 1 ? "META" : "RIESGO") + " · saldo " + balance + " · inicio " + start + " · límite " + riskLevel() + " · meta " + goalLevel());
+            showAlert(st);
+        }
         if (st == 0 && alerted != 0 && balance > riskLevel() && balance < goalLevel()) alerted = 0;
     }
 
@@ -668,7 +728,8 @@ public class GuardService extends Service {
         double pl = balance - start;
         TextView amt = text((pl >= 0 ? "+" : "") + money(pl), 34, 0xFFFFFFFF, true);
         amt.setGravity(Gravity.CENTER);
-        TextView msg = text(win ? "Llegaste a tu meta.\nCIERRA Y RETIRA LA GANANCIA." : "Tocaste tu límite de riesgo.\nPARA POR HOY.", 20, 0xFFFFFFFF, true);
+        TextView msg = text((win ? "Llegaste a tu meta.\nCIERRA Y RETIRA LA GANANCIA." : "Tocaste tu límite de riesgo.\nPARA POR HOY.")
+                + "\n\nSaldo " + money(balance) + " · empezaste con " + money(start) + "\n" + (win ? "Meta " + money(goalLevel()) : "Límite " + money(riskLevel())), 20, 0xFFFFFFFF, true);
         msg.setGravity(Gravity.CENTER);
         msg.setPadding(0, dp(16), 0, dp(24));
         TextView ok = text("Toca para cerrar", 14, 0xCCFFFFFF, false);

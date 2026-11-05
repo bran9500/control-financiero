@@ -231,6 +231,7 @@ function tail(d, P, steps, all, cur, lvl, nextStake){
 // ---------- acciones ----------
 function lastDay(){ const k = Object.keys(D.days).filter(x => x < today()).sort().pop(); return k ? D.days[k] : null; }
 function suggestedCapital(){
+  if(D.cfg.capital > 0) return D.cfg.capital;   // el capital que configuraste manda
   const l = lastDay();
   if(l){ const c = calc(l); return r2(l.capital + c.profit); }
   return D.cfg.capital || 0;
@@ -447,7 +448,8 @@ function renderHoy(){
     </div>`;
     return h;
   }
-  const c = calc(d);
+  const dv = d.src === 'rotador' ? Object.assign({}, d, { rops: sessionOps() }) : d;   // Hoy = solo la sesión actual
+  const c = calc(dv);
   if(d.src !== 'rotador'){
     const rops = fetchRot(today());
     const n = rops ? rops.filter(o => !o.cut).length : 0;
@@ -727,6 +729,35 @@ function rotSeqHtml(R){
     <div class="kv"><span>Si se quema un lote</span><b class="num neg">${money(-R.lotBudget)}</b></div>
     <div class="kv"><span>Todos los lotes (${R.nLots})</span><b class="num">${money(R.lotBudget * R.nLots)}</b></div>`;
 }
+function saveAllSettings(){
+  // Los campos ya se guardan al escribir; esto lo confirma y le pasa todo a la ventanita.
+  document.activeElement && document.activeElement.blur && document.activeElement.blur();
+  save(); pushPlan();
+  const d = D.days[today()] || D.cfg, P = plan(Object.assign({}, D.cfg, d, { capital: (D.days[today()] || {}).capital || D.cfg.capital }));
+  toast('Guardado ✓ Capital ' + money((D.days[today()] || {}).capital || D.cfg.capital || 0) + ' · meta ' + money(P.goal$) + ' · riesgo ' + money(P.risk$));
+}
+function runDiagnostics(){
+  if(!(window.Android && Android.diagnostics)){ toast('Esto funciona dentro de la app del teléfono'); return; }
+  const lite = { cfg: D.cfg, hoy: today(), days: {} };
+  Object.keys(D.days).sort().slice(-10).forEach(k => { const d = Object.assign({}, D.days[k]); if(d.rops) d.rops = d.rops.slice(-60); lite.days[k] = d; });
+  try{ const c = D.days[today()] ? calc(Object.assign({}, D.days[today()], { rops: sessionOps() })) : null;
+    if(c) lite.calcHoy = { profit: c.profit, won: c.won, lost: c.lost, ops: c.ops, target: c.P.target, budget: c.P.budget }; }catch(e){}
+  const r = Android.diagnostics(JSON.stringify(lite));
+  toast(r ? 'Diagnóstico listo: ' + r : 'No se pudo crear el diagnóstico');
+}
+function resetEverythingToday(){
+  if(!sure('resetall', 'Toca otra vez para REINICIAR HOY (sesión, día y ventanita)')) return;
+  if(window.Android && Android.resetAll) Android.resetAll();
+  delete D.days[today()]; save();
+  tab = 'hoy'; setTimeout(() => { render(); toast('Listo: hoy empieza de cero'); }, 300);
+}
+function wipeHistory(){
+  if(!sure('wipe', 'Toca otra vez para BORRAR TODO el historial y las sesiones guardadas')) return;
+  if(window.Android && Android.deleteAllSessions) Android.deleteAllSessions();
+  if(window.Android && Android.resetAll) Android.resetAll();
+  D.days = {}; save();
+  tab = 'hoy'; setTimeout(() => { render(); toast('Historial borrado'); }, 300);
+}
 function getG(){ try{ return window.Android && Android.getGuard ? JSON.parse(Android.getGuard()) : null; }catch(e){ return null; } }
 function setG(k, v){ const G = getG(); if(!G) return; G[k] = (k === 'auto' || k === 'sound') ? !!v : Math.max(0, Math.round(num(v))); try{ Android.setGuard(JSON.stringify(G)); }catch(e){} }
 let newArmed = 0;
@@ -743,6 +774,16 @@ function renderAjustes(){
   const f = (k, label, step, help) => `<label class="f">${label}<input type="number" inputmode="decimal" step="${step}" value="${c[k]}" oninput="setCfg('${k}', this.value)">${help ? `<span class="faint">${help}</span>` : ''}</label>`;
   const fr = (k, label, step, mode) => `<label class="f">${label}<input type="${mode || 'number'}" inputmode="decimal" step="${step}" value="${R[k]}" oninput="setRot('${k}', this.value)"></label>`;
   return `<div class="topbar"><div><p class="page-title">Ajustes</p><p class="sub">Un solo lugar para el Rotador y el Diario</p></div></div>
+  <div class="card">
+    <p class="card-title">Herramientas</p>
+    <button class="btn btn-solid btn-block" onclick="saveAllSettings()">💾 Guardar ajustes</button>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn" onclick="runDiagnostics()">🩺 Diagnóstico</button>
+      <button class="btn" onclick="resetEverythingToday()">🔄 Reiniciar hoy</button>
+    </div>
+    <button class="btn btn-block" style="margin-top:8px;border-color:var(--loss);color:var(--loss);" onclick="wipeHistory()">🗑 Borrar todo el historial</button>
+    <p class="faint" style="margin:8px 0 0 0;"><b>Diagnóstico</b> crea un archivo en Descargas y abre Compartir: mándamelo si algo raro pasa. <b>Reiniciar hoy</b> borra la sesión y el día de hoy y la ventanita vuelve a tomar tu saldo como inicio.</p>
+  </div>
   ${sessionCardHtml()}
   ${td ? `<div class="card"><p class="card-title">Hoy</p>
     <label class="f">Capital de hoy ($)<input type="text" inputmode="decimal" value="${td.capital}" oninput="setTodayCapital(this.value)"></label>
@@ -859,6 +900,10 @@ function render(){
   restoreFolds();
 }
 // ---------- conexión con el Rotador ----------
+function sessionOps(){
+  if(!(window.Android && Android.getSessionOps)) return (D.days[today()] || {}).rops || [];
+  try{ return JSON.parse(Android.getSessionOps(dayRange(today())[0]) || '[]'); }catch(e){ return []; }
+}
 function useRotToday(){
   const d = D.days[today()]; if(!d) return;
   d.src = 'rotador'; D.cfg.src = 'rotador';
