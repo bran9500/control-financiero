@@ -15,7 +15,7 @@ const ICONS = {
   import:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>',
   more:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>'
 };
-const TAB_TITLES = { home:'Tu semana', mov:'Movimientos', debts:'Deudas y fijos', import:'Subir extracto', more:'Más', settings:'Ajustes', help:'Ayuda' };
+const TAB_TITLES = { home:'Tu semana', mov:'Movimientos', debts:'Deudas y fijos', import:'Subir extracto', more:'Más', couple:'Nosotros', settings:'Ajustes', help:'Ayuda' };
 
 function render(){
   const app = document.getElementById('app');
@@ -40,6 +40,7 @@ function render(){
   else if(activeTab === 'import') body = renderImportTab();
   else if(activeTab === 'settings') body = renderSettingsPage();
   else if(activeTab === 'help') body = renderHelpPage();
+  else if(activeTab === 'couple') body = renderCoupleTab();
   else body = renderMoreTab(c);
 
   app.innerHTML = previewBanner() + renderTopbar() + body + renderTabbar() + renderSheet(c);
@@ -90,6 +91,7 @@ function renderHome(c){
   html += renderQuestionsCard();
   html += renderLoansDueCard();
   html += renderPaydayCard(c);
+  html += renderCoupleHomeCard();
 
   // Avisos de pagos que vencen en 3 días o menos (o ya vencidos esta semana sin pagar)
   const soon = c.upcoming.filter(u => u.days <= 3);
@@ -485,6 +487,7 @@ function renderDebtsTab(c){
   </div>`;
   const segs = [['debts','Deudas'],['expenses','Gastos fijos'],['recurring','Cobros repetidos' + (newRec ? ` (${newRec})` : '')]];
   html += `<div class="seg" data-tour="debtseg">${segs.map(([k,l]) => `<button class="${debtSeg===k?'active':''}" onclick="setDebtSeg('${k}')">${l}</button>`).join('')}</div>`;
+  if(debtSeg === 'debts' && data.debts.length) html += `<button class="pick" style="margin-bottom:12px;" onclick="openCouple('plan')"><span><b>Plan para salir de deudas</b><br><span class="item-meta" style="margin:0;">Avalancha o bola de nieve, solo o en pareja</span></span><span class="chevron">›</span></button>`;
   html += `<div class="card">`;
   if(debtSeg === 'debts') html += debtsBody();
   else if(debtSeg === 'expenses') html += expensesBody();
@@ -751,6 +754,8 @@ function renderImportPreview(){
 // ------------------------------------------------------------------ MÁS
 function renderMoreTab(c){
   let html = '';
+  const cdm = coupleData();
+  html += `<button class="pick" style="margin-bottom:12px;" onclick="openCouple('resumen')"><span><b>Finanzas en pareja</b><br><span class="item-meta" style="margin:0;">${cdm.partnerName ? 'Tú y ' + escapeAttr(partnerName()) + ': deudas, plan y gastos compartidos' : 'Juntar tus finanzas con las de tu pareja sin mezclar los datos'}</span></span><span class="chevron">›</span></button>`;
 
   html += renderSection('savings', 'Ahorro', '', `
     <div class="tab-row">
@@ -778,7 +783,10 @@ function renderMoreTab(c){
   const balMonth = incMonth - respMonth - varMonth;
   const balNoFlex = balMonth + debtFlex;
   const mrow = (name, val, color, meta, strong) => `<div class="item-row"><div class="item-main"><div class="item-name" ${strong?'style="font-weight:600;"':''}>${name}</div>${meta?`<div class="item-meta">${meta}</div>`:''}</div><div class="item-amounts"><span class="item-amount" style="${color?'color:'+color+';':''}${strong?'font-weight:600;':''}">${val}</span></div></div>`;
-  html += renderSection('balance', 'Balance del mes', '', `<div class="stat-list">
+  const totalPaidDebts = (data.history.paidDebts||[]).reduce((s,p)=>s+(p.balance||0),0);
+  const totalLoansOut = data.loans.filter(l=>!l.returned).reduce((s,l)=>s+(l.amount||0),0);
+  const totalSavings = savingsTotal('emergency') + savingsTotal('investments');
+  html += renderSection('balance', 'Balance y estadísticas', '', `<div class="stat-list">
     <div class="clickable" style="cursor:pointer;" onclick="sheet={type:'incomeList', from:'${statsFrom}'};render()">${mrow('Lo que ganas al mes ›', fmtMoney(incMonth), 'var(--good)', `Promedio: ${fmtMoney(avgIncome)} ${PL().por}. Toca para ver cada ingreso y su fecha.`)}</div>
     ${mrow('Gastos fijos', '−' + fmtMoney(expMonth), '', `${data.expenses.length} gasto${data.expenses.length===1?'':'s'} fijo${data.expenses.length===1?'':'s'} (renta, servicios…)`)}
     ${mrow('Pagos de deudas', '−' + fmtMoney(debtFixed), '', 'Los que no se pueden mover')}
@@ -787,21 +795,14 @@ function renderMoreTab(c){
     <div class="clickable" style="cursor:pointer;" onclick="sheet={type:'daySpend', from:'${statsFrom}'};render()">${mrow('Gasto del día a día ›', '−' + fmtMoney(varMonth), '', `Hormiga y otros gastos del banco, en promedio. Toca para ver cuáles son y corregir los que no van aquí.`)}</div>
     ${mrow(balMonth >= 0 ? 'Te sobra al mes' : 'Te falta al mes (déficit)', fmtMoney(Math.abs(balMonth)), balMonth >= 0 ? 'var(--good)' : 'var(--warn)', `${fmtMoney(Math.abs(balMonth)/ppm)} ${PL().por}`, true)}
     ${debtFlex > 0.004 && balMonth < 0 ? `<p class="item-meta" style="margin:8px 0 0 0;">${balNoFlex >= 0 ? `Si saltas las deudas flexibles, alcanzas y te sobran ${fmtMoney(balNoFlex)} al mes.` : `Aun saltando las deudas flexibles te faltarían ${fmtMoney(-balNoFlex)} al mes.`}</p>` : ''}
+    <p class="sub-head">Estadísticas</p>
+    ${mrow('Gasto hormiga ' + PL().adj + ' promedio', fmtMoney(avgHormiga))}
+    ${mrow('Deuda pendiente', fmtMoney(c.totalDebt), 'var(--warn)')}
+    ${mrow('Deuda saldada hasta ahora', fmtMoney(totalPaidDebts), 'var(--good)')}
+    ${mrow('Prestado sin devolver', fmtMoney(totalLoansOut))}
+    ${mrow('Ahorro total (fondo + inversiones)', fmtMoney(totalSavings), 'var(--good)')}
     <p class="item-meta" style="margin:8px 0 0 0;">Lo que ganas es el promedio de tus últimas ${allWeeksForAvg.length} ${PL().plural} con datos. Mientras más extractos subas, más exacto queda.</p>
   </div>`);
-  const totalPaidDebts = (data.history.paidDebts||[]).reduce((s,p)=>s+(p.balance||0),0);
-  const totalLoansOut = data.loans.filter(l=>!l.returned).reduce((s,l)=>s+(l.amount||0),0);
-  const totalSavings = savingsTotal('emergency') + savingsTotal('investments');
-  const statRow = (name, val, color, meta) => `<div class="item-row"><div class="item-main"><div class="item-name">${name}</div>${meta?`<div class="item-meta">${meta}</div>`:''}</div><div class="item-amounts"><span class="item-amount" style="${color?'color:'+color+';':''}">${val}</span></div></div>`;
-  html += renderSection('stats', 'Estadísticas', '', `<div class="stat-list">
-    ${statRow('Ingreso ' + PL().adj + ' promedio', fmtMoney(avgIncome), '', `Últimas ${allWeeksForAvg.length} ${PL().plural} con datos`)}
-    ${statRow('Gasto hormiga ' + PL().adj + ' promedio', fmtMoney(avgHormiga))}
-    ${statRow('Deuda saldada hasta ahora', fmtMoney(totalPaidDebts), 'var(--good)')}
-    ${statRow('Deuda pendiente', fmtMoney(c.totalDebt), 'var(--warn)')}
-    ${statRow('Prestado sin devolver', fmtMoney(totalLoansOut))}
-    ${statRow('Ahorro total (fondo + inversiones)', fmtMoney(totalSavings), 'var(--good)')}
-  </div>`);
-
   // Resumen por rango
   const rangeSummary = computeRangeSummary();
   const rangeCount = rangeSummary ? (rangeSummary.incomes.length + rangeSummary.hormiga.length + rangeSummary.gastos.length + rangeSummary.loans.length + rangeSummary.dueItems.length) : '';
@@ -855,13 +856,6 @@ function renderMoreTab(c){
         <div class="item-amounts"><span class="item-amount" style="color:var(--good);">${fmtMoney(p.balance)}</span></div>
       </div>`).join('') : '<div class="empty-note" style="padding-top:0;">Ninguna deuda saldada todavía.</div>'}`);
 
-  // Mis apps
-  html += `<div class="card">
-    <div class="card-head"><div><p class="card-title">Mis apps</p><p class="card-sub">Todo en un solo lugar</p></div></div>
-    ${renderAppsRow()}
-    <p class="item-meta" style="margin-top:4px;line-height:1.6;">Las ventanas flotantes del Rotador y del Bot se activan desde dentro de cada una, igual que antes. También puedes poner el widget "Control Financiero · Semana" en tu pantalla de inicio.</p>
-  </div>`;
-
   // Exportar resumen
   html += `<div class="card" data-tour="export">
     <div class="card-head"><div><p class="card-title">Exportar resumen para Claude</p><p class="card-sub">Últimos 3 meses + todos los movimientos</p></div></div>
@@ -869,11 +863,6 @@ function renderMoreTab(c){
     <button class="btn btn-solid btn-block" onclick="exportSummary()">Exportar resumen</button>
   </div>`;
 
-  // Ajustes y ayuda
-  html += `<div class="card">
-    <div class="card-head"><div><p class="card-title">Ajustes y ayuda</p><p class="card-sub">Nombre, colores, letra, pagos, moneda, tutorial</p></div></div>
-    <div class="btn-row"><button class="btn btn-solid" style="flex:1;" onclick="openSettings()">⚙ Ajustes</button><button class="btn" style="flex:1;" onclick="openHelp()">❓ Ayuda</button></div>
-  </div>`;
   html += renderFxCard();
 
   // Respaldo

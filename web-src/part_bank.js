@@ -703,6 +703,12 @@ function statementPeriod(lines){
     const m1 = MONTHS_EN[m[1].toLowerCase()], m2 = MONTHS_EN[m[4].toLowerCase()];
     if(m1 && m2) return { start: ymd(+m[3], m1, +m[2]), end: ymd(+m[6], m2, +m[5]) };
   }
+  // Bank of America: "for October 25, 2026 to November 22, 2026"
+  m = joined.match(/\b(?:for|from)\s+([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\s+(?:to|through|-|–)\s+([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/i);
+  if(m){
+    const m1 = MONTHS_EN[m[1].toLowerCase()], m2 = MONTHS_EN[m[4].toLowerCase()];
+    if(m1 && m2) return { start: ymd(+m[3], m1, +m[2]), end: ymd(+m[6], m2, +m[5]) };
+  }
   m = joined.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*(?:-|–|to|through|thru)\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
   if(m){
     const y1 = +m[3] < 100 ? +m[3] + 2000 : +m[3], y2 = +m[6] < 100 ? +m[6] + 2000 : +m[6];
@@ -713,7 +719,7 @@ function statementPeriod(lines){
 }
 
 const PDF_IN_HEAD  = /^(electronic deposits|deposits|other credits|credits|deposits (and|&) (other )?(additions|credits)|interest (paid|earned)|incoming)/i;
-const PDF_OUT_HEAD = /^(electronic payments|other withdrawals|withdrawals|checks paid|checks|service charges|fees|atm|point of sale|debit card|card purchases|purchases|withdrawals (and|&) (other )?(subtractions|debits))/i;
+const PDF_OUT_HEAD = /^(electronic payments|other withdrawals|withdrawals|checks paid|checks|service charges|service fees|fees|atm|point of sale|debit card|card purchases|purchases|withdrawals (and|&) (other )?(subtractions|debits))/i;
 const PDF_STOP     = /^(daily balance summary|daily balance|balance summary|date\s+balance|how to balance|call 1-|for consumer accounts|in case of errors|your account balance)/i;
 const PDF_SKIP     = /^(subtotal|total|beginning balance|ending balance|posting date|date description|description amount|page \d|continued)/i;
 
@@ -736,7 +742,7 @@ function parsePdfStatementLines(lines){
 
   lines.forEach(raw => {
     const line = raw.trim();
-    const bal = line.match(/^ending balance\s+(-?\$?[\d,]*\d\.\d{2})/i);
+    const bal = line.match(/^ending balance(?:\s+on\s+[A-Za-z]+\.?\s+\d{1,2},?\s+\d{4})?\s+(-?\$?[\d,]*\d\.\d{2})/i);
     if(bal && endBalance === null) endBalance = parseBankAmount(bal[1]);
     if(/daily account activity|account activity|transaction (history|detail)/i.test(line)){ inActivity = true; section = null; last = null; return; }
     if(PDF_STOP.test(line)){ section = null; last = null; return; }

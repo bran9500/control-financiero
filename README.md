@@ -135,3 +135,11 @@ Versión 2.7: los extractos en PDF ya no leen como pagos las filas de la tabla d
 
 ### 3.13
 - Bot Señales → pestaña **Simulador**: opera en papel las señales del bot con gestiones Masaniello (misma fórmula que el Excel v9). Dos escenarios a la vez con $200 cada uno (4 gestiones de $50, 9 operaciones): A = 1 acierto sigue al bot / 2 aciertos al contrario; B = al revés. Cada operación se resuelve con el color de cierre de la vela. Efectividad del bot, rachas, ciclos ganados/quemados, línea "SIM" en la ventana flotante y exportación del informe (resumen + operaciones + velas) a Descargas para compartir.
+
+### 3.35 — En pareja
+- Nueva sección **Nosotros** (Más → Finanzas en pareja, o desde Deudas → Plan para salir de deudas). Tus datos se quedan donde están; los de tu pareja se guardan aparte (`pareja-data`) y entran en el respaldo.
+- **Plan de deudas**: junta tus deudas, las de ella y las de los dos; compara **avalancha** (primero la de más interés) contra **bola de nieve** (primero la más pequeña) y solo mínimos: cuánto tardan, en qué fecha quedan libres, cuántos intereses pagan, cuánto ponerle a cada deuda este mes y el orden en que se termina cada una. Extra mensual configurable o "lo que les sobra".
+- **Su pestaña**: sus deudas, sus extractos de **Bank of America** (PDF o CSV, sin duplicados, con deshacer), ingresos a mano y sus movimientos con categoría (incluye "Entre ustedes / propio").
+- **Compartidos**: gastos de la casa y qué % pone cada uno.
+- El lector de PDF ahora entiende el formato de Bank of America (periodo, saldo final, cargos por servicio).
+- Limpieza en Más: Balance y Estadísticas en una sola sección; se quitan las tarjetas repetidas de "Mis apps" (ya están en Inicio) y "Ajustes y ayuda" (ya están arriba).

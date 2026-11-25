@@ -109,6 +109,7 @@ const HELP_GO = [
   { t:'Cobros que se repiten', k:'cobro repetido suscripcion netflix recurrente', go:"setTab('debts');setDebtSeg('recurring')" },
   { t:'Subir extracto del banco', k:'extracto pdf csv banco subir statement', go:"setTab('import')" },
   { t:'Subir captura de pantalla', k:'captura screenshot foto pantalla banco', go:"setTab('import')" },
+  { t:'Finanzas en pareja y plan de deudas', k:'pareja novia esposa nosotros conjunta compartido plan deudas avalancha bola nieve salir de deudas cuando termino', go:"openCouple('resumen')" },
   { t:'Ahorro y estadísticas', k:'ahorro fondo emergencia inversion estadisticas promedio', go:"setTab('more')" },
   { t:'Exportar resumen para Claude', k:'exportar resumen claude analizar', go:"setTab('more')" },
   { t:'Ajustes: color, letra, nombre, moneda', k:'ajustes configuracion color fondo letra fuente tamaño nombre saludo moneda pesos quincena', go:"openSettings()" },

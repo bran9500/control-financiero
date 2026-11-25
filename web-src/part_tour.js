@@ -16,7 +16,7 @@ const TOUR = [
   { tab:'debts', sel:'debtseg', title:'Si algo sale repetido', text:'Toca un gasto o deuda para editarlo. Si dos son lo mismo (como el carro), usa <b>Unir con…</b> para que no se cuente dos veces.' },
   { tab:'import', sel:'upload', title:'Subir extracto', text:'Descarga el PDF de TD Bank y súbelo aquí. La app saca todos los movimientos sola y no repite los que ya tenías.' },
   { tab:'import', sel:'shot', title:'O una captura', text:'Si el extracto no trae lo de esta semana, toma captura de pantalla en la app del banco y súbela aquí.' },
-  { tab:'more', sel:'sec-savings', title:'Más', text:'Ahorro, estadísticas, resumen por fechas, historial y tus apps.' },
+  { tab:'more', sel:'sec-savings', title:'Más', text:'Finanzas en pareja, ahorro, balance, resumen por fechas e historial.' },
   { tab:'more', sel:'export', title:'Pásamelo a mí', text:'Exporta un resumen y pégamelo en un chat para que te ayude a analizar tus finanzas.' },
   { tab:'more', sel:'backup', title:'Respaldo', text:'Guarda un archivo con todo (finanzas y apps) de vez en cuando. Si cambias de teléfono, lo restauras y queda todo igual.' },
   { tab:'home', sel:'btn-settings', title:'Ajustes ⚙', text:'Tu nombre, colores, letra, tamaño, cada cuánto te pagan y la moneda. Cámbialos cuando quieras.' },
